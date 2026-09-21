@@ -1,50 +1,51 @@
-# Sistema de Ventas — KivyMD (Colombia, COP)
+# Sistema de Ventas — Qt6/QML + C++20 (Colombia, COP)
 
 Aplicación de escritorio para punto de venta y gestión comercial: catálogo,
 inventario, POS con pagos mixtos, compras, CxC/CxP, reportes con KPIs,
-usuarios con 2FA y modo offline real con sincronización.
+usuarios con 2FA TOTP y modo offline-first con sincronización.
 
-## Módulos (12 + base)
+Migrado desde KivyMD/Python (ver historial git) siguiendo `arquitectura.txt`:
 
-| # | Módulo | Pantalla |
-|---|--------|----------|
-| 1 | Usuarios y Roles (PBKDF2, lockout, bitácora, 2FA TOTP) | `screens/users.py` |
-| 2 | Catálogo (ABM, CSV/Excel, barcodes, lotes, kits) | `screens/products.py` |
-| 3 | Clientes CRM (NIT, crédito, descuentos) | `screens/clients.py` |
-| 4 | Proveedores | `screens/suppliers.py` |
-| 5 | Inventario (entradas/salidas/transferencias, valorizado, alertas) | `screens/inventory.py` |
-| 6 | POS (pagos mixtos, promos, ticket, cajón, corte, offline) | `screens/pos.py` |
-| 7 | Ventas y Facturación (6 tipos de doc, 6 estados, DIAN opcional) | `screens/sales.py` |
-| 8 | Cuentas por Cobrar (abonos, mora, recordatorios) | `screens/receivables.py` |
-| 9 | Cuentas por Pagar (programación, pronto pago) | `screens/payables.py` |
-| 10 | Reportes (operativos, financieros, KPIs, CSV/PDF) | `screens/reports.py` |
-| 11 | Compras (OC → recepción → CxP automática) | `screens/purchases.py` |
-| 12 | Promociones y Descuentos | `screens/promos.py` |
+```
+qml/ (Pages/Components) → src/controllers → src/services
+                        → src/repositories → SQLite
+```
 
-Extras: Dashboard estilo GesNet (12 tarjetas + comparativa), login con
-recuperación de contraseña, `DIAN OFF` por defecto (documentos internos;
-activable para futura facturación electrónica real en `data/dian.py`).
+## Módulos
+
+| # | Módulo | QML | Servicio |
+|---|--------|-----|----------|
+| 1 | Usuarios y Roles (PBKDF2, lockout, bitácora, 2FA TOTP) | `UsersPage` | `AuthService` |
+| 2 | Catálogo (ABM, lotes, kits, barcodes) | `ProductsPage` | `ProductRepository` |
+| 3 | Clientes CRM (NIT, crédito, descuentos) | `ClientsPage` | `ClientRepository` |
+| 4 | Proveedores | `SuppliersPage` | `SupplierRepository` |
+| 5 | Inventario (entradas/salidas/transferencias, valorizado, alertas) | `InventoryPage` | `InventoryService` |
+| 6 | POS (pagos mixtos, promos, ticket, caja, offline) | `PosPage` | `SalesService` |
+| 7 | Ventas y documentos (6 tipos, 6 estados + Cancelada) | `SalesPage` | `SaleRepository` |
+| 8 | Cuentas por Cobrar (abonos, mora 2 %) | `ReceivablesPage` | `ReceivablesService` |
+| 9 | Cuentas por Pagar (pronto pago) | `PayablesPage` | `PayablesService` |
+| 10 | Reportes (operativos, financieros, KPIs, CSV/PDF) | `ReportsPage` | `ReportService` |
+| 11 | Compras (OC → recepción → CxP automática) | `PurchasesPage` | `PurchaseService` |
+| 12 | Promociones (7 tipos) | `PromosPage` | `PromoRepository` |
+
+Extras: Dashboard estilo GesNet, `DIAN OFF` por defecto (documentos internos),
+tickets siempre en `.txt`, cola `outbox` idempotente.
 
 ## Requisitos
 
-- Python 3.12
-- Kivy 2.3.1 · KivyMD 2.0
-- `openpyxl` (import Excel) · `reportlab` (export PDF) · `pillow`
+- Qt 6.x (probado 6.11.2) con Quick, QuickControls2, Sql, Network
+- CMake 3.28+, compilador C++20 (g++ 13+)
 
 ```bash
-python -m venv venv && source venv/bin/activate
-pip install kivy==2.3.1 kivymd==2.0.0 openpyxl reportlab pillow
+cmake -S . -B build -DCMAKE_PREFIX_PATH=$HOME/Qt/6.11.2/gcc_64
+cmake --build build -j$(nproc)
+ctest --test-dir build   # 11 suites QtTest
+QT_QUICK_CONTROLS_STYLE=Material ./build/qtsales
 ```
 
-## Ejecución
-
-```bash
-cd sistema_ventas
-python main.py
-```
-
-La base SQLite (`data/sistema_ventas.db`) se crea y se siembra sola al
-iniciar; no se versiona (ver `.gitignore`).
+La base SQLite se crea/siembra sola en `AppDataLocation/sistema_ventas.db`
+(`QTSALES_DB=<ruta>` para usar otra; el esquema es compatible con la BD
+del sistema Python anterior).
 
 ## Usuarios de prueba
 
@@ -59,23 +60,29 @@ iniciar; no se versiona (ver `.gitignore`).
 ## Estructura
 
 ```
-sistema_ventas/
-├── main.py               # App, tema pastel, navegación por roles
-├── screens/              # 14 pantallas (login, dashboard, 12 módulos)
-├── components/           # sidebar, topbar, printer, theme (UI central)
-├── data/
-│   ├── db.py             # SQLite + migraciones + seed
-│   ├── repository.py     # Acceso a datos (las pantallas no tocan file directo)
-│   ├── offline.py        # Outbox persistente + monitor + sync idempotente
-│   ├── dian.py           # Facturación electrónica (OFF; punto de integración)
-│   ├── totp.py           # 2FA TOTP sin dependencias
-│   └── mock_data.py      # Seed inicial + flags
-└── fases.md              # Especificación de los 12 módulos
+├── CMakeLists.txt          # qt_add_executable + qt_add_qml_module, C++20
+├── src/
+│   ├── main.cpp            # DI manual + contexto QML
+│   ├── core/               # DatabaseManager, EventBus, Money, Result
+│   ├── domain/Entities.h   # 14 structs 1:1 con SQLite
+│   ├── repositories/       # 11 repos QSql (sin SQL en UI)
+│   ├── services/           # Auth, Sales, Inventory, Purchase, Report,
+│   │                       #  Sync, Credit, Dian, TicketPrinter, Totp
+│   └── controllers/        # 13 controllers Q_PROPERTY/Q_INVOKABLE
+├── qml/                    # Main + 14 páginas + sidebar, Material
+├── sql/schema.sql + seed.sql (embebidos en el binario vía .qrc)
+├── tests/                  # 11 suites QtTest (ctest)
+└── fases.md                # Especificación original de los 12 módulos
 ```
 
 ## Notas
 
-- Moneda COP, IVA 19%, NIT — genérico (abarrotes/electrónica/ropa).
-- Offline-first: las ventas siempre se guardan local; la cola `outbox`
-  sincroniza DIAN/backend al reconectar (idempotente, sobrevive reinicios).
-- Sin hardware de impresión, los tickets se guardan como `.txt`.
+- Moneda COP, IVA 19 %, NIT.
+- Offline-first: las ventas siempre se guardan local; `outbox` sincroniza
+  al reconectar (idempotente por clave).
+- Sin impresora, los tickets se guardan como `.txt` (y se intenta `lp`).
+- Desviaciones del Python original (bugs no replicados): notas
+  crédito/cargo guardan el motivo en bitácora (el `UPDATE sales SET
+  reason/ref` original referenciaba columnas inexistentes); el IVA por
+  línea se interpreta desde el texto (`"IVA 19%"`→19) en vez de
+  `Decimal("IVA 19%")` que fallaba.

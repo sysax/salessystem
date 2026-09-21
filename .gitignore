@@ -1,39 +1,35 @@
-```
-# Compiled and build artifacts
-*.pyc
-__pycache__/
-*.pyo
-*.pyd
+# Qt / CMake build artifacts
+build*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.user
+*.user.*
+.qt/
+.qmlcache/
+
+# Compiled objects
+*.o
 *.so
-*.egg-info/
 
-# Dependencies
-.venv/
-venv/
-.env
-.env.local
-*.env.*
+# Qt Creator / CLion / VSCode
+.vscode/
+.idea/
+*.cbp
 
-# Logs and temp files
+# Logs y temporales
 *.log
 *.tmp
 *.swp
+*~
 
-# Editors
-.vscode/
-.idea/
+# Base de datos local de referencia / desarrollo (no versionar)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
-# Coverage reports
-.coverage
-htmlcov/
-coverage/
-
-# OS generated files
+# OS
 .DS_Store
 Thumbs.db
-
-# Build directories
-build/
-dist/
-*.egg-info/
-```
