@@ -19,6 +19,7 @@ ApplicationWindow {
     Component.onCompleted: {
         Utils.registerToast(globalToastItem);
         Utils.registerLoading(globalLoadingItem);
+        root.tickClock();
     }
 
     Material.theme: Material.Light
@@ -26,6 +27,21 @@ ApplicationWindow {
     Material.accent: Theme.accent
 
     property string currentScreen: "login"
+
+    // Header útil (mejora #12): reloj, estado de red y alertas.
+    property string clockText: "--/-- --:--:--"
+    property bool online: true
+
+    function tickClock() {
+        clockText = Qt.formatDateTime(new Date(), "dd/MM HH:mm:ss");
+    }
+
+    function recheckOnline() {
+        // isOnline() bloquea hasta 1.5s solo sin red; por eso se llama al login,
+        // cada 120s y manualmente, nunca en cada navegación.
+        online = syncSvc.isOnline();
+        return online;
+    }
 
     // Mejora #5: metadatos para breadcrumbs + sidebar (etiqueta, icono, sección).
     function screenMeta(key) {
@@ -153,6 +169,34 @@ ApplicationWindow {
                 text: qsTr("⏳ %1 por sincronizar").arg(pos.pendingSync)
                 color: Material.color(Material.Orange)
             }
+            // Reloj en vivo
+            Label {
+                visible: auth.loggedIn
+                text: "🕒 " + clockText
+                Accessible.name: qsTr("Fecha y hora actual")
+            }
+            // Estado de red (clic = re-chequear)
+            ToolButton {
+                visible: auth.loggedIn
+                text: online ? qsTr("🟢") : qsTr("🔴")
+                Accessible.name: online ? qsTr("En línea. Activar para comprobar conexión") : qsTr("Sin conexión. Activar para reintentar")
+                ToolTip.text: online ? qsTr("En línea") : qsTr("Sin conexión — clic para reintentar")
+                ToolTip.visible: hovered
+                onClicked: {
+                    var ok = recheckOnline();
+                    Utils.showToast(ok ? "success" : "warning",
+                        ok ? qsTr("Conexión disponible") : qsTr("Sin conexión: se trabaja offline"), 2500);
+                }
+            }
+            // Alerta de stock bajo → inventario
+            ToolButton {
+                visible: auth.loggedIn && (dash.data.lowStockAlerts || 0) > 0
+                text: qsTr("⚠️ %1").arg(dash.data.lowStockAlerts)
+                Accessible.name: qsTr("Alerta de stock bajo. Ir a inventario")
+                ToolTip.text: qsTr("Stock bajo — ir a inventario")
+                ToolTip.visible: hovered
+                onClicked: root.navigate("inventory")
+            }
             ToolButton {
                 visible: auth.loggedIn
                 text: qsTr("Salir")
@@ -269,5 +313,30 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+M"; enabled: auth.loggedIn
         onActivated: drawer.visible ? drawer.close() : drawer.open()
+    }
+
+    // Motores del header útil (mejora #12)
+    Timer {
+        interval: 1000
+        running: true
+        repeat: true
+        onTriggered: root.tickClock()
+    }
+    Timer {
+        id: netTimer
+        interval: 120000
+        running: auth.loggedIn
+        repeat: true
+        onTriggered: root.recheckOnline()
+    }
+    Connections {
+        target: auth
+        onSessionChanged: {
+            if (auth.loggedIn) {
+                root.tickClock();
+                root.recheckOnline();
+                dash.refresh();
+            }
+        }
     }
 }

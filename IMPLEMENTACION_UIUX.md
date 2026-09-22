@@ -245,6 +245,15 @@ Basado en esta implementación, se recomienda continuar con:
   props `pendingRemoveId/Code` + toast). Bloquear usuario se deja directo (reversible).
   POS ya cubría eliminar/vaciar carrito (#4).
 - Topes responsivos: detalle de venta `min(420, ventana-64)` × `min(240, ventana-320)`.
+
+## Mejora #12 — Header útil
+
+- `Main.qml`: reloj en vivo `🕒 dd/MM HH:mm:ss` (`Timer` 1s + `tickClock()`), badge de red
+  `🟢/🔴` (clic re-chequea con toast; `ToolTip` + `Accessible.name`), badge `⚠️ N` de stock
+  bajo (`dash.data.lowStockAlerts`) que navega a inventario. Se conserva `⏳ por sincronizar`.
+- Estado de red vía `syncSvc.isOnline()` (TCP 8.8.8.8, bloquea ≤1.5s solo sin red): chequeo
+  al login (`onSessionChanged` + `dash.refresh()`), cada 120s (`netTimer` solo con sesión)
+  y manual; nunca en cada navegación.
 - **Contraste**: `Theme.textOnBright (#1A1A1A)` + `Toast.fgColor` (texto oscuro en
   success/warning, blanco en info/error); base Material Light sin cambios. `Accessible.name`
   ya cubría sidebar, paginador, POS y atajos principales.
