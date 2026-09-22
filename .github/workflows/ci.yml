@@ -21,7 +21,8 @@ jobs:
           version: '6.11.2'
           host: linux
           target: desktop
-          arch: gcc_64
+          # En el repo 6.11 el arch se llama linux_gcc_64 (no gcc_64)
+          arch: linux_gcc_64
           cache: true
 
       - name: Install build tools
