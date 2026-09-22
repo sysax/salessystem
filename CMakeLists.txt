@@ -113,6 +113,7 @@ qt_add_qml_module(QtSalesSystemApp
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/Theme.qml
         qml/AppSidebar.qml
         qml/Card.qml
         qml/LoginPage.qml
@@ -133,6 +134,9 @@ qt_add_qml_module(QtSalesSystemApp
         qml/components/Toast.qml
         qml/components/LoadingOverlay.qml
 )
+
+# Theme.qml es singleton del módulo (pragma Singleton + este flag).
+set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 target_link_libraries(QtSalesSystemApp PRIVATE
     sales_core
