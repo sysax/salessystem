@@ -137,6 +137,8 @@ qt_add_qml_module(QtSalesSystemApp
         qml/Utils.js
         qml/components/Toast.qml
         qml/components/LoadingOverlay.qml
+        qml/components/SortHeader.qml
+        qml/components/Pager.qml
 )
 
 target_link_libraries(QtSalesSystemApp PRIVATE

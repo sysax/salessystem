@@ -188,3 +188,14 @@ Basado en esta implementación, se recomienda continuar con:
   comparativa hoy-vs-ayer (`dayDeltaText`, badge en header), KPIs financieros (margen bruto/neto,
   rotación+días), gráfico de barras propio de 7 días (sin Qt Charts para no añadir dependencia/CI),
   ranking con 🥇🥈🥉 + barra relativa, sección stock-bajo (top 5) con atajos a reportes/inventario.
+
+## Mejora #7 — Tablas funcionales
+
+- `qml/components/SortHeader.qml` + `qml/components/Pager.qml` (reutilizables, registrados en CMake):
+  encabezados con ▲▼, paginador «‹ Pág x/y›» + filas 10/20/50, todo 40-48px táctil.
+- `qml/ProductsPage.qml`: columnas SKU/Nombre/Precio/Stock ordenables, filtro local
+  (nombre/SKU/categoría) + búsqueda servidor, `viewRows` paginado, stock ≤0 en rojo.
+- `qml/SalesPage.qml`: columnas Folio/Cliente/Total/Estado, filtro local
+  (cliente/folio/estado/documento), orden default folio desc.
+- Se mantuvo `ListView` + cabeceras en vez de `TableView` nativo por mejor táctil y
+  consistencia; lógica 100% cliente (bucles clásicos Qt 6.4), patrón extensible al resto.
