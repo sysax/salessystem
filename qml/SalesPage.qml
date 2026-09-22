@@ -214,8 +214,8 @@ ColumnLayout {
         property string saleId: ""
         ColumnLayout {
             ScrollView {
-                Layout.preferredWidth: 420
-                Layout.preferredHeight: 240
+                Layout.preferredWidth: Math.min(420, (ApplicationWindow.window ? ApplicationWindow.window.width : 480) - 64)
+                Layout.preferredHeight: Math.min(240, (ApplicationWindow.window ? ApplicationWindow.window.height : 640) - 320)
                 TextArea {
                     id: detailText
                     readOnly: true
@@ -235,15 +235,23 @@ ColumnLayout {
                 }
                 Button {
                     text: qsTr("Cancelar venta")
-                    onClicked: {
-                        var r = salesCtl.cancel(detailDialog.saleId, "UI", auth.currentUser);
-                        if (!r.ok)
-                            detailText.text = r.error;
-                        else
-                            detailDialog.close();
-                    }
+                    onClicked: confirmCancelSale.open()
                 }
             }
+        }
+    }
+
+    ConfirmDialog {
+        id: confirmCancelSale
+        title: qsTr("Cancelar venta")
+        message: qsTr("¿Cancelar la venta %1? Se reversará el stock y no se puede deshacer.").arg(detailDialog.saleId)
+        confirmText: qsTr("Sí, cancelar")
+        onAccepted: {
+            var r = salesCtl.cancel(detailDialog.saleId, "UI", auth.currentUser);
+            if (!r.ok)
+                detailText.text = r.error;
+            else
+                detailDialog.close();
         }
     }
 

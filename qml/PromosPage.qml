@@ -2,12 +2,15 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Utils.js" as Utils
 import QtSalesSystem
 import "components"
 
 ColumnLayout {
     id: root
     spacing: Theme.spacingSmall
+    property string pendingRemoveId: ""
+    property string pendingRemoveCode: ""
 
     RowLayout {
         Label {
@@ -47,7 +50,11 @@ ColumnLayout {
             }
             Button {
                 text: qsTr("Eliminar")
-                onClicked: promosCtl.remove(modelData.id)
+                onClicked: {
+                    root.pendingRemoveId = modelData.id;
+                    root.pendingRemoveCode = modelData.code;
+                    confirmRemovePromo.open();
+                }
             }
         }
         ScrollBar.vertical: ScrollBar {}
@@ -108,6 +115,23 @@ ColumnLayout {
                 pErr.text = r.error;
                 open();
             }
+        }
+    }
+
+    ConfirmDialog {
+        id: confirmRemovePromo
+        title: qsTr("Eliminar promoción")
+        message: qsTr("¿Eliminar la promoción %1? Dejará de aplicarse en el POS.").arg(root.pendingRemoveCode)
+        confirmText: qsTr("Sí, eliminar")
+        onAccepted: {
+            promosCtl.remove(root.pendingRemoveId);
+            Utils.showToast("info", qsTr("Promoción eliminada"), 2000);
+            root.pendingRemoveId = "";
+            root.pendingRemoveCode = "";
+        }
+        onRejected: {
+            root.pendingRemoveId = "";
+            root.pendingRemoveCode = "";
         }
     }
 }

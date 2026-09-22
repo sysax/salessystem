@@ -234,6 +234,17 @@ Basado en esta implementación, se recomienda continuar con:
   `onOpened: <campo>.forceActiveFocus()` en los 11 diálogos (producto/cliente/abono,
   proveedor, usuario nuevo/clave, promo, OC, ajuste/transferencia, CxC/CxP). Tab nativo
   y cierre con Esc se conservan.
+
+## Mejora #11 — Diálogos responsivos
+
+- `qml/components/ConfirmDialog.qml` (nuevo, registrado en CMake): `message/confirmText/danger`,
+  ancho `min(400, ventana-48)`, mensaje en `ScrollView` topado a 180px, foco inicial en
+  Cancelar (no confirma con Enter por accidente), Ok resaltado si `danger`.
+- Confirmaciones destructivas que faltaban: cancelar venta (`SalesPage`, revierte stock),
+  cancelar OC (`PurchasesPage`, prop `pendingCancelOc`), eliminar promo (`PromosPage`,
+  props `pendingRemoveId/Code` + toast). Bloquear usuario se deja directo (reversible).
+  POS ya cubría eliminar/vaciar carrito (#4).
+- Topes responsivos: detalle de venta `min(420, ventana-64)` × `min(240, ventana-320)`.
 - **Contraste**: `Theme.textOnBright (#1A1A1A)` + `Toast.fgColor` (texto oscuro en
   success/warning, blanco en info/error); base Material Light sin cambios. `Accessible.name`
   ya cubría sidebar, paginador, POS y atajos principales.

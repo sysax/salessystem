@@ -140,6 +140,7 @@ qt_add_qml_module(QtSalesSystemApp
         qml/components/SortHeader.qml
         qml/components/Pager.qml
         qml/components/EmptyState.qml
+        qml/components/ConfirmDialog.qml
 )
 
 target_link_libraries(QtSalesSystemApp PRIVATE

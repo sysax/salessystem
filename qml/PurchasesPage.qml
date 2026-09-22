@@ -8,6 +8,7 @@ import "components"
 ColumnLayout {
     id: root
     spacing: Theme.spacingSmall
+    property string pendingCancelOc: ""
 
     RowLayout {
         Label {
@@ -47,9 +48,8 @@ ColumnLayout {
                 text: qsTr("Cancelar")
                 enabled: modelData.status === "Pendiente"
                 onClicked: {
-                    var r = purchasesCtl.cancel(modelData.id, auth.currentUser);
-                    if (!r.ok)
-                        msg.text = r.error;
+                    root.pendingCancelOc = modelData.id;
+                    confirmCancelOc.open();
                 }
             }
         }
@@ -68,6 +68,20 @@ ColumnLayout {
     Label {
         id: msg
         color: Theme.error
+    }
+
+    ConfirmDialog {
+        id: confirmCancelOc
+        title: qsTr("Cancelar orden")
+        message: qsTr("¿Cancelar la orden %1? No se puede deshacer.").arg(root.pendingCancelOc)
+        confirmText: qsTr("Sí, cancelar")
+        onAccepted: {
+            var r = purchasesCtl.cancel(root.pendingCancelOc, auth.currentUser);
+            if (!r.ok)
+                msg.text = r.error;
+            root.pendingCancelOc = "";
+        }
+        onRejected: root.pendingCancelOc = ""
     }
 
     Dialog {
