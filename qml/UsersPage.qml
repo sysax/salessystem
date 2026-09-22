@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 ColumnLayout {
     id: root
@@ -24,6 +25,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: usersCtl.users
+        visible: (usersCtl.users || []).length > 0
         delegate: RowLayout {
             width: ListView.view.width
             Label {
@@ -49,6 +51,16 @@ ColumnLayout {
             }
         }
         ScrollBar.vertical: ScrollBar {}
+    }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (usersCtl.users || []).length === 0
+        icon: "👤"
+        title: qsTr("Sin usuarios")
+        hint: qsTr("Crea el primero con “Nuevo” y asigna rol + 2FA.")
+        actionText: qsTr("Nuevo usuario")
+        onAction: addDialog.open()
     }
     Label {
         id: msg

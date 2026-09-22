@@ -219,6 +219,7 @@ ApplicationWindow {
     SalesPage {
         id: salesPage
         visible: false
+        onGo: screen => root.navigate(screen)
     }
     ClientsPage {
         id: clientsPage

@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 ColumnLayout {
     id: root
@@ -32,6 +33,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: clientsCtl.clients
+        visible: (clientsCtl.clients || []).length > 0
         delegate: ItemDelegate {
             width: ListView.view.width
             text: modelData.name + "  ·  " + modelData.balance + " saldo  ·  " + modelData.status
@@ -46,6 +48,20 @@ ColumnLayout {
             }
         }
         ScrollBar.vertical: ScrollBar {}
+    }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (clientsCtl.clients || []).length === 0
+        icon: "👥"
+        title: qsTr("Sin clientes")
+        hint: qsTr("Registra el primero con “Nuevo” para asignar ventas y crédito.")
+        actionText: qsTr("Nuevo cliente")
+        onAction: {
+            editDialog.clientId = -1;
+            editDialog.fields = {};
+            editDialog.open();
+        }
     }
     Label {
         id: stmtLabel

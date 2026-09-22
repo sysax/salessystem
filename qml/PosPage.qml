@@ -5,6 +5,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "Utils.js" as Utils
 import QtSalesSystem
+import "components"
 
 RowLayout {
     id: root
@@ -55,6 +56,7 @@ RowLayout {
             Layout.preferredHeight: 200
             clip: true
             model: catalog.products
+            visible: (catalog.products || []).length > 0
             delegate: SwipeDelegate {
                 id: prodDelegate
                 width: ListView.view.width
@@ -81,6 +83,13 @@ RowLayout {
                 }
             }
             ScrollBar.vertical: ScrollBar {}
+        }
+        EmptyState {
+            Layout.fillWidth: true
+            visible: (catalog.products || []).length === 0
+            icon: "🔍"
+            title: qsTr("Sin productos para vender")
+            hint: qsTr("Busca de nuevo o da de alta productos en el catálogo.")
         }
         RowLayout {
             spacing: Theme.spacingSmall

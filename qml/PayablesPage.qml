@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 ColumnLayout {
     id: root
@@ -17,6 +18,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: cxpCtl.pending
+        visible: (cxpCtl.pending || []).length > 0
         delegate: RowLayout {
             width: ListView.view.width
             Label {
@@ -33,6 +35,14 @@ ColumnLayout {
             }
         }
         ScrollBar.vertical: ScrollBar {}
+    }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (cxpCtl.pending || []).length === 0
+        icon: "✅"
+        title: qsTr("Sin cuentas por pagar")
+        hint: qsTr("No hay facturas pendientes a proveedores.")
     }
     Label {
         id: msg

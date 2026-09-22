@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 ColumnLayout {
     id: root
@@ -32,6 +33,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: suppliersCtl.suppliers
+        visible: (suppliersCtl.suppliers || []).length > 0
         delegate: ItemDelegate {
             width: ListView.view.width
             text: modelData.name + "  ·  " + modelData.contact + "  ·  " + modelData.phone
@@ -42,6 +44,20 @@ ColumnLayout {
             }
         }
         ScrollBar.vertical: ScrollBar {}
+    }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (suppliersCtl.suppliers || []).length === 0
+        icon: "🚚"
+        title: qsTr("Sin proveedores")
+        hint: qsTr("Registra el primero con “Nuevo” para crear órdenes de compra.")
+        actionText: qsTr("Nuevo proveedor")
+        onAction: {
+            editDialog.supId = -1;
+            editDialog.fields = {};
+            editDialog.open();
+        }
     }
 
     Dialog {

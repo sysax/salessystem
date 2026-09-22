@@ -199,3 +199,13 @@ Basado en esta implementación, se recomienda continuar con:
   (cliente/folio/estado/documento), orden default folio desc.
 - Se mantuvo `ListView` + cabeceras en vez de `TableView` nativo por mejor táctil y
   consistencia; lógica 100% cliente (bucles clásicos Qt 6.4), patrón extensible al resto.
+
+## Mejora #8 — Empty states
+
+- `qml/components/EmptyState.qml` (nuevo, registrado en CMake): icono + título + hint + botón
+  de acción opcional (`signal action()`), 44px táctil.
+- Aplicado en 11 listas (lista oculta + `EmptyState` visible cuando está vacía):
+  Productos (Sin productos/Sin resultados + Nuevo), Ventas (Sin ventas + Ir al POS con `signal go`
+  cableada en `Main`), POS (🔍 sin productos), Clientes (+ Nuevo), Inventario (alertas ✅
+  + movimientos), Compras (+ Nueva OC), Proveedores (+ Nuevo), CxC/CxP (✅ al día),
+  Promos (+ Nueva), Usuarios (+ Nuevo).

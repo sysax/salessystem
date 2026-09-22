@@ -92,6 +92,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: root.viewRows
+        visible: root.viewRows.length > 0
         delegate: ItemDelegate {
             width: ListView.view.width
             height: 48
@@ -127,6 +128,20 @@ ColumnLayout {
             }
         }
         ScrollBar.vertical: ScrollBar {}
+    }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: root.viewRows.length === 0
+        icon: "📦"
+        title: (catalog.products || []).length === 0 ? qsTr("Sin productos") : qsTr("Sin resultados")
+        hint: (catalog.products || []).length === 0 ? qsTr("Crea el primero con “Nuevo” o importa desde Compras.") : qsTr("Ajusta el filtro o la búsqueda.")
+        actionText: (catalog.products || []).length === 0 ? qsTr("Nuevo producto") : ""
+        onAction: {
+            editDialog.sku = "";
+            editDialog.fields = {};
+            editDialog.open();
+        }
     }
     Pager {
         Layout.fillWidth: true

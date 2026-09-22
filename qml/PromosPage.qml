@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 ColumnLayout {
     id: root
@@ -31,6 +32,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: promosCtl.promos
+        visible: (promosCtl.promos || []).length > 0
         delegate: RowLayout {
             width: ListView.view.width
             CheckBox {
@@ -48,6 +50,16 @@ ColumnLayout {
             }
         }
         ScrollBar.vertical: ScrollBar {}
+    }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (promosCtl.promos || []).length === 0
+        icon: "🎟️"
+        title: qsTr("Sin promociones")
+        hint: qsTr("Crea la primera con “Nueva”: porcentaje, 2x1, cupón, happy hour…")
+        actionText: qsTr("Nueva promoción")
+        onAction: addDialog.open()
     }
 
     Dialog {

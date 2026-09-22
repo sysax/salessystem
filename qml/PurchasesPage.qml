@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 ColumnLayout {
     id: root
@@ -24,6 +25,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: purchasesCtl.orders
+        visible: (purchasesCtl.orders || []).length > 0
         delegate: RowLayout {
             width: ListView.view.width
             Label {
@@ -51,6 +53,16 @@ ColumnLayout {
             }
         }
         ScrollBar.vertical: ScrollBar {}
+    }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (purchasesCtl.orders || []).length === 0
+        icon: "🛍️"
+        title: qsTr("Sin órdenes de compra")
+        hint: qsTr("Crea la primera con “Nueva OC”; al recibirla se actualiza inventario y CxP.")
+        actionText: qsTr("Nueva OC")
+        onAction: createDialog.open()
     }
     Label {
         id: msg

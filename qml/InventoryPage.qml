@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 ColumnLayout {
     id: root
@@ -35,11 +36,17 @@ ColumnLayout {
         Layout.preferredHeight: 110
         clip: true
         model: inventoryCtl.alerts.low || []
+        visible: (inventoryCtl.alerts.low || []).length > 0
         delegate: Label {
             width: ListView.view.width
             text: "⚠ " + modelData.sku + "  " + modelData.name + "  (stock " + modelData.stock + ")"
             color: "red"
         }
+    }
+    Label {
+        visible: (inventoryCtl.alerts.low || []).length === 0
+        text: qsTr("✅ Sin alertas: todo el stock está sobre el mínimo.")
+        opacity: 0.7
     }
     Label {
         text: qsTr("Movimientos recientes")
@@ -50,11 +57,20 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: inventoryCtl.movements
+        visible: (inventoryCtl.movements || []).length > 0
         delegate: Label {
             width: ListView.view.width
             text: modelData.ts + "  " + modelData.sku + "  " + modelData.type + "  " + (modelData.qty > 0 ? "+" : "") + modelData.qty + "  (" + modelData.before + "→" + modelData.after + ")"
         }
         ScrollBar.vertical: ScrollBar {}
+    }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (inventoryCtl.movements || []).length === 0
+        icon: "🏬"
+        title: qsTr("Sin movimientos")
+        hint: qsTr("Registra un ajuste o recibe mercancía en Compras.")
     }
 
     Dialog {

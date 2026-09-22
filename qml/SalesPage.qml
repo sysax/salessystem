@@ -8,6 +8,7 @@ import "components"
 ColumnLayout {
     id: root
     spacing: 8
+    signal go(string screen)
 
     property string sortKey: "id"
     property bool sortAsc: false
@@ -79,6 +80,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: root.viewRows
+        visible: root.viewRows.length > 0
         delegate: ItemDelegate {
             width: ListView.view.width
             height: 48
@@ -113,6 +115,16 @@ ColumnLayout {
             }
         }
         ScrollBar.vertical: ScrollBar {}
+    }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: root.viewRows.length === 0
+        icon: "🧾"
+        title: (salesCtl.sales || []).length === 0 ? qsTr("Sin ventas aún") : qsTr("Sin resultados")
+        hint: (salesCtl.sales || []).length === 0 ? qsTr("Las ventas cobradas en el POS aparecerán aquí.") : qsTr("Ajusta el filtro.")
+        actionText: (salesCtl.sales || []).length === 0 ? qsTr("Ir al POS") : ""
+        onAction: root.go("pos")
     }
     Pager {
         Layout.fillWidth: true
