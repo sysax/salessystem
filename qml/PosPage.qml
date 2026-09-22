@@ -36,7 +36,9 @@ RowLayout {
                 onClicked: {
                     var r = pos.addToCart(modelData.id, 1);
                     if (!r.ok)
-                        msg.text = r.error;
+                        ApplicationWindow.window.globalToast.error(r.error, 3000);
+                    else
+                        ApplicationWindow.window.globalToast.success("Agregado al carrito", 1500);
                 }
             }
             ScrollBar.vertical: ScrollBar {}
@@ -73,7 +75,10 @@ RowLayout {
                 }
                 Button {
                     text: "✕"
-                    onClicked: pos.removeLine(index)
+                    onClicked: {
+                        pos.removeLine(index);
+                        ApplicationWindow.window.globalToast.info("Producto eliminado", 2000);
+                    }
                 }
             }
             ScrollBar.vertical: ScrollBar {}
@@ -116,7 +121,10 @@ RowLayout {
                 text: qsTr("Aplicar")
                 onClicked: {
                     var r = pos.applyPromo(promoField.text);
-                    msg.text = r.ok ? qsTr("Promo: ") + money(r.discount) : r.error;
+                    if (r.ok)
+                        ApplicationWindow.window.globalToast.success("Descuento: " + money(r.discount), 2500);
+                    else
+                        ApplicationWindow.window.globalToast.error(r.error, 3000);
                 }
             }
         }
@@ -150,18 +158,16 @@ RowLayout {
                 }
                 var r = pos.checkout(clientField.text, pays, methodBox.currentText, auth.currentUser);
                 if (r.ok) {
-                    msg.text = qsTr("Venta %1 · Cambio %2 · %3").arg(r.saleId).arg(money(r.change)).arg(r.ticket);
+                    ApplicationWindow.window.globalToast.success(
+                        "Venta " + r.saleId + " · Cambio " + money(r.change), 
+                        3000
+                    );
                     cashField.text = "";
                     promoField.text = "";
                 } else {
-                    msg.text = r.error;
+                    ApplicationWindow.window.globalToast.error(r.error, 4000);
                 }
             }
-        }
-        Label {
-            id: msg
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
         }
         GroupBox {
             title: qsTr("Caja")
@@ -180,7 +186,14 @@ RowLayout {
                         text: pos.caja.open ? qsTr("Cerrar") : qsTr("Abrir")
                         onClicked: {
                             var r = pos.caja.open ? pos.closeCaja(parseFloat(cajaField.text) || 0, auth.currentUser) : pos.openCaja(parseFloat(cajaField.text) || 0, auth.currentUser);
-                            msg.text = r.ok ? (r.diff !== undefined ? qsTr("Diferencia: ") + money(r.diff) : qsTr("Caja abierta")) : r.error;
+                            if (r.ok) {
+                                if (r.diff !== undefined)
+                                    ApplicationWindow.window.globalToast.warning("Diferencia: " + money(r.diff), 3000);
+                                else
+                                    ApplicationWindow.window.globalToast.success("Caja abierta", 2500);
+                            } else {
+                                ApplicationWindow.window.globalToast.error(r.error, 4000);
+                            }
                         }
                     }
                 }

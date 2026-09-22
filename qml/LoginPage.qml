@@ -39,12 +39,6 @@ Pane {
             Layout.fillWidth: true
             onAccepted: doTotp()
         }
-        Label {
-            id: errLabel
-            color: "red"
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
-        }
         Button {
             text: root.needTotp ? qsTr("Verificar 2FA") : qsTr("Entrar")
             highlighted: true
@@ -62,24 +56,24 @@ Pane {
     function doLogin() {
         var r = auth.login(userField.text, passField.text);
         if (r.ok) {
-            errLabel.text = "";
+            ApplicationWindow.window.globalToast.success("¡Bienvenido!", 2000);
             root.loggedIn();
         } else if (r.totpRequired) {
             root.needTotp = true;
-            errLabel.text = qsTr("Ingrese su código 2FA");
+            ApplicationWindow.window.globalToast.info("Ingrese su código 2FA", 3000);
         } else {
-            errLabel.text = r.error;
+            ApplicationWindow.window.globalToast.error(r.error, 4000);
         }
     }
 
     function doTotp() {
         var r = auth.verifyTotp(totpField.text);
         if (r.ok) {
-            errLabel.text = "";
+            ApplicationWindow.window.globalToast.success("Autenticación exitosa", 2000);
             root.needTotp = false;
             root.loggedIn();
         } else {
-            errLabel.text = r.error;
+            ApplicationWindow.window.globalToast.error(r.error, 4000);
         }
     }
 }

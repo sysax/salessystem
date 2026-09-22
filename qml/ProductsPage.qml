@@ -23,6 +23,7 @@ ColumnLayout {
             onClicked: {
                 editDialog.sku = "";
                 editDialog.fields = {};
+                editErr.text = "";
                 editDialog.open();
             }
         }
@@ -97,6 +98,12 @@ ColumnLayout {
             if (!r.ok) {
                 editErr.text = r.error;
                 open(); // reabrir si falló
+            } else {
+                ApplicationWindow.window.globalToast.success(
+                    editDialog.sku === "" ? "Producto creado" : "Producto actualizado", 
+                    2500
+                );
+                close();
             }
         }
     }

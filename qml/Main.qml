@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import "components"
 
 ApplicationWindow {
     id: root
@@ -128,6 +129,15 @@ ApplicationWindow {
         id: stack
         anchors.fill: parent
         initialItem: loginPage
+    }
+
+    // Global notification and loading overlays
+    Toast {
+        id: globalToast
+    }
+    
+    LoadingOverlay {
+        id: globalLoading
     }
 
     LoginPage {
