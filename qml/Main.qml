@@ -27,6 +27,34 @@ ApplicationWindow {
 
     property string currentScreen: "login"
 
+    // Mejora #5: metadatos para breadcrumbs + sidebar (etiqueta, icono, sección).
+    function screenMeta(key) {
+        var map = {
+            "login": {"label": "Ingresar", "icon": "🔑", "section": "Sistema"},
+            "dashboard": {"label": "Tablero", "icon": "📊", "section": "Principal"},
+            "pos": {"label": "Punto de venta", "icon": "🛒", "section": "Principal"},
+            "products": {"label": "Productos", "icon": "📦", "section": "Catálogo"},
+            "sales": {"label": "Ventas", "icon": "🧾", "section": "Ventas"},
+            "clients": {"label": "Clientes", "icon": "👥", "section": "Ventas"},
+            "inventory": {"label": "Inventario", "icon": "🏬", "section": "Catálogo"},
+            "purchases": {"label": "Compras", "icon": "🛍️", "section": "Catálogo"},
+            "suppliers": {"label": "Proveedores", "icon": "🚚", "section": "Catálogo"},
+            "receivables": {"label": "Cuentas por cobrar", "icon": "💳", "section": "Finanzas"},
+            "payables": {"label": "Cuentas por pagar", "icon": "💸", "section": "Finanzas"},
+            "reports": {"label": "Reportes", "icon": "📈", "section": "Finanzas"},
+            "promos": {"label": "Promociones", "icon": "🎟️", "section": "Ventas"},
+            "users": {"label": "Usuarios", "icon": "👤", "section": "Sistema"}
+        };
+        return map[key] || {"label": key, "icon": "•", "section": ""};
+    }
+
+    function crumbText() {
+        var m = screenMeta(currentScreen);
+        if (currentScreen === "login" || currentScreen === "dashboard")
+            return m.icon + " " + m.label;
+        return m.section + "  ›  " + m.icon + " " + m.label;
+    }
+
     function navigate(screen) {
         if (!auth.canAccess(screen)) {
             if (!auth.loggedIn)
@@ -96,13 +124,27 @@ ApplicationWindow {
     header: ToolBar {
         RowLayout {
             anchors.fill: parent
+            spacing: 4
             ToolButton {
                 text: "\u2630"
                 enabled: auth.loggedIn
+                Accessible.name: qsTr("Abrir menú")
                 onClicked: drawer.open()
             }
+            // Breadcrumb clicable: ir al tablero
+            ToolButton {
+                visible: auth.loggedIn && currentScreen !== "dashboard" && currentScreen !== "login"
+                text: qsTr("Tablero")
+                Accessible.name: qsTr("Ir al tablero")
+                onClicked: root.navigate("dashboard")
+            }
             Label {
-                text: qsTr("Sistema de Ventas  ·  ") + currentScreen + (auth.loggedIn ? "  ·  " + auth.currentUser + " (" + auth.currentRole + ")" : "")
+                visible: auth.loggedIn && currentScreen !== "dashboard" && currentScreen !== "login"
+                text: "›"
+                opacity: 0.6
+            }
+            Label {
+                text: qsTr("Sistema de Ventas  ·  ") + crumbText() + (auth.loggedIn ? "  ·  " + auth.currentUser + " (" + auth.currentRole + ")" : "")
                 elide: Label.ElideRight
                 Layout.fillWidth: true
             }
@@ -124,10 +166,12 @@ ApplicationWindow {
 
     Drawer {
         id: drawer
-        width: 260
+        width: 280
         height: parent.height
         AppSidebar {
+            id: sidebar
             anchors.fill: parent
+            currentKey: root.currentScreen
             onGo: screen => root.navigate(screen)
         }
     }

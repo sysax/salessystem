@@ -157,3 +157,25 @@ Basado en esta implementación, se recomienda continuar con:
   `payDialog`: monto con `DoubleValidator` (≥ 0.01) y Ok con binding.
 - `LoginPage`: botón Entrar/Verificar deshabilitado con campos vacíos.
 - El chequeo backend en `onAccepted` se conserva como defensa en profundidad.
+
+## Mejora #4 — POS mejorado (táctil + confirmación + swipe)
+
+- `qml/PosPage.qml` (`import QtSalesSystem` para `Theme`):
+  - Botones táctiles: `touchH: 48`, filas producto 56 / carrito 64; Buscar/Aplicar/Abrir-Cerrar
+    a 48px, `Cobrar` a 56px con fuente `fontL` bold, `−/+/✕` a 48×48.
+  - Confirmación destructiva: `confirmRemoveDialog` (Ok|Cancel) antes de `pos.removeLine()`,
+    `confirmClearDialog` antes de `pos.clearCart()`; se eliminó el borrado directo.
+  - Swipe gestures: `SwipeDelegate` en productos (swipe-right “Añadir +”, full-swipe agrega)
+    y en carrito (swipe-left “Eliminar”, full-swipe pide confirmación).
+  - Extra: contador `Carrito (%1)`, empty-state “Carrito vacío…”, `Utils.showLoading/hideLoading`
+    en checkout, `DoubleValidator` en efectivo, tokens `spacingSmall/Medium`, `fontM/ML/L/XL`.
+
+## Mejora #5 — Navegación clara
+
+- `qml/AppSidebar.qml` (sin `import QtSalesSystem` para que `tst_sidebar` lo cargue aislado;
+  valores literales iguales a Theme):
+  - Iconos por módulo (📊🛒📦🧾👥🏬🛍️🚚💳💸📈🎟️👤), filas a 48px, `Accessible.name`.
+  - Indicador pantalla activa: `currentKey` + barra lateral accent + negrita + `highlighted`;
+    `syncCurrent()` alinea `currentIndex` para teclado; `refresh()` por rol intacto.
+- `qml/Main.qml`: `screenMeta()` (label/icono/sección), `crumbText()` (“Sección › Icono Etiqueta”),
+  breadcrumb clicable a Tablero en header, `Drawer` 280px, `sidebar.currentKey: currentScreen`.

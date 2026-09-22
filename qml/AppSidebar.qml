@@ -1,5 +1,8 @@
 // Menú lateral filtrado por rol (antes components/sidebar.py).
 // Claves de pantalla = permisos de ROLE_PERMISSIONS.
+// Mejora #5: iconos, indicador de pantalla activa, objetivo táctil 48px.
+// Nota: sin import QtSalesSystem a propósito — tst_sidebar carga este archivo
+// aislado sin el módulo registrado; los valores igualan Theme (8/14/16/18).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -8,20 +11,22 @@ ColumnLayout {
     id: root
     signal go(string screen)
 
+    property string currentKey: "dashboard"
+
     property var entries: [
-        { "key": "dashboard", "label": "Tablero" },
-        { "key": "pos", "label": "Punto de venta" },
-        { "key": "products", "label": "Productos" },
-        { "key": "sales", "label": "Ventas" },
-        { "key": "clients", "label": "Clientes" },
-        { "key": "inventory", "label": "Inventario" },
-        { "key": "purchases", "label": "Compras" },
-        { "key": "suppliers", "label": "Proveedores" },
-        { "key": "receivables", "label": "Cuentas por cobrar" },
-        { "key": "payables", "label": "Cuentas por pagar" },
-        { "key": "reports", "label": "Reportes" },
-        { "key": "promos", "label": "Promociones" },
-        { "key": "users", "label": "Usuarios" },
+        { "key": "dashboard", "label": "Tablero", "icon": "📊" },
+        { "key": "pos", "label": "Punto de venta", "icon": "🛒" },
+        { "key": "products", "label": "Productos", "icon": "📦" },
+        { "key": "sales", "label": "Ventas", "icon": "🧾" },
+        { "key": "clients", "label": "Clientes", "icon": "👥" },
+        { "key": "inventory", "label": "Inventario", "icon": "🏬" },
+        { "key": "purchases", "label": "Compras", "icon": "🛍️" },
+        { "key": "suppliers", "label": "Proveedores", "icon": "🚚" },
+        { "key": "receivables", "label": "Cuentas por cobrar", "icon": "💳" },
+        { "key": "payables", "label": "Cuentas por pagar", "icon": "💸" },
+        { "key": "reports", "label": "Reportes", "icon": "📈" },
+        { "key": "promos", "label": "Promociones", "icon": "🎟️" },
+        { "key": "users", "label": "Usuarios", "icon": "👤" },
     ]
 
     Label {
@@ -38,8 +43,32 @@ ColumnLayout {
         clip: true
         delegate: ItemDelegate {
             width: ListView.view.width
-            text: modelData.label
-            highlighted: ListView.view.currentIndex === index
+            height: 48
+            highlighted: modelData.key === root.currentKey
+            Accessible.name: modelData.label
+            contentItem: RowLayout {
+                spacing: 8
+                // Barra de pantalla activa
+                Rectangle {
+                    Layout.preferredWidth: 4
+                    Layout.fillHeight: true
+                    radius: 2
+                    color: modelData.key === root.currentKey ? "#5AA9E6" : "transparent"
+                }
+                Label {
+                    text: modelData.icon
+                    font.pixelSize: 16
+                    Layout.preferredWidth: 28
+                    horizontalAlignment: Text.AlignHCenter
+                }
+                Label {
+                    text: modelData.label
+                    font.pixelSize: 14
+                    font.bold: modelData.key === root.currentKey
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+            }
             onClicked: root.go(modelData.key)
         }
     }
@@ -52,7 +81,22 @@ ColumnLayout {
                 visible.push(root.entries[i]);
         }
         menuList.model = visible;
+        syncCurrent();
     }
+
+    function syncCurrent() {
+        // Mantiene currentIndex alineado con currentKey para el resaltado por teclado
+        if (!menuList.model)
+            return;
+        for (var i = 0; i < menuList.model.length; ++i) {
+            if (menuList.model[i].key === root.currentKey) {
+                menuList.currentIndex = i;
+                return;
+            }
+        }
+    }
+
+    onCurrentKeyChanged: syncCurrent()
 
     Component.onCompleted: refresh()
 
