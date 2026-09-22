@@ -254,6 +254,11 @@ Basado en esta implementación, se recomienda continuar con:
 - Estado de red vía `syncSvc.isOnline()` (TCP 8.8.8.8, bloquea ≤1.5s solo sin red): chequeo
   al login (`onSessionChanged` + `dash.refresh()`), cada 120s (`netTimer` solo con sesión)
   y manual; nunca en cada navegación.
+
+## Respiro general de pantallas
+
+- `Main.qml` (`StackView`): `topMargin: Theme.spacingSmall`, laterales
+  `Theme.marginMedium`. Login intacto (contenido centrado de ancho fijo).
 - **Contraste**: `Theme.textOnBright (#1A1A1A)` + `Toast.fgColor` (texto oscuro en
   success/warning, blanco en info/error); base Material Light sin cambios. `Accessible.name`
   ya cubría sidebar, paginador, POS y atajos principales.

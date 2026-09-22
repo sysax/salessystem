@@ -223,7 +223,11 @@ ApplicationWindow {
     StackView {
         id: stack
         anchors.fill: parent
-        initialItem: loginPage
+        // Respiro general: todas las pantallas llevan margen superior y lateral.
+        // Login no se altera (contenido centrado de ancho fijo).
+        anchors.topMargin: Theme.spacingSmall
+        anchors.leftMargin: Theme.marginMedium
+        anchors.rightMargin: Theme.marginMedium
     }
     
     // Global notification and loading overlays - outside StackView for proper visibility
