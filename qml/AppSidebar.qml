@@ -45,15 +45,20 @@ ColumnLayout {
     }
 
     function refresh() {
-        menuList.model = root.entries.filter(e => auth.canAccess(e.key));
+        // Bucle clásico: las arrow functions no cargan en Qt 6.4 (CI)
+        var visible = [];
+        for (var i = 0; i < root.entries.length; ++i) {
+            if (auth.canAccess(root.entries[i].key))
+                visible.push(root.entries[i]);
+        }
+        menuList.model = visible;
     }
 
     Component.onCompleted: refresh()
 
     Connections {
         target: auth
-        function onSessionChanged() {
-            root.refresh();
-        }
+        // Sintaxis onSignal: clásica, válida en todas las versiones (function onX requiere Qt nuevo)
+        onSessionChanged: root.refresh()
     }
 }
