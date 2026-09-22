@@ -48,7 +48,7 @@ QString ProductRepository::generateBarcode(const QString &sku)
 {
     // EAN-13 con prefijo Colombia 770 (antes: hash() de Python)
     const quint64 h = qHash(sku);
-    return QStringLiteral("770%1").arg(h % 10000000000ULL, 10, 10, u'0');
+    return QStringLiteral("770%1").arg(static_cast<qulonglong>(h % 10000000000ULL), 10, 10, u'0');
 }
 
 QList<Product> ProductRepository::list() const
