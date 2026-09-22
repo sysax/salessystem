@@ -132,12 +132,15 @@ ApplicationWindow {
     }
 
     // Global notification and loading overlays
+    property alias globalToast: globalToastItem
+    property alias globalLoading: globalLoadingItem
+    
     Toast {
-        id: globalToast
+        id: globalToastItem
     }
     
     LoadingOverlay {
-        id: globalLoading
+        id: globalLoadingItem
     }
 
     LoginPage {
