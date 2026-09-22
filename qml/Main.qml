@@ -7,6 +7,7 @@ import QtQuick.Controls.Material
 import QtQuick.Layouts
 import "components"
 import "Utils.js" as Utils
+import QtSalesSystem
 
 ApplicationWindow {
     id: root
@@ -21,8 +22,8 @@ ApplicationWindow {
     }
 
     Material.theme: Material.Light
-    Material.primary: "#7FC8A9"   // menta pastel (components/theme.py)
-    Material.accent: "#5AA9E6"
+    Material.primary: Theme.primary   // menta pastel
+    Material.accent: Theme.accent
 
     property string currentScreen: "login"
 
@@ -141,13 +142,13 @@ ApplicationWindow {
     Toast {
         id: globalToastItem
         anchors.fill: parent
-        z: 9999
+        z: Theme.zToast
     }
-    
+
     LoadingOverlay {
         id: globalLoadingItem
         anchors.fill: parent
-        z: 9998
+        z: Theme.zLoading
     }
     
     property alias globalToast: globalToastItem

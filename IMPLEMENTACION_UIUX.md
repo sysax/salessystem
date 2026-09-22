@@ -134,3 +134,17 @@ Basado en esta implementación, se recomienda continuar con:
 - No requieren dependencias externas beyond QtQuick.Controls
 - Funcionan con Qt 6.x y Qt 5.15+
 - El sistema es fácilmente extensible para añadir más tipos o estilos
+
+## Mejora #9 — Design tokens (rama ux/09-theme-tokens)
+
+- `qml/Theme.qml`: singleton del módulo (`pragma Singleton` + `QT_QML_SINGLETON_TYPE`
+  en CMake). Tokens: `primary/accent`, semánticos `info/success/warning/error`,
+  `textOnColor/overlayDim/textOutline`, espaciados 8/12/16, `marginMedium`,
+  `radiusMedium`, escala `fontXS..fontDisplay` (+`fontML`), constantes de Toast
+  (duración, ancho, márgenes, animaciones) y `zToast/zLoading`.
+- Migrados a tokens (sin cambio visual): `Main.qml` (Material.primary/accent, z de
+  overlays), `Toast.qml` (colores, radio, fuentes, duraciones), `LoadingOverlay.qml`
+  (velo, espaciado, fuente, outline).
+- Las páginas migran progresivamente en sus ramas (valores relevados: spacing 8/10/12,
+  títulos 18/20/22/26, cuerpo 11/12/14).
+- Doc de origen: `docs/mejoras-ui-ux.md`.

@@ -108,11 +108,16 @@ if(COMMAND qt_policy)
     qt_policy(SET QTP0004 OLD)
 endif()
 
+# Theme.qml es singleton del módulo (pragma Singleton + este flag).
+# Debe ir ANTES de qt_add_qml_module: el módulo lee las propiedades al crearse.
+set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 qt_add_qml_module(QtSalesSystemApp
     URI QtSalesSystem
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/Theme.qml
         qml/AppSidebar.qml
         qml/Card.qml
         qml/LoginPage.qml
