@@ -11,7 +11,7 @@ Item {
     property string message: ""
     property int duration: 3000  // milliseconds
     property string type: "info"  // info, success, warning, error
-    property bool visible: false
+    property bool toastVisible: false
     
     // Colors by type
     readonly property color colorInfo: "#2196F3"

@@ -7,7 +7,7 @@ import QtQuick.Layouts
 Item {
     id: root
     
-    property bool visible: false
+    property bool loadingVisible: false
     property string message: "Cargando..."
     
     anchors.fill: parent
@@ -17,7 +17,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: "#80000000"  // 50% black
-        opacity: root.visible ? 0.5 : 0
+        opacity: root.loadingVisible ? 0.5 : 0
         visible: opacity > 0
         
         Behavior on opacity {
@@ -29,8 +29,8 @@ Item {
     ColumnLayout {
         anchors.centerIn: parent
         spacing: 16
-        visible: root.visible
-        opacity: root.visible ? 1 : 0
+        visible: root.loadingVisible
+        opacity: root.loadingVisible ? 1 : 0
         
         Behavior on opacity {
             NumberAnimation { duration: 200 }
@@ -39,7 +39,7 @@ Item {
         // Spinner using BusyIndicator
         BusyIndicator {
             id: spinner
-            running: root.visible
+            running: root.loadingVisible
             Layout.alignment: Qt.AlignHCenter
             width: 48
             height: 48
@@ -60,11 +60,11 @@ Item {
     // Show method
     function show(msg) {
         if (msg !== undefined) root.message = msg;
-        root.visible = true;
+        root.loadingVisible = true;
     }
     
     // Hide method
     function hide() {
-        root.visible = false;
+        root.loadingVisible = false;
     }
 }
