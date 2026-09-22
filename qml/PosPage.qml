@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Utils.js" as Utils
 
 RowLayout {
     id: root
@@ -36,9 +37,9 @@ RowLayout {
                 onClicked: {
                     var r = pos.addToCart(modelData.id, 1);
                     if (!r.ok)
-                        ApplicationWindow.window.globalToast.error(r.error, 3000);
+                        Utils.showToast("error", r.error, 3000);
                     else
-                        ApplicationWindow.window.globalToast.success("Agregado al carrito", 1500);
+                        Utils.showToast("success", "Agregado al carrito", 1500);
                 }
             }
             ScrollBar.vertical: ScrollBar {}
@@ -77,7 +78,7 @@ RowLayout {
                     text: "✕"
                     onClicked: {
                         pos.removeLine(index);
-                        ApplicationWindow.window.globalToast.info("Producto eliminado", 2000);
+                        Utils.showToast("info", "Producto eliminado", 2000);
                     }
                 }
             }
@@ -122,9 +123,9 @@ RowLayout {
                 onClicked: {
                     var r = pos.applyPromo(promoField.text);
                     if (r.ok)
-                        ApplicationWindow.window.globalToast.success("Descuento: " + money(r.discount), 2500);
+                        Utils.showToast("success", "Descuento: " + money(r.discount), 2500);
                     else
-                        ApplicationWindow.window.globalToast.error(r.error, 3000);
+                        Utils.showToast("error", r.error, 3000);
                 }
             }
         }
@@ -158,14 +159,11 @@ RowLayout {
                 }
                 var r = pos.checkout(clientField.text, pays, methodBox.currentText, auth.currentUser);
                 if (r.ok) {
-                    ApplicationWindow.window.globalToast.success(
-                        "Venta " + r.saleId + " · Cambio " + money(r.change), 
-                        3000
-                    );
+                    Utils.showToast("success", "Venta " + r.saleId + " · Cambio " + money(r.change), 3000);
                     cashField.text = "";
                     promoField.text = "";
                 } else {
-                    ApplicationWindow.window.globalToast.error(r.error, 4000);
+                    Utils.showToast("error", r.error, 4000);
                 }
             }
         }
@@ -188,11 +186,11 @@ RowLayout {
                             var r = pos.caja.open ? pos.closeCaja(parseFloat(cajaField.text) || 0, auth.currentUser) : pos.openCaja(parseFloat(cajaField.text) || 0, auth.currentUser);
                             if (r.ok) {
                                 if (r.diff !== undefined)
-                                    ApplicationWindow.window.globalToast.warning("Diferencia: " + money(r.diff), 3000);
+                                    Utils.showToast("warning", "Diferencia: " + money(r.diff), 3000);
                                 else
-                                    ApplicationWindow.window.globalToast.success("Caja abierta", 2500);
+                                    Utils.showToast("success", "Caja abierta", 2500);
                             } else {
-                                ApplicationWindow.window.globalToast.error(r.error, 4000);
+                                Utils.showToast("error", r.error, 4000);
                             }
                         }
                     }

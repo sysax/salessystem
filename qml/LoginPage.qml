@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Utils.js" as Utils
 
 Pane {
     id: root
@@ -56,24 +57,24 @@ Pane {
     function doLogin() {
         var r = auth.login(userField.text, passField.text);
         if (r.ok) {
-            ApplicationWindow.window.globalToast.success("¡Bienvenido!", 2000);
+            Utils.showToast("success", "¡Bienvenido!", 2000);
             root.loggedIn();
         } else if (r.totpRequired) {
             root.needTotp = true;
-            ApplicationWindow.window.globalToast.info("Ingrese su código 2FA", 3000);
+            Utils.showToast("info", "Ingrese su código 2FA", 3000);
         } else {
-            ApplicationWindow.window.globalToast.error(r.error, 4000);
+            Utils.showToast("error", r.error, 4000);
         }
     }
 
     function doTotp() {
         var r = auth.verifyTotp(totpField.text);
         if (r.ok) {
-            ApplicationWindow.window.globalToast.success("Autenticación exitosa", 2000);
+            Utils.showToast("success", "Autenticación exitosa", 2000);
             root.needTotp = false;
             root.loggedIn();
         } else {
-            ApplicationWindow.window.globalToast.error(r.error, 4000);
+            Utils.showToast("error", r.error, 4000);
         }
     }
 }

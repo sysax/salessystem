@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Utils.js" as Utils
 
 ColumnLayout {
     id: root
@@ -99,10 +100,7 @@ ColumnLayout {
                 editErr.text = r.error;
                 open(); // reabrir si falló
             } else {
-                ApplicationWindow.window.globalToast.success(
-                    editDialog.sku === "" ? "Producto creado" : "Producto actualizado", 
-                    2500
-                );
+                Utils.showToast("success", editDialog.sku === "" ? "Producto creado" : "Producto actualizado", 2500);
                 close();
             }
         }
