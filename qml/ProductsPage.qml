@@ -90,12 +90,14 @@ ColumnLayout {
                 "cat": fCat.text || "General"
             };
             var r;
+            Utils.showLoading(qsTr("Guardando..."));
             if (editDialog.sku === "") {
                 fields.sku = "P" + Date.now().toString().slice(-6);
                 r = catalog.add(fields);
             } else {
                 r = catalog.update(editDialog.sku, fields);
             }
+            Utils.hideLoading();
             if (!r.ok) {
                 editErr.text = r.error;
                 open(); // reabrir si falló

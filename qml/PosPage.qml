@@ -157,7 +157,9 @@ RowLayout {
                     if (cash > 0)
                         pays["efectivo"] = cash;
                 }
+                Utils.showLoading(qsTr("Procesando venta..."));
                 var r = pos.checkout(clientField.text, pays, methodBox.currentText, auth.currentUser);
+                Utils.hideLoading();
                 if (r.ok) {
                     Utils.showToast("success", "Venta " + r.saleId + " · Cambio " + money(r.change), 3000);
                     cashField.text = "";

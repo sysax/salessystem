@@ -55,7 +55,9 @@ Pane {
     }
 
     function doLogin() {
+        Utils.showLoading(qsTr("Ingresando..."));
         var r = auth.login(userField.text, passField.text);
+        Utils.hideLoading();
         if (r.ok) {
             Utils.showToast("success", "¡Bienvenido!", 2000);
             root.loggedIn();
@@ -68,7 +70,9 @@ Pane {
     }
 
     function doTotp() {
+        Utils.showLoading(qsTr("Verificando..."));
         var r = auth.verifyTotp(totpField.text);
+        Utils.hideLoading();
         if (r.ok) {
             Utils.showToast("success", "Autenticación exitosa", 2000);
             root.needTotp = false;
