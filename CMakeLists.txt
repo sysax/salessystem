@@ -96,6 +96,7 @@ qt_add_resources(sales_core "sql_files"
     FILES
         sql/schema.sql
         sql/seed.sql
+        sql/seed_min.sql
 )
 
 qt_add_executable(QtSalesSystemApp

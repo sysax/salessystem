@@ -47,6 +47,13 @@ La base SQLite se crea/siembra sola en `AppDataLocation/sistema_ventas.db`
 (`QTSALES_DB=<ruta>` para usar otra; el esquema es compatible con la BD
 del sistema Python anterior).
 
+```bash
+# Probar con BD vacía (solo esquema): se siembra con demo + usuarios
+QTSALES_DB=/tmp/ventas_vacia.db ./build/qtsales
+# Probar sin datos demo (solo los 5 usuarios, cero productos/ventas)
+QTSALES_DB=/tmp/ventas_cero.db QTSALES_SIN_DEMO=1 ./build/qtsales
+```
+
 ## Usuarios de prueba
 
 | Usuario | Clave | Rol |
