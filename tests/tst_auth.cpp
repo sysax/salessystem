@@ -50,7 +50,7 @@ private slots:
             QVERIFY(q.exec() && q.next());
             QVERIFY2(AuthService::verifyPassword(q.value(0).toString(), pass),
                      qPrintable(QStringLiteral("hash Python de %1 no verifica").arg(user)));
-            QVERIFY(!AuthService::verifyPassword(q.value(0).toString(), pass + u"X"));
+            QVERIFY(!AuthService::verifyPassword(q.value(0).toString(), pass + QStringLiteral("X")));
             q.finish();
         }
     }

@@ -98,6 +98,8 @@ ColumnLayout {
                 id: fPhone
                 text: editDialog.fields.phone || ""
                 placeholderText: qsTr("Teléfono")
+                validator: RegularExpressionValidator { regularExpression: /[0-9+\-\s]*/ }
+                inputMethodHints: Qt.ImhDialableCharactersOnly
             }
             TextField {
                 id: fCity
@@ -108,6 +110,17 @@ ColumnLayout {
                 id: editErr
                 color: "red"
             }
+            Label {
+                text: fName.text.trim() === "" ? qsTr("Ingrese el nombre") :
+                      !fPhone.acceptableInput ? qsTr("Teléfono inválido") : ""
+                color: "red"
+                visible: text !== ""
+            }
+        }
+        Component.onCompleted: {
+            editDialog.standardButton(Dialog.Save).enabled = Qt.binding(function() {
+                return fName.text.trim() !== "" && fPhone.acceptableInput;
+            });
         }
         onAccepted: {
             var f = {
@@ -133,6 +146,8 @@ ColumnLayout {
             TextField {
                 id: payAmount
                 placeholderText: qsTr("Monto")
+                validator: DoubleValidator { bottom: 0.01 }
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
             }
         }
         onAccepted: {
@@ -141,6 +156,11 @@ ColumnLayout {
                 payAmount.text = "";
                 open();
             }
+        }
+        Component.onCompleted: {
+            payDialog.standardButton(Dialog.Ok).enabled = Qt.binding(function() {
+                return payAmount.acceptableInput;
+            });
         }
     }
 

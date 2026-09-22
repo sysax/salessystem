@@ -5,7 +5,7 @@
 // evitar errores de coma flotante. Sustituye a Decimal de Python.
 #include <QLocale>
 #include <QString>
-#include <QtTypes>
+#include <QtGlobal> // qint64, qAbs (QtTypes no existe como header top-level en Qt 6.4)
 
 class Money
 {

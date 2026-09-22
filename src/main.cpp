@@ -5,6 +5,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QUrl>
 
 #include "controllers/AuthController.h"
 #include "controllers/CatalogController.h"
@@ -104,7 +105,12 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("promosCtl"), &promosCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("usersCtl"), &usersCtl);
 
+    // loadFromModule existe desde Qt 6.5; el CI usa Qt 6.4 (sin él).
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     engine.loadFromModule(QStringLiteral("QtSalesSystem"), QStringLiteral("Main"));
+#else
+    engine.load(QUrl(QStringLiteral("qrc:/qt/qml/QtSalesSystem/qml/Main.qml")));
+#endif
     if (engine.rootObjects().isEmpty())
         return -1;
     return app.exec();

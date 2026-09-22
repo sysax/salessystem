@@ -148,3 +148,12 @@ Basado en esta implementación, se recomienda continuar con:
 - Las páginas migran progresivamente en sus ramas (valores relevados: spacing 8/10/12,
   títulos 18/20/22/26, cuerpo 11/12/14).
 - Doc de origen: `docs/mejoras-ui-ux.md`.
+
+## Mejora #3 — Validación reactiva (rama ux/03-validacion-reactiva)
+
+- `ProductsPage`: `DoubleValidator` (precio ≥ 0) e `IntValidator` (stock entero ≥ 0),
+  hint en vivo con el primer problema, botón Save habilitado solo con formulario válido.
+- `ClientsPage`: `RegularExpressionValidator` para teléfono, hint en vivo, Save con binding;
+  `payDialog`: monto con `DoubleValidator` (≥ 0.01) y Ok con binding.
+- `LoginPage`: botón Entrar/Verificar deshabilitado con campos vacíos.
+- El chequeo backend en `onAccepted` se conserva como defensa en profundidad.
