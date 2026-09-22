@@ -2,15 +2,16 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
 import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
 
     Label {
         text: qsTr("Cuentas por cobrar")
-        font.pixelSize: 18
+        font.pixelSize: Theme.fontL
         font.bold: true
     }
     ListView {
@@ -46,7 +47,7 @@ ColumnLayout {
     }
     Label {
         id: msg
-        color: "red"
+        color: Theme.error
     }
 
     Dialog {

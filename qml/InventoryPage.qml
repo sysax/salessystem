@@ -2,11 +2,12 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
 import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
 
     RowLayout {
         Label {
@@ -40,7 +41,7 @@ ColumnLayout {
         delegate: Label {
             width: ListView.view.width
             text: "⚠ " + modelData.sku + "  " + modelData.name + "  (stock " + modelData.stock + ")"
-            color: "red"
+            color: Theme.error
         }
     }
     Label {
@@ -93,7 +94,7 @@ ColumnLayout {
             }
             Label {
                 id: aErr
-                color: "red"
+                color: Theme.error
             }
         }
         onAccepted: {
@@ -128,7 +129,7 @@ ColumnLayout {
             }
             Label {
                 id: tErr
-                color: "red"
+                color: Theme.error
             }
         }
         onAccepted: {

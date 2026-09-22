@@ -3,6 +3,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
 
 ColumnLayout {
     id: root
@@ -25,7 +26,7 @@ ColumnLayout {
     Label {
         text: root.title
         font.bold: true
-        font.pixelSize: 15
+        font.pixelSize: Theme.fontM
         Layout.alignment: Qt.AlignHCenter
         Layout.fillWidth: true
         horizontalAlignment: Text.AlignHCenter

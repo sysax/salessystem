@@ -2,16 +2,17 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
 import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
 
     RowLayout {
         Label {
             text: qsTr("Promociones y descuentos")
-            font.pixelSize: 18
+            font.pixelSize: Theme.fontL
             font.bold: true
             Layout.fillWidth: true
         }
@@ -24,7 +25,7 @@ ColumnLayout {
     }
     Label {
         text: qsTr("Tipos: porcentaje · monto_fijo · 2x1 · 3x2 · volumen · cupon · happy_hour")
-        font.pixelSize: 11
+        font.pixelSize: Theme.fontXS
         opacity: 0.7
     }
     ListView {
@@ -90,7 +91,7 @@ ColumnLayout {
             }
             Label {
                 id: pErr
-                color: "red"
+                color: Theme.error
             }
         }
         onAccepted: {

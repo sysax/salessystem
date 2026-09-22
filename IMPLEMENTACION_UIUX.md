@@ -149,6 +149,21 @@ Basado en esta implementación, se recomienda continuar con:
   títulos 18/20/22/26, cuerpo 11/12/14).
 - Doc de origen: `docs/mejoras-ui-ux.md`.
 
+### Cierre #9 — Migración total a tokens (rama ux/03-validacion-reactiva)
+
+- Migradas a `Theme` (sin cambio visual salvo lo indicado): `LoginPage` (spacingMedium,
+  fontDisplay, fontXS), `ProductsPage`/`SalesPage`/`ClientsPage`/`SuppliersPage`/`InventoryPage`/
+  `PurchasesPage`/`ReceivablesPage`/`PayablesPage`/`PromosPage`/`UsersPage`/`ReportsPage`
+  (spacingSmall, fontL/fontXL/fontXS, `color: Theme.error` en errores), `Card.qml`
+  (marginMedium, spacingMedium, fontDisplay/fontS/fontXL, success/error semánticos),
+  `EmptyState.qml` (título fontM).
+- Normalizaciones mínimas: `spacing: 10→spacingMedium (12)`, `font 15→fontM (14)`,
+  `"red"→Theme.error` (rojo semántico #F44336).
+- Intencionalmente sin migrar (sin token equivalente, se preserva visual):
+  micro-espaciados 2/4/6, icono emoji 36px de `EmptyState`, `palette.text`.
+- Excepción: `AppSidebar.qml` mantiene literales iguales a Theme porque `tst_sidebar`
+  lo carga aislado sin el módulo registrado.
+
 ## Mejora #3 — Validación reactiva (rama ux/03-validacion-reactiva)
 
 - `ProductsPage`: `DoubleValidator` (precio ≥ 0) e `IntValidator` (stock entero ≥ 0),

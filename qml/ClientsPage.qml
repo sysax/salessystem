@@ -2,11 +2,12 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
 import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
 
     RowLayout {
         TextField {
@@ -124,12 +125,12 @@ ColumnLayout {
             }
             Label {
                 id: editErr
-                color: "red"
+                color: Theme.error
             }
             Label {
                 text: fName.text.trim() === "" ? qsTr("Ingrese el nombre") :
                       !fPhone.acceptableInput ? qsTr("Teléfono inválido") : ""
-                color: "red"
+                color: Theme.error
                 visible: text !== ""
             }
         }

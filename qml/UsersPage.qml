@@ -2,16 +2,17 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
 import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
 
     RowLayout {
         Label {
             text: qsTr("Usuarios y roles")
-            font.pixelSize: 18
+            font.pixelSize: Theme.fontL
             font.bold: true
             Layout.fillWidth: true
         }
@@ -64,7 +65,7 @@ ColumnLayout {
     }
     Label {
         id: msg
-        color: "red"
+        color: Theme.error
     }
 
     Dialog {
@@ -88,7 +89,7 @@ ColumnLayout {
             }
             Label {
                 id: uErr
-                color: "red"
+                color: Theme.error
             }
         }
         onAccepted: {

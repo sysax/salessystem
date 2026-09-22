@@ -3,11 +3,12 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
 import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
     signal go(string screen)
 
     property string sortKey: "id"
@@ -21,7 +22,7 @@ ColumnLayout {
     RowLayout {
         Label {
             text: qsTr("Ventas y documentos")
-            font.pixelSize: 18
+            font.pixelSize: Theme.fontL
             font.bold: true
             Layout.fillWidth: true
         }
@@ -45,7 +46,7 @@ ColumnLayout {
         }
     }
     RowLayout {
-        spacing: 8
+        spacing: Theme.spacingSmall
         SortHeader {
             label: qsTr("Folio")
             active: root.sortKey === "id"
@@ -91,7 +92,7 @@ ColumnLayout {
                 detailDialog.open();
             }
             contentItem: RowLayout {
-                spacing: 8
+                spacing: Theme.spacingSmall
                 Label {
                     text: modelData.id
                     Layout.preferredWidth: 100

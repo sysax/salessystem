@@ -4,11 +4,12 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "Utils.js" as Utils
+import QtSalesSystem
 import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
 
     property string sortKey: "name"
     property bool sortAsc: true
@@ -57,7 +58,7 @@ ColumnLayout {
     }
     // Encabezados ordenables
     RowLayout {
-        spacing: 8
+        spacing: Theme.spacingSmall
         SortHeader {
             label: qsTr("SKU")
             active: root.sortKey === "sku"
@@ -102,7 +103,7 @@ ColumnLayout {
                 editDialog.open();
             }
             contentItem: RowLayout {
-                spacing: 8
+                spacing: Theme.spacingSmall
                 Label {
                     text: modelData.sku
                     Layout.preferredWidth: 120
@@ -259,14 +260,14 @@ ColumnLayout {
             }
             Label {
                 id: editErr
-                color: "red"
+                color: Theme.error
             }
             Label {
                 // Ayuda reactiva: primer problema del formulario (validación en vivo)
                 text: fName.text.trim() === "" ? qsTr("Ingrese el nombre") :
                       !fPrice.acceptableInput ? qsTr("Precio inválido (≥ 0)") :
                       !fStock.acceptableInput ? qsTr("Stock inválido (entero ≥ 0)") : ""
-                color: "red"
+                color: Theme.error
                 visible: text !== ""
             }
         }

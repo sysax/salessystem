@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import QtSalesSystem
 
 Pane {
     property string title
@@ -14,15 +15,15 @@ Pane {
     property bool alert: false
 
     Material.elevation: 2
-    padding: 12
+    padding: Theme.marginMedium
 
     RowLayout {
         anchors.fill: parent
-        spacing: 10
+        spacing: Theme.spacingMedium
         Label {
             visible: icon !== ""
             text: icon
-            font.pixelSize: 26
+            font.pixelSize: Theme.fontDisplay
             Layout.alignment: Qt.AlignTop
         }
         ColumnLayout {
@@ -30,23 +31,23 @@ Pane {
             spacing: 2
             Label {
                 text: title
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontS
                 opacity: 0.7
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
             Label {
                 text: value
-                font.pixelSize: 20
+                font.pixelSize: Theme.fontXL
                 font.bold: true
-                color: alert ? "#F44336" : palette.text
+                color: alert ? Theme.error : palette.text
             }
             Label {
                 visible: delta !== ""
                 text: delta
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontS
                 font.bold: true
-                color: deltaUp ? "#4CAF50" : "#F44336"
+                color: deltaUp ? Theme.success : Theme.error
             }
         }
     }
