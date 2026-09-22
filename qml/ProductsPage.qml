@@ -65,11 +65,15 @@ ColumnLayout {
                     id: fPrice
                     text: editDialog.fields.price !== undefined ? editDialog.fields.price : ""
                     placeholderText: qsTr("Precio")
+                    validator: DoubleValidator { bottom: 0 }
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
                 }
                 TextField {
                     id: fStock
                     text: editDialog.fields.stock !== undefined ? editDialog.fields.stock : ""
                     placeholderText: qsTr("Stock")
+                    validator: IntValidator { bottom: 0; top: 9999999 }
+                    inputMethodHints: Qt.ImhDigitsOnly
                 }
             }
             TextField {
@@ -81,6 +85,20 @@ ColumnLayout {
                 id: editErr
                 color: "red"
             }
+            Label {
+                // Ayuda reactiva: primer problema del formulario (validación en vivo)
+                text: fName.text.trim() === "" ? qsTr("Ingrese el nombre") :
+                      !fPrice.acceptableInput ? qsTr("Precio inválido (≥ 0)") :
+                      !fStock.acceptableInput ? qsTr("Stock inválido (entero ≥ 0)") : ""
+                color: "red"
+                visible: text !== ""
+            }
+        }
+        Component.onCompleted: {
+            // Guardar solo con formulario válido (el chequeo backend en onAccepted se conserva)
+            editDialog.standardButton(Dialog.Save).enabled = Qt.binding(function() {
+                return fName.text.trim() !== "" && fPrice.acceptableInput && fStock.acceptableInput;
+            });
         }
         onAccepted: {
             var fields = {

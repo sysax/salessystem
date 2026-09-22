@@ -44,6 +44,9 @@ Pane {
             text: root.needTotp ? qsTr("Verificar 2FA") : qsTr("Entrar")
             highlighted: true
             Layout.fillWidth: true
+            // No llamar al backend con campos vacíos (el manejo de error vía Toast se conserva)
+            enabled: root.needTotp ? totpField.text.trim() !== ""
+                                   : userField.text.trim() !== "" && passField.text !== ""
             onClicked: root.needTotp ? doTotp() : doLogin()
         }
         Label {
