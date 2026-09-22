@@ -29,7 +29,8 @@ Item {
     }
     
     anchors.fill: parent
-    z: 1000  // Ensure it's on top
+    z: 9999  // Ensure it's on top of everything
+    clip: true
     
     // Toast container
     Rectangle {
