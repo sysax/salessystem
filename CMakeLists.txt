@@ -102,6 +102,12 @@ qt_add_executable(QtSalesSystemApp
     src/main.cpp
 )
 
+# Qt 6.5+ policy QTP0004: mantener import relativo "components" sin qmldir
+if(COMMAND qt_policy)
+    qt_policy(SET QTP0001 NEW)
+    qt_policy(SET QTP0004 OLD)
+endif()
+
 qt_add_qml_module(QtSalesSystemApp
     URI QtSalesSystem
     VERSION 1.0
@@ -123,6 +129,9 @@ qt_add_qml_module(QtSalesSystemApp
         qml/ReportsPage.qml
         qml/PromosPage.qml
         qml/UsersPage.qml
+        qml/Utils.js
+        qml/components/Toast.qml
+        qml/components/LoadingOverlay.qml
 )
 
 target_link_libraries(QtSalesSystemApp PRIVATE

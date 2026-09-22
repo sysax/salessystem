@@ -29,7 +29,7 @@ Item {
     }
     
     anchors.fill: parent
-    z: 9999  // Ensure it's on top of everything
+    z: 9999  // Ensure it's on top of everything (above LoadingOverlay z 9998)
     clip: true
     
     // Toast container
@@ -77,12 +77,12 @@ Item {
             }
         }
         
-        // Animation
-        SequentialAnimation on opacity {
+        // Animation (standalone object: avoids value-source + binding conflict on opacity)
+        SequentialAnimation {
             id: anim
-            NumberAnimation { to: 1.0; duration: 300; easing.type: Easing.OutCubic }
+            NumberAnimation { target: toastRect; property: "opacity"; to: 1.0; duration: 300; easing.type: Easing.OutCubic }
             PauseAnimation { duration: root.duration }
-            NumberAnimation { to: 0.0; duration: 300; easing.type: Easing.InCubic }
+            NumberAnimation { target: toastRect; property: "opacity"; to: 0.0; duration: 300; easing.type: Easing.InCubic }
         }
     }
     

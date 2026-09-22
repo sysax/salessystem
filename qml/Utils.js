@@ -1,43 +1,38 @@
 .pragma library
 
+// Registro explícito desde Main.qml (Component.onCompleted).
+// Evita el lookup frágil vía Qt.application.windows, que puede ser
+// undefined/vacío según plataforma o momento de la llamada.
+var _toast = null;
+var _loading = null;
+
+function registerToast(t) { _toast = t; }
+function registerLoading(l) { _loading = l; }
+
 // Función segura para mostrar Toasts
-// Intenta obtener la ventana activa y llama al globalToast
 function showToast(type, message, duration) {
-    // Pequeño delay para asegurar que la UI esté lista si se llama muy temprano
-    if (typeof Qt !== 'undefined' && Qt.application && Qt.application.windows) {
-        // Fallback directo si tenemos acceso a la aplicación
-        if (Qt.application.windows.length > 0) {
-            var win = Qt.application.windows[0];
-            if (win && win.globalToast) {
-                if (type === "success") win.globalToast.success(message, duration);
-                else if (type === "error") win.globalToast.error(message, duration);
-                else if (type === "warning") win.globalToast.warning(message, duration);
-                else if (type === "info") win.globalToast.info(message, duration);
-                else win.globalToast.show(message, type, duration);
-                return;
-            }
-        }
+    if (_toast) {
+        if (type === "success") _toast.success(message, duration);
+        else if (type === "error") _toast.error(message, duration);
+        else if (type === "warning") _toast.warning(message, duration);
+        else if (type === "info") _toast.info(message, duration);
+        else _toast.show(message, duration, type);
+        return;
     }
     console.log("Toast (" + type + "): " + message);
 }
 
 function showLoading(message) {
-    if (typeof Qt !== 'undefined' && Qt.application && Qt.application.windows && Qt.application.windows.length > 0) {
-        var win = Qt.application.windows[0];
-        if (win && win.globalLoading) {
-            win.globalLoading.show(message);
-            return;
-        }
+    if (_loading) {
+        _loading.show(message);
+        return;
     }
     console.log("Loading: " + message);
 }
 
 function hideLoading() {
-    if (typeof Qt !== 'undefined' && Qt.application && Qt.application.windows && Qt.application.windows.length > 0) {
-        var win = Qt.application.windows[0];
-        if (win && win.globalLoading) {
-            win.globalLoading.hide();
-            return;
-        }
+    if (_loading) {
+        _loading.hide();
+        return;
     }
 }

@@ -6,6 +6,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
 import "components"
+import "Utils.js" as Utils
 
 ApplicationWindow {
     id: root
@@ -13,6 +14,11 @@ ApplicationWindow {
     width: 1366
     height: 800
     title: qsTr("Sistema de Ventas")
+
+    Component.onCompleted: {
+        Utils.registerToast(globalToastItem);
+        Utils.registerLoading(globalLoadingItem);
+    }
 
     Material.theme: Material.Light
     Material.primary: "#7FC8A9"   // menta pastel (components/theme.py)
