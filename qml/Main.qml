@@ -129,17 +129,19 @@ ApplicationWindow {
         id: stack
         anchors.fill: parent
         initialItem: loginPage
-        
-        // Global notification and loading overlays inside StackView for proper visibility
-        Toast {
-            id: globalToastItem
-            anchors.fill: parent
-        }
-        
-        LoadingOverlay {
-            id: globalLoadingItem
-            anchors.fill: parent
-        }
+    }
+    
+    // Global notification and loading overlays - outside StackView for proper visibility
+    Toast {
+        id: globalToastItem
+        anchors.fill: parent
+        z: 9999
+    }
+    
+    LoadingOverlay {
+        id: globalLoadingItem
+        anchors.fill: parent
+        z: 9998
     }
     
     property alias globalToast: globalToastItem
