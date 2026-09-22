@@ -28,6 +28,9 @@ Item {
             default: return colorInfo;
         }
     }
+
+    // Contraste (mejora #10): texto oscuro sobre verde/naranja, blanco en azul/rojo
+    readonly property color fgColor: (type === "success" || type === "warning") ? Theme.textOnBright : Theme.textOnColor
     
     anchors.fill: parent
     z: 9999  // Ensure it's on top of everything (above LoadingOverlay z 9998)
@@ -63,14 +66,14 @@ Item {
                     }
                 }
                 font.pixelSize: Theme.fontXL
-                color: Theme.textOnColor
+                color: root.fgColor
                 Layout.alignment: Qt.AlignVCenter
             }
             
             // Message
             Label {
                 text: root.message
-                color: Theme.textOnColor
+                color: root.fgColor
                 font.pixelSize: Theme.fontM
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true

@@ -65,6 +65,7 @@ ColumnLayout {
 
     Dialog {
         id: addDialog
+        onOpened: pCode.forceActiveFocus()
         title: qsTr("Nueva promoción")
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel

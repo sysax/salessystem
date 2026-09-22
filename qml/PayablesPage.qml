@@ -52,6 +52,7 @@ ColumnLayout {
 
     Dialog {
         id: payDialog
+        onOpened: payAmount.forceActiveFocus()
         title: qsTr("Pagar ") + payId
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel

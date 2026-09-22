@@ -70,6 +70,7 @@ ColumnLayout {
 
     Dialog {
         id: addDialog
+        onOpened: uName.forceActiveFocus()
         title: qsTr("Nuevo usuario")
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -102,6 +103,7 @@ ColumnLayout {
     }
     Dialog {
         id: resetDialog
+        onOpened: rPass.forceActiveFocus()
         title: qsTr("Nueva clave para ") + username
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel

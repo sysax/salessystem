@@ -95,6 +95,7 @@ ColumnLayout {
 
     Dialog {
         id: editDialog
+        onOpened: fName.forceActiveFocus()
         title: clientId < 0 ? qsTr("Nuevo cliente") : qsTr("Editar cliente")
         modal: true
         standardButtons: Dialog.Save | Dialog.Cancel
@@ -155,6 +156,7 @@ ColumnLayout {
     }
     Dialog {
         id: payDialog
+        onOpened: payAmount.forceActiveFocus()
         title: qsTr("Abonar ") + saleId
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel

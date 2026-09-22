@@ -76,6 +76,7 @@ ColumnLayout {
 
     Dialog {
         id: adjustDialog
+        onOpened: aSku.forceActiveFocus()
         title: qsTr("Ajuste de stock (requiere motivo)")
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -107,6 +108,7 @@ ColumnLayout {
     }
     Dialog {
         id: transferDialog
+        onOpened: tSku.forceActiveFocus()
         title: qsTr("Transferir ubicación")
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel

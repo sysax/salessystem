@@ -63,6 +63,7 @@ ColumnLayout {
 
     Dialog {
         id: editDialog
+        onOpened: fName.forceActiveFocus()
         title: supId < 0 ? qsTr("Nuevo proveedor") : qsTr("Editar proveedor")
         modal: true
         standardButtons: Dialog.Save | Dialog.Cancel

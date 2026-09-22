@@ -72,6 +72,7 @@ ColumnLayout {
 
     Dialog {
         id: createDialog
+        onOpened: cSupplier.forceActiveFocus()
         title: qsTr("Nueva orden de compra")
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel

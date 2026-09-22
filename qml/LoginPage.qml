@@ -11,6 +11,10 @@ Pane {
 
     property bool needTotp: false
 
+    // Focus management (mejora #10): foco inicial y al pedir 2FA
+    onNeedTotpChanged: { if (needTotp) totpField.forceActiveFocus() }
+    Component.onCompleted: userField.forceActiveFocus()
+
     ColumnLayout {
         anchors.centerIn: parent
         width: 320

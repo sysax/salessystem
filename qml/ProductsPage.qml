@@ -225,6 +225,7 @@ ColumnLayout {
 
     Dialog {
         id: editDialog
+        onOpened: fName.forceActiveFocus()
         title: sku === "" ? qsTr("Nuevo producto") : qsTr("Editar ") + sku
         modal: true
         standardButtons: Dialog.Save | Dialog.Cancel

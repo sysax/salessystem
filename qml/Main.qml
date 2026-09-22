@@ -257,4 +257,17 @@ ApplicationWindow {
         id: usersPage
         visible: false
     }
+
+    // Atajos de teclado (mejora #10): navegación rápida entre módulos principales.
+    // navigate() ya valida sesión y permiso por rol.
+    Shortcut { sequence: "Ctrl+1"; enabled: auth.loggedIn; onActivated: root.navigate("dashboard") }
+    Shortcut { sequence: "Ctrl+2"; enabled: auth.loggedIn; onActivated: root.navigate("pos") }
+    Shortcut { sequence: "Ctrl+3"; enabled: auth.loggedIn; onActivated: root.navigate("products") }
+    Shortcut { sequence: "Ctrl+4"; enabled: auth.loggedIn; onActivated: root.navigate("sales") }
+    Shortcut { sequence: "Ctrl+5"; enabled: auth.loggedIn; onActivated: root.navigate("inventory") }
+    Shortcut { sequence: "Ctrl+6"; enabled: auth.loggedIn; onActivated: root.navigate("reports") }
+    Shortcut {
+        sequence: "Ctrl+M"; enabled: auth.loggedIn
+        onActivated: drawer.visible ? drawer.close() : drawer.open()
+    }
 }

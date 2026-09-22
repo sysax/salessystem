@@ -224,3 +224,16 @@ Basado en esta implementación, se recomienda continuar con:
   cableada en `Main`), POS (🔍 sin productos), Clientes (+ Nuevo), Inventario (alertas ✅
   + movimientos), Compras (+ Nueva OC), Proveedores (+ Nuevo), CxC/CxP (✅ al día),
   Promos (+ Nueva), Usuarios (+ Nuevo).
+
+## Mejora #10 — Accesibilidad
+
+- **Atajos de teclado** (`Main.qml`, `Shortcut` con `enabled: auth.loggedIn`; `navigate()`
+  ya valida permiso por rol): `Ctrl+1..6` → Tablero/POS/Productos/Ventas/Inventario/Reportes,
+  `Ctrl+M` abre/cierra el menú. Hints visibles en `AppSidebar` (campo `sc`, fontS 60%).
+- **Focus management**: `LoginPage` foca usuario al abrir y campo 2FA al pedirlo;
+  `onOpened: <campo>.forceActiveFocus()` en los 11 diálogos (producto/cliente/abono,
+  proveedor, usuario nuevo/clave, promo, OC, ajuste/transferencia, CxC/CxP). Tab nativo
+  y cierre con Esc se conservan.
+- **Contraste**: `Theme.textOnBright (#1A1A1A)` + `Toast.fgColor` (texto oscuro en
+  success/warning, blanco en info/error); base Material Light sin cambios. `Accessible.name`
+  ya cubría sidebar, paginador, POS y atajos principales.

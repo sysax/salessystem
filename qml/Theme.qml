@@ -19,6 +19,8 @@ QtObject {
 
     // Superficies y texto
     readonly property color textOnColor: "white"
+    // Texto oscuro para fondos claros semánticos (contraste en Toast success/warning)
+    readonly property color textOnBright: "#1A1A1A"
     readonly property color overlayDim: "#80000000"   // velo 50% negro
     readonly property color textOutline: "#20000000"
 

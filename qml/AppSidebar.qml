@@ -14,19 +14,19 @@ ColumnLayout {
     property string currentKey: "dashboard"
 
     property var entries: [
-        { "key": "dashboard", "label": "Tablero", "icon": "📊" },
-        { "key": "pos", "label": "Punto de venta", "icon": "🛒" },
-        { "key": "products", "label": "Productos", "icon": "📦" },
-        { "key": "sales", "label": "Ventas", "icon": "🧾" },
-        { "key": "clients", "label": "Clientes", "icon": "👥" },
-        { "key": "inventory", "label": "Inventario", "icon": "🏬" },
-        { "key": "purchases", "label": "Compras", "icon": "🛍️" },
-        { "key": "suppliers", "label": "Proveedores", "icon": "🚚" },
-        { "key": "receivables", "label": "Cuentas por cobrar", "icon": "💳" },
-        { "key": "payables", "label": "Cuentas por pagar", "icon": "💸" },
-        { "key": "reports", "label": "Reportes", "icon": "📈" },
-        { "key": "promos", "label": "Promociones", "icon": "🎟️" },
-        { "key": "users", "label": "Usuarios", "icon": "👤" },
+        { "key": "dashboard", "label": "Tablero", "icon": "📊", "sc": "Ctrl+1" },
+        { "key": "pos", "label": "Punto de venta", "icon": "🛒", "sc": "Ctrl+2" },
+        { "key": "products", "label": "Productos", "icon": "📦", "sc": "Ctrl+3" },
+        { "key": "sales", "label": "Ventas", "icon": "🧾", "sc": "Ctrl+4" },
+        { "key": "clients", "label": "Clientes", "icon": "👥", "sc": "" },
+        { "key": "inventory", "label": "Inventario", "icon": "🏬", "sc": "Ctrl+5" },
+        { "key": "purchases", "label": "Compras", "icon": "🛍️", "sc": "" },
+        { "key": "suppliers", "label": "Proveedores", "icon": "🚚", "sc": "" },
+        { "key": "receivables", "label": "Cuentas por cobrar", "icon": "💳", "sc": "" },
+        { "key": "payables", "label": "Cuentas por pagar", "icon": "💸", "sc": "" },
+        { "key": "reports", "label": "Reportes", "icon": "📈", "sc": "Ctrl+6" },
+        { "key": "promos", "label": "Promociones", "icon": "🎟️", "sc": "" },
+        { "key": "users", "label": "Usuarios", "icon": "👤", "sc": "" },
     ]
 
     Label {
@@ -67,6 +67,12 @@ ColumnLayout {
                     font.bold: modelData.key === root.currentKey
                     Layout.fillWidth: true
                     elide: Text.ElideRight
+                }
+                Label {
+                    visible: modelData.sc !== ""
+                    text: modelData.sc
+                    font.pixelSize: 12
+                    opacity: 0.6
                 }
             }
             onClicked: root.go(modelData.key)
