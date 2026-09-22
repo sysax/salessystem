@@ -354,6 +354,7 @@ RowLayout {
         id: confirmRemoveDialog
         title: qsTr("Eliminar producto")
         modal: true
+        width: 320
         standardButtons: Dialog.Ok | Dialog.Cancel
         property int removeIndex: -1
         property string removeName: ""
@@ -376,6 +377,7 @@ RowLayout {
         id: confirmClearDialog
         title: qsTr("Vaciar carrito")
         modal: true
+        width: 320
         standardButtons: Dialog.Ok | Dialog.Cancel
         Label {
             text: qsTr("¿Vaciar todo el carrito? Esta acción no se puede deshacer.")
