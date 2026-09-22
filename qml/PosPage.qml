@@ -29,6 +29,26 @@ RowLayout {
         confirmRemoveDialog.open();
     }
 
+    // Lógica de cobro: Efectivo/Mixto exigen efectivo >= total (Crédito y demás, no).
+    function cashNeeded() {
+        return methodBox.currentText === "Efectivo" || methodBox.currentText === "Mixto";
+    }
+    function cashValue() {
+        return parseFloat(cashField.text) || 0;
+    }
+    function cartTotal() {
+        return (pos.totals && pos.totals.total) || 0;
+    }
+    function canCharge() {
+        if (pos.cart.length === 0)
+            return false;
+        if (!cashNeeded())
+            return true;
+        if (cartTotal() <= 0)
+            return true; // promo cubre el total
+        return cashField.acceptableInput && cashValue() >= cartTotal();
+    }
+
     // Izquierda: búsqueda + carrito
     ColumnLayout {
         Layout.fillWidth: true
@@ -254,6 +274,16 @@ RowLayout {
             Layout.fillWidth: true
             implicitHeight: root.touchH
         }
+        Label {
+            // Ayuda reactiva: cambio o faltante según el efectivo ingresado
+            visible: root.cashNeeded() && pos.cart.length > 0 && cashField.text !== ""
+            text: root.cashValue() >= root.cartTotal()
+                  ? qsTr("Cambio: ") + money(root.cashValue() - root.cartTotal())
+                  : qsTr("Faltan: ") + money(root.cartTotal() - root.cashValue())
+            color: root.cashValue() >= root.cartTotal() ? Theme.success : Theme.error
+            font.bold: true
+            font.pixelSize: Theme.fontM
+        }
         Button {
             text: qsTr("Cobrar")
             highlighted: true
@@ -261,7 +291,7 @@ RowLayout {
             implicitHeight: 56
             font.bold: true
             font.pixelSize: Theme.fontL
-            enabled: pos.cart.length > 0
+            enabled: root.canCharge()
             onClicked: {
                 var pays = {};
                 if (methodBox.currentText === "Mixto" || methodBox.currentText === "Efectivo") {
