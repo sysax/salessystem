@@ -228,6 +228,7 @@ ApplicationWindow {
         anchors.topMargin: Theme.spacingSmall
         anchors.leftMargin: Theme.marginMedium
         anchors.rightMargin: Theme.marginMedium
+        initialItem: loginPage
     }
     
     // Global notification and loading overlays - outside StackView for proper visibility
