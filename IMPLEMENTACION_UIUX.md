@@ -179,3 +179,12 @@ Basado en esta implementación, se recomienda continuar con:
     `syncCurrent()` alinea `currentIndex` para teclado; `refresh()` por rol intacto.
 - `qml/Main.qml`: `screenMeta()` (label/icono/sección), `crumbText()` (“Sección › Icono Etiqueta”),
   breadcrumb clicable a Tablero en header, `Drawer` 280px, `sidebar.currentKey: currentScreen`.
+
+## Mejora #6 — Dashboard visual
+
+- `qml/Card.qml`: props `icon/delta/deltaUp/alert` (compat con `title/value`); layout icono + valores,
+  delta verde/rojo, alerta roja.
+- `qml/DashboardPage.qml` (`import QtSalesSystem`): 9 tarjetas con iconos (💰📦👥⏳⚠️📈💹🧮🔄),
+  comparativa hoy-vs-ayer (`dayDeltaText`, badge en header), KPIs financieros (margen bruto/neto,
+  rotación+días), gráfico de barras propio de 7 días (sin Qt Charts para no añadir dependencia/CI),
+  ranking con 🥇🥈🥉 + barra relativa, sección stock-bajo (top 5) con atajos a reportes/inventario.
