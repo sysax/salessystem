@@ -108,6 +108,10 @@ if(COMMAND qt_policy)
     qt_policy(SET QTP0004 OLD)
 endif()
 
+# Theme.qml es singleton del módulo (pragma Singleton + este flag).
+# Debe ir ANTES de qt_add_qml_module: el módulo lee las propiedades al crearse.
+set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 qt_add_qml_module(QtSalesSystemApp
     URI QtSalesSystem
     VERSION 1.0
@@ -134,9 +138,6 @@ qt_add_qml_module(QtSalesSystemApp
         qml/components/Toast.qml
         qml/components/LoadingOverlay.qml
 )
-
-# Theme.qml es singleton del módulo (pragma Singleton + este flag).
-set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 target_link_libraries(QtSalesSystemApp PRIVATE
     sales_core

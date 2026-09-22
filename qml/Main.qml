@@ -7,6 +7,7 @@ import QtQuick.Controls.Material
 import QtQuick.Layouts
 import "components"
 import "Utils.js" as Utils
+import QtSalesSystem
 
 ApplicationWindow {
     id: root
