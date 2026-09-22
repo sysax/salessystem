@@ -108,7 +108,6 @@ ColumnLayout {
 
     Connections {
         target: auth
-        // Sintaxis onSignal: clásica, válida en todas las versiones (function onX requiere Qt nuevo)
-        onSessionChanged: root.refresh()
+        function onSessionChanged() { root.refresh(); }
     }
 }

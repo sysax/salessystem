@@ -336,7 +336,7 @@ ApplicationWindow {
     }
     Connections {
         target: auth
-        onSessionChanged: {
+        function onSessionChanged() {
             if (auth.loggedIn) {
                 root.tickClock();
                 root.recheckOnline();

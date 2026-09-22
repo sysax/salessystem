@@ -220,7 +220,7 @@ ColumnLayout {
 
     Connections {
         target: catalog
-        onProductsChanged: root.refreshView()
+        function onProductsChanged() { root.refreshView(); }
     }
 
     Dialog {

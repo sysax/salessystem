@@ -203,7 +203,7 @@ ColumnLayout {
 
     Connections {
         target: salesCtl
-        onSalesChanged: root.refreshView()
+        function onSalesChanged() { root.refreshView(); }
     }
 
     Dialog {
