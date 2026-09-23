@@ -29,9 +29,9 @@ public:
     QVariantMap alerts() const { return m_alerts; }
 
     Q_INVOKABLE void refresh();
-    Q_INVOKABLE QVariantMap adjust(const QString &sku, int delta, const QString &reason,
+    Q_INVOKABLE QVariantMap adjust(const QString &sku, double delta, const QString &reason,
                                    const QString &user);
-    Q_INVOKABLE QVariantMap transfer(const QString &sku, int qty, const QString &to,
+    Q_INVOKABLE QVariantMap transfer(const QString &sku, double qty, const QString &to,
                                      const QString &reason, const QString &user);
     Q_INVOKABLE QVariantMap valuation() const;
 
@@ -59,7 +59,7 @@ public:
     QVariantList orders() const { return m_orders; }
 
     Q_INVOKABLE void refresh();
-    Q_INVOKABLE QVariantMap create(const QString &supplier, const QString &sku, int qty,
+    Q_INVOKABLE QVariantMap create(const QString &supplier, const QString &sku, double qty,
                                    const QString &user);
     Q_INVOKABLE QVariantMap receive(const QString &folio, const QString &user);
     Q_INVOKABLE QVariantMap cancel(const QString &folio, const QString &user);

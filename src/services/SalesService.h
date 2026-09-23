@@ -11,6 +11,9 @@
 #include "../repositories/ProductRepository.h"
 #include "../repositories/PromoRepository.h"
 #include "../repositories/SaleRepository.h"
+#include "../repositories/SerialRepository.h"
+#include "../repositories/AuditRepository.h"
+#include "../services/SettingsService.h"
 
 class EventBus;
 
@@ -28,20 +31,34 @@ class SalesService : public QObject
 public:
     struct ServiceItem {
         int productId = 0;
-        int qty = 1;
+        double qty = 1.0;
         double priceOverride = 0.0; // 0 ⇒ precio lista
         double discountPct = 0.0;
+        QString serial; // Fase 3: IMEI/serial (productos tracked)
+        QString receta; // Fase 3: Nº receta (requires_prescription)
     };
     struct LineTotal {
         int productId = 0;
         QString name;
         QString sku;
-        int qty = 0;
+        double qty = 0.0;
         double unitPrice = 0.0;
         double subtotal = 0.0;
         double discount = 0.0;
         double tax = 0.0;
         double total = 0.0;
+        // Fase 1: tasa efectivamente aplicada (validada contra settings).
+        double taxRate = 0.0;
+        QString taxName;
+        // Fase 3: serial/receta de la línea.
+        QString serial;
+        QString receta;
+    };
+    struct TaxBucket {
+        QString name;
+        double rate = 0.0;
+        double base = 0.0; // Σ(subtotal − descuento) de sus líneas
+        double tax = 0.0;  // Σ impuesto de sus líneas (agregado, no recalculado)
     };
     struct Totals {
         double subtotal = 0.0;
@@ -50,6 +67,7 @@ public:
         double total = 0.0;
         int itemsCount = 0;
         QList<LineTotal> lines;
+        QList<TaxBucket> buckets; // desglose por tasa
     };
     struct CreatedSale {
         QString id;
@@ -57,28 +75,43 @@ public:
         QString cufe;
         QString status;
         QList<LineTotal> items;
+        QList<TaxBucket> buckets;
     };
 
     explicit SalesService(QSqlDatabase db, ProductRepository *products, SaleRepository *sales,
                           InventoryRepository *inventory, ClientRepository *clients,
                           CajaRepository *caja, PromoRepository *promos, EventBus *bus = nullptr,
-                          QObject *parent = nullptr);
+                          SettingsService *settings = nullptr,
+                          AuditRepository *audit = nullptr,
+                          SerialRepository *serials = nullptr, QObject *parent = nullptr);
 
     // Crea venta completa. payments: {"efectivo": X, "credito": Y} o vacío +
     // paymentMethod ("Efectivo"|"Credito"|...). promoCode opcional.
+    // role: rol del vendedor (productos controlled exigen Administrador).
     Result<CreatedSale> create(const QList<ServiceItem> &items, const QString &clientName,
                                const QMap<QString, double> &payments,
                                const QString &paymentMethod, const QString &promoCode,
-                               const QString &vendedor, bool offline = false);
+                               const QString &vendedor, bool offline = false,
+                               const QString &role = {});
     Result<CreatedSale> cancel(const QString &saleId, const QString &reason,
                                const QString &user);
     Totals calculateTotals(const QList<ServiceItem> &items) const;
 
-    // Impuesto desde texto BD ("IVA 19%"→19, "19"→19, otro→0)
+    // Impuesto desde texto BD ("IVA 19%"→19, "19"→19, otro→0). Legacy: se
+    // conserva para compatibilidad; el cálculo usa resolveTaxRate().
     static double parseTaxRate(const QString &taxText);
+    // Fase 1: valida contra tax_rates_json; si no está configurada, usa
+    // default_tax_rate. Sin settings (tests viejos) = parseTaxRate().
+    double resolveTaxRate(const QString &taxText) const;
+    QString resolveTaxName(const QString &taxText) const;
+    // Serializa buckets a JSON para sales.tax_breakdown.
+    static QString bucketsToJson(const QList<TaxBucket> &buckets);
+    static QList<TaxBucket> bucketsFromJson(const QString &json);
 
 private:
     Result<Totals> buildTotals(const QList<ServiceItem> &items, QString &error) const;
+    // Fase 3: producto con seguimiento de serial (flag attrs o seriales registrados).
+    bool isTracked(const Product &p) const;
 
     QSqlDatabase m_db;
     ProductRepository *m_products = nullptr;
@@ -88,4 +121,7 @@ private:
     CajaRepository *m_caja = nullptr;
     PromoRepository *m_promos = nullptr;
     EventBus *m_bus = nullptr;
+    SettingsService *m_settings = nullptr;
+    AuditRepository *m_audit = nullptr;
+    SerialRepository *m_serials = nullptr;
 };

@@ -3,6 +3,7 @@
 #include <QtTest>
 
 #include "core/DatabaseManager.h"
+#include "TestDb.h"
 #include "core/EventBus.h"
 #include "repositories/AuditRepository.h"
 #include "repositories/CajaRepository.h"
@@ -27,6 +28,8 @@ private slots:
         QVERIFY(m_tmp.isValid());
         m_dbm = new DatabaseManager(this);
         QVERIFY(m_dbm->initialize(m_tmp.filePath(QStringLiteral("sales_svc.db"))));
+        // Datos demo solo-tests (la app siembra base limpia)
+        QVERIFY(TestDb::loadDemo(m_dbm->database()));
         QSqlDatabase db = m_dbm->database();
         m_audit = new AuditRepository(db, this);
         m_products = new ProductRepository(db, m_audit, this);
@@ -37,7 +40,7 @@ private slots:
         m_promos = new PromoRepository(db, m_products, m_audit, this);
         m_bus = new EventBus(this);
         m_svc = new SalesService(db, m_products, m_sales, m_inventory, m_clients, m_caja,
-                                 m_promos, m_bus, this);
+                                 m_promos, m_bus, nullptr, nullptr, nullptr, this);
     }
 
     void taxParsing()

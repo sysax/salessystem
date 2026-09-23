@@ -1,6 +1,6 @@
-// AuthService contra BD temporal sembrada (sql/seed.sql).
-// Incluye prueba de compatibilidad cripto: los hashes PBKDF2 generados
-// por Python (hashlib, 100k) deben verificar en C++ (QPasswordDigestor).
+// AuthService contra BD temporal con base limpia (solo admin, sql/seed.sql).
+// Incluye prueba de compatibilidad cripto: el hash PBKDF2 de admin generado
+// por Python (hashlib, 100k) debe verificar en C++ (QPasswordDigestor).
 #include <QtTest>
 
 #include "core/DatabaseManager.h"
@@ -21,14 +21,14 @@ private slots:
         QVERIFY(m_tmp.isValid());
         m_db = new DatabaseManager(this);
         QVERIFY(m_db->initialize(m_tmp.filePath(QStringLiteral("auth.db"))));
-        // Seed aplicado íntegro (sql/seed.sql)
-        QCOMPARE(m_db->tableRowCount("users"), 5);
-        QCOMPARE(m_db->tableRowCount("products"), 10);
-        QCOMPARE(m_db->tableRowCount("clients"), 5);
-        QCOMPARE(m_db->tableRowCount("suppliers"), 5);
-        QCOMPARE(m_db->tableRowCount("sales"), 8);
-        QCOMPARE(m_db->tableRowCount("promos"), 6);
-        QCOMPARE(m_db->tableRowCount("counters"), 5);
+        // Seed de producción: base limpia, solo admin, resto vacío
+        QCOMPARE(m_db->tableRowCount("users"), 1);
+        QCOMPARE(m_db->tableRowCount("products"), 0);
+        QCOMPARE(m_db->tableRowCount("clients"), 0);
+        QCOMPARE(m_db->tableRowCount("suppliers"), 0);
+        QCOMPARE(m_db->tableRowCount("sales"), 0);
+        QCOMPARE(m_db->tableRowCount("promos"), 0);
+        QCOMPARE(m_db->tableRowCount("counters"), 0);
         m_bus = new EventBus(this);
         m_auth = new AuthService(m_db->database(), m_bus, this);
     }
@@ -40,10 +40,6 @@ private slots:
         q.prepare(QStringLiteral("SELECT password FROM users WHERE username=?"));
         const QList<QPair<QString, QString>> creds = {
             {QStringLiteral("admin"), QStringLiteral("admin123")},
-            {QStringLiteral("vendedor"), QStringLiteral("venta123")},
-            {QStringLiteral("cajero"), QStringLiteral("caja123")},
-            {QStringLiteral("almacen"), QStringLiteral("alma123")},
-            {QStringLiteral("contador"), QStringLiteral("conta123")},
         };
         for (const auto &[user, pass] : creds) {
             q.addBindValue(user);
@@ -62,6 +58,52 @@ private slots:
         QCOMPARE(r.value().username, QStringLiteral("admin"));
         QCOMPARE(r.value().role, QStringLiteral("Administrador"));
         QVERIFY(!r.value().totpRequired);
+        // Admin por defecto: cambio de clave obligatorio al primer ingreso
+        QVERIFY(r.value().mustChangePassword);
+    }
+
+    void forcedPasswordChange()
+    {
+        // Validaciones del cambio propio
+        QVERIFY(!m_auth->changePassword(QStringLiteral("admin"), QStringLiteral("mala"),
+                                        QStringLiteral("nueva1234")).ok()); // actual errónea
+        QVERIFY(!m_auth->changePassword(QStringLiteral("admin"), QStringLiteral("admin123"),
+                                        QStringLiteral("ab")).ok()); // corta
+        QVERIFY(!m_auth->changePassword(QStringLiteral("admin"), QStringLiteral("admin123"),
+                                        QStringLiteral("admin123")).ok()); // igual
+        QVERIFY(!m_auth->changePassword(QStringLiteral("nadie"), QStringLiteral("x"),
+                                        QStringLiteral("nueva1234")).ok()); // inexistente
+        // Cambio válido limpia el flag
+        QVERIFY(m_auth->changePassword(QStringLiteral("admin"), QStringLiteral("admin123"),
+                                       QStringLiteral("nueva1234")).ok());
+        const auto r = m_auth->login(QStringLiteral("admin"), QStringLiteral("nueva1234"));
+        QVERIFY(r.ok());
+        QVERIFY(!r.value().mustChangePassword);
+        QVERIFY(!m_auth->login(QStringLiteral("admin"), QStringLiteral("admin123")).ok());
+        // Restaurar clave por defecto para el resto de la suite
+        QVERIFY(m_auth->resetPassword(QStringLiteral("admin"), QStringLiteral("admin123")).ok());
+    }
+
+    void resetForcesChange()
+    {
+        QVERIFY(m_auth->addUser(QStringLiteral("tmpchg"), QStringLiteral("tmpc1234"),
+                                QStringLiteral("Cajero")).ok());
+        // Clave puesta por admin → cambio obligatorio
+        QVERIFY(m_auth->login(QStringLiteral("tmpchg"), QStringLiteral("tmpc1234"))
+                    .value()
+                    .mustChangePassword);
+        // El usuario personaliza su clave → flag limpio
+        QVERIFY(m_auth->changePassword(QStringLiteral("tmpchg"), QStringLiteral("tmpc1234"),
+                                       QStringLiteral("mia1234")).ok());
+        QVERIFY(!m_auth->login(QStringLiteral("tmpchg"), QStringLiteral("mia1234"))
+                     .value()
+                     .mustChangePassword);
+        // Reset de admin → vuelve a exigir cambio
+        QVERIFY(m_auth->resetPassword(QStringLiteral("tmpchg"), QStringLiteral("otra1234")).ok());
+        QVERIFY(m_auth->login(QStringLiteral("tmpchg"), QStringLiteral("otra1234"))
+                    .value()
+                    .mustChangePassword);
+        QVERIFY(m_auth->deleteUser(QStringLiteral("tmpchg")).ok());
     }
 
     void loginUnknownAndWrong()

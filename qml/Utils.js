@@ -36,3 +36,17 @@ function hideLoading() {
         return;
     }
 }
+
+// Fase 2: cantidad con hasta 3 decimales recortando ceros (2, 0.35).
+// Única función de formato de cantidades en QML (par de TicketPrinter::formatQty).
+function formatQty(v) {
+    var n = Number(v) || 0;
+    var s = n.toFixed(3);
+    s = s.replace(/\.?0+$/, "");
+    return s === "-0" ? "0" : s;
+}
+
+function isWeighable(unit) {
+    var u = String(unit || "").toLowerCase();
+    return u === "g" || u === "kg" || u === "ml" || u === "l";
+}

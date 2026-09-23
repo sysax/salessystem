@@ -109,7 +109,7 @@ ColumnLayout {
             }
         }
         onAccepted: {
-            var r = purchasesCtl.create(cSupplier.text, cSku.text, parseInt(cQty.text) || 0, auth.currentUser);
+            var r = purchasesCtl.create(cSupplier.text, cSku.text, parseFloat(cQty.text) || 0, auth.currentUser);
             if (!r.ok) {
                 cErr.text = r.error;
                 open();

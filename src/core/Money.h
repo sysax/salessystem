@@ -26,15 +26,27 @@ public:
     constexpr qint64 cents() const { return m_cents; }
     double toCop() const { return static_cast<double>(m_cents) / CentsPerCop; }
 
-    // "$ 1.850.000" (es_CO, sin decimales salvo que haya céntimos)
-    static QString format(qint64 cents) {
+    // "$ 1.850.000" (es_CO, sin decimales salvo que haya céntimos).
+    // Overload con símbolo/decimales de SettingsService (Fase 0 multinegocio);
+    // el overload simple conserva el default COP para compatibilidad.
+    static QString format(qint64 cents, const QString &symbol, int decimals)
+    {
         static const QLocale co(QLocale::Spanish, QLocale::Colombia);
-        const qint64 cop = cents / CentsPerCop;
+        const qint64 major = cents / CentsPerCop;
         const int rem = static_cast<int>(qAbs(cents % CentsPerCop));
-        QString s = QStringLiteral("$ ") + co.toString(cop);
-        if (rem != 0)
+        QString s = symbol + QStringLiteral(" ") + co.toString(major);
+        if (decimals > 0) {
+            s += co.decimalPoint()
+                + QString::number(rem).rightJustified(2, u'0').left(decimals).leftJustified(
+                      decimals, u'0');
+        } else if (rem != 0) {
             s += co.decimalPoint() + QString::number(rem).rightJustified(2, u'0');
+        }
         return s;
+    }
+    static QString format(qint64 cents)
+    {
+        return format(cents, QStringLiteral("$"), 0);
     }
     QString format() const { return format(m_cents); }
 

@@ -3,12 +3,24 @@
 -- tablas/columnas. Ejecutar con IF NOT EXISTS + migraciones en DatabaseManager.
 -- Origen: data/db.py::init_db + _migrate_users + _migrate_products.
 
+-- Fase 2: diccionario de categorías (los productos guardan cat/subcat como
+-- texto plano; esta tabla NO es FK, solo alimenta combos y filtros).
+CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    parent_id INTEGER REFERENCES categories(id),
+    business_type TEXT DEFAULT '',
+    sort_order INTEGER DEFAULT 0,
+    UNIQUE(name, parent_id)
+);
+
 CREATE TABLE IF NOT EXISTS users (
     username TEXT PRIMARY KEY, password TEXT, role TEXT,
     active INTEGER DEFAULT 1, failed_attempts INTEGER DEFAULT 0,
     locked_until TEXT, created_at TEXT, last_login TEXT,
     totp_secret TEXT DEFAULT NULL, totp_enabled INTEGER DEFAULT 0,
-    recovery_json TEXT DEFAULT '[]'
+    recovery_json TEXT DEFAULT '[]',
+    must_change_password INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS products (
@@ -17,7 +29,8 @@ CREATE TABLE IF NOT EXISTS products (
     brand TEXT, supplier TEXT, price REAL, price_buy REAL, price_wholesale REAL,
     tax TEXT, unit TEXT, stock INTEGER, stock_min INTEGER, stock_max INTEGER,
     location TEXT, status TEXT, image TEXT, lote TEXT, vencimiento TEXT,
-    is_kit INTEGER DEFAULT 0, kit_json TEXT DEFAULT '[]'
+    is_kit INTEGER DEFAULT 0, kit_json TEXT DEFAULT '[]',
+    attrs_json TEXT DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS clients (
@@ -36,12 +49,22 @@ CREATE TABLE IF NOT EXISTS suppliers (
 CREATE TABLE IF NOT EXISTS sales (
     id TEXT PRIMARY KEY, date TEXT, client TEXT, vendedor TEXT, total REAL, subtotal REAL,
     tax REAL, discount REAL, promo TEXT, status TEXT, doc_type TEXT, payment TEXT,
-    payments_json TEXT, paid REAL, balance REAL, due TEXT, estado TEXT, dian_cufe TEXT, dian_status TEXT
+    payments_json TEXT, paid REAL, balance REAL, due TEXT, estado TEXT, dian_cufe TEXT, dian_status TEXT,
+    tax_breakdown TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS sale_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sale_id TEXT, product_id INTEGER, qty INTEGER, subtotal REAL
+    sale_id TEXT, product_id INTEGER, qty INTEGER, subtotal REAL,
+    attrs_json TEXT DEFAULT '{}', serial TEXT DEFAULT ''
+);
+
+-- Fase 3: seriales/IMEI (celulares). status: in_stock|sold|rma|repaired.
+CREATE TABLE IF NOT EXISTS serials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER, sku TEXT, serial TEXT UNIQUE,
+    status TEXT DEFAULT 'in_stock',
+    sale_id TEXT, imei2 TEXT, notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS purchases (
@@ -99,6 +122,23 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 INSERT OR IGNORE INTO settings (key, value) VALUES ('dian_enabled', '0');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('dian_provider', 'simulado');
+-- Fase 0 multinegocio: perfil del negocio (key/value, sin ALTER).
+INSERT OR IGNORE INTO settings (key, value) VALUES ('business_name', 'Mi Negocio');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('business_type', 'miscelanea');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('business_nit', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('business_tax_id', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('business_address', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('business_phone', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('business_logo_path', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('currency_code', 'COP');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('currency_symbol', '$');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('currency_decimals', '0');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('default_tax_rate', '19');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('tax_rates_json', '[{"name":"IVA 19%","rate":19},{"name":"Excluido","rate":0}]');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('weight_unit_default', 'unidad');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('require_expiry', '0');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('require_serial', '0');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('mora_rate_monthly', '2');
 
 CREATE TABLE IF NOT EXISTS recovery_tokens (
     token TEXT PRIMARY KEY,
@@ -120,6 +160,6 @@ CREATE INDEX IF NOT EXISTS idx_clients_nit ON clients(nit);
 CREATE INDEX IF NOT EXISTS idx_inventory_movements_ts ON inventory_movements(ts);
 
 -- Migraciones de columnas para DBs creadas por versiones antiguas (Python):
--- users.active/failed_attempts/locked_until/created_at/last_login/totp_secret/totp_enabled/recovery_json
+-- users.active/failed_attempts/locked_until/created_at/last_login/totp_secret/totp_enabled/recovery_json/must_change_password
 -- products.image/lote/vencimiento/is_kit/kit_json
 -- Se aplican en DatabaseManager::migrate() con PRAGMA table_info, igual que _migrate_users/_migrate_products.

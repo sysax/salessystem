@@ -45,11 +45,11 @@ private slots:
         // Sin sesión: vacío
         QCOMPARE(menu->property("count").toInt(), 0);
 
-        // Login como admin → 13 entradas (acceso total)
+        // Login como admin → 14 entradas (acceso total, incluye Configuración)
         const QVariantMap r =
             auth.login(QStringLiteral("admin"), QStringLiteral("admin123"));
         QVERIFY(r["ok"].toBool());
-        QTRY_COMPARE(menu->property("count").toInt(), 13);
+        QTRY_COMPARE(menu->property("count").toInt(), 14);
 
         // Logout → vacío de nuevo
         auth.logout();

@@ -3,11 +3,16 @@
 #include <QDate>
 #include <QDateTime>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QPdfWriter>
 #include <QPainter>
 #include <QSet>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QSqlRecord>
 #include <QTextStream>
 
 #include <algorithm>
@@ -55,7 +60,7 @@ QVariantList ReportService::topProducts(int n) const
         QString name;
         if (p.exec() && p.next())
             name = p.value(0).toString();
-        out << QVariantMap{{"id", pid}, {"name", name}, {"sold", q.value(1).toInt()}};
+        out << QVariantMap{{"id", pid}, {"name", name}, {"sold", q.value(1).toDouble()}};
     }
     // Rellenar con cero vendidos hasta n (como en Python)
     if (out.size() < n) {
@@ -73,20 +78,20 @@ QVariantList ReportService::topProducts(int n) const
 
 QVariantList ReportService::leastSold(int n) const
 {
-    QMap<int, int> cnt;
+    QMap<int, double> cnt;
     QSqlQuery q(m_db);
     q.exec(QStringLiteral(
         "SELECT product_id, SUM(qty) FROM sale_items JOIN sales ON sale_items.sale_id=sales.id "
         "WHERE sales.status!='Cancelada' GROUP BY product_id"));
     while (q.next())
-        cnt[q.value(0).toInt()] = q.value(1).toInt();
+        cnt[q.value(0).toInt()] = q.value(1).toDouble();
     QSqlQuery all(m_db);
     all.exec(QStringLiteral("SELECT id, name FROM products ORDER BY id"));
     QList<QPair<int, QString>> prods;
     while (all.next()) {
         prods << qMakePair(all.value(0).toInt(), all.value(1).toString());
         if (!cnt.contains(all.value(0).toInt()))
-            cnt[all.value(0).toInt()] = 0;
+            cnt[all.value(0).toInt()] = 0.0;
     }
     std::sort(prods.begin(), prods.end(),
               [&](const auto &a, const auto &b) { return cnt[a.first] < cnt[b.first]; });
@@ -132,13 +137,13 @@ QVariantList ReportService::topSellers(int n) const
 
 QVariantList ReportService::marginPerProduct() const
 {
-    QMap<int, int> sold;
+    QMap<int, double> sold;
     QSqlQuery q(m_db);
     q.exec(QStringLiteral(
         "SELECT product_id, SUM(qty) FROM sale_items JOIN sales ON sale_items.sale_id=sales.id "
         "WHERE sales.status='Pagada' GROUP BY product_id"));
     while (q.next())
-        sold[q.value(0).toInt()] = q.value(1).toInt();
+        sold[q.value(0).toInt()] = q.value(1).toDouble();
     QVariantList out;
     QSqlQuery p(m_db);
     p.exec(QStringLiteral("SELECT id, sku, name, price, price_buy FROM products"));
@@ -149,7 +154,7 @@ QVariantList ReportService::marginPerProduct() const
         if (cost <= 0)
             cost = price * 0.7;
         const double mu = price - cost;
-        const int s = sold.value(pid, 0);
+        const double s = sold.value(pid, 0.0);
         out << QVariantMap{{"id", pid},
                            {"sku", p.value(1).toString()},
                            {"name", p.value(2).toString()},
@@ -237,7 +242,7 @@ QVariantMap ReportService::incomeStatement() const
         double c = q.value(1).toDouble();
         if (c <= 0)
             c = q.value(2).toDouble() * 0.7;
-        costo += c * q.value(0).toInt();
+        costo += c * q.value(0).toDouble();
     }
     const double impuestos =
         scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(tax),0) FROM sales WHERE status='Pagada'"));
@@ -261,9 +266,54 @@ QVariantMap ReportService::cashFlow() const
 
 QVariantMap ReportService::taxes() const
 {
-    const double iva =
-        scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(tax),0) FROM sales WHERE status='Pagada'"));
-    return {{"iva_19", iva}, {"total", iva}};
+    // Fase 1: desglose por tasa desde sales.tax_breakdown (JSON por venta).
+    // Ventas históricas sin breakdown caen al bucket legacy iva_19 (compat).
+    QMap<double, double> byRate;
+    QMap<double, QString> names;
+    QSqlQuery q(m_db);
+    q.exec(QStringLiteral("SELECT tax, tax_breakdown FROM sales WHERE status='Pagada'"));
+    bool hasColumn = true;
+    while (q.next()) {
+        const double legacy = q.value(0).toDouble();
+        const int col = q.record().indexOf(QStringLiteral("tax_breakdown"));
+        if (col < 0) {
+            hasColumn = false;
+            byRate[19.0] += legacy;
+            continue;
+        }
+        const QString js = q.value(col).toString().trimmed();
+        if (js.isEmpty()) {
+            byRate[19.0] += legacy;
+            continue;
+        }
+        QJsonParseError err{};
+        const auto doc = QJsonDocument::fromJson(js.toUtf8(), &err);
+        if (err.error != QJsonParseError::NoError || !doc.isArray()) {
+            byRate[19.0] += legacy;
+            continue;
+        }
+        for (const QJsonValue &v : doc.array()) {
+            if (!v.isObject())
+                continue;
+            const auto o = v.toObject();
+            const double rate = o.value(QStringLiteral("rate")).toDouble();
+            const double tax = o.value(QStringLiteral("tax")).toDouble();
+            byRate[rate] += tax;
+            const QString nm = o.value(QStringLiteral("name")).toString();
+            if (!nm.isEmpty() && !names.contains(rate))
+                names[rate] = nm;
+        }
+    }
+    Q_UNUSED(hasColumn);
+    QVariantList breakdown;
+    double total = 0.0;
+    for (auto it = byRate.begin(); it != byRate.end(); ++it) {
+        total += it.value();
+        breakdown << QVariantMap{{"name", names.value(it.key(), QStringLiteral("%1%").arg(it.key()))},
+                                 {"rate", it.key()},
+                                 {"tax", it.value()}};
+    }
+    return {{"iva_19", byRate.value(19.0, 0.0)}, {"total", total}, {"breakdown", breakdown}};
 }
 
 QVariantMap ReportService::kpis() const
@@ -292,6 +342,29 @@ QVariantMap ReportService::kpis() const
             {"costos_fijos", costosFijos}};
 }
 
+QVariantList ReportService::expiringProducts(int days) const
+{
+    QVariantList out;
+    const QString limit =
+        QDate::currentDate().addDays(days > 0 ? days : 30).toString(Qt::ISODate);
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "SELECT sku, name, lote, vencimiento, stock FROM products "
+        "WHERE vencimiento IS NOT NULL AND vencimiento != '' AND vencimiento <= ? "
+        "ORDER BY vencimiento"));
+    q.addBindValue(limit);
+    if (!q.exec())
+        return out;
+    while (q.next()) {
+        out << QVariantMap{{"sku", q.value(0).toString()},
+                           {"name", q.value(1).toString()},
+                           {"lote", q.value(2).toString()},
+                           {"vencimiento", q.value(3).toString()},
+                           {"stock", q.value(4).toDouble()}};
+    }
+    return out;
+}
+
 QString ReportService::exportCsv(const QString &type, const QString &dir) const
 {
     const QString path = dir + QStringLiteral("/reporte_%1_%2.csv")
@@ -301,6 +374,11 @@ QString ReportService::exportCsv(const QString &type, const QString &dir) const
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
         return {};
     QTextStream out(&f);
+    out << "Negocio," << setting(QStringLiteral("business_name"), QStringLiteral("Mi Negocio"))
+        << "\n";
+    const QString nit = setting(QStringLiteral("business_nit"));
+    if (!nit.isEmpty())
+        out << "NIT," << nit << "\n";
     if (type == QLatin1String("financiero")) {
         const QVariantMap e = incomeStatement(), fl = cashFlow(), tx = taxes();
         out << "Financiero,Valor\n";
@@ -308,7 +386,21 @@ QString ReportService::exportCsv(const QString &type, const QString &dir) const
         out << "Costo," << e["costo"].toDouble() << "\n";
         out << "Bruto," << e["bruto"].toDouble() << "\n";
         out << "IVA," << tx["iva_19"].toDouble() << "\n";
+        // Fase 1: desglose por tasa.
+        for (const QVariant &v : tx["breakdown"].toList()) {
+            const QVariantMap m = v.toMap();
+            out << "Impuesto " << m["name"].toString() << "," << m["tax"].toDouble() << "\n";
+        }
         out << "Flujo neto," << fl["neto"].toDouble() << "\n";
+    } else if (type == QLatin1String("vencimientos")) {
+        // Fase 3: próximos a vencer (90 días).
+        out << "SKU,Nombre,Lote,Vencimiento,Stock\n";
+        for (const QVariant &v : expiringProducts(90)) {
+            const QVariantMap m = v.toMap();
+            out << m["sku"].toString() << "," << m["name"].toString() << ","
+                << m["lote"].toString() << "," << m["vencimiento"].toString() << ","
+                << m["stock"].toDouble() << "\n";
+        }
     } else {
         const QVariantMap d = salesForPeriod(QStringLiteral("dia")),
                           w = salesForPeriod(QStringLiteral("semana"));
@@ -339,8 +431,17 @@ QString ReportService::exportPdf(const QString &type, const QString &dir) const
     titleFont.setBold(true);
     painter.setFont(titleFont);
     int y = 400;
-    painter.drawText(400, y, QStringLiteral("Sistema de Ventas — Reporte %1").arg(type));
-    y += 500;
+    painter.drawText(400, y, QStringLiteral("%1 — Reporte %2")
+                                 .arg(setting(QStringLiteral("business_name"),
+                                              QStringLiteral("Sistema de Ventas")),
+                                      type));
+    y += 350;
+    const QString nit = setting(QStringLiteral("business_nit"));
+    if (!nit.isEmpty()) {
+        painter.drawText(400, y, QStringLiteral("NIT: %1").arg(nit));
+        y += 350;
+    }
+    y += 150;
     QFont bodyFont = painter.font();
     bodyFont.setPointSize(10);
     bodyFont.setBold(false);
@@ -377,4 +478,14 @@ QString ReportService::exportPdf(const QString &type, const QString &dir) const
     }
     painter.end();
     return QFile::exists(path) ? path : QString();
+}
+
+QString ReportService::setting(const QString &key, const QString &fallback) const
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT value FROM settings WHERE key=?"));
+    q.addBindValue(key);
+    if (!q.exec() || !q.next())
+        return fallback;
+    return q.value(0).toString();
 }

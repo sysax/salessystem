@@ -17,9 +17,9 @@ TicketPrinter::TicketPrinter(const QString &ticketsDir, QObject *parent)
     QDir().mkpath(m_dir);
 }
 
-static QString money(double v)
+static QString money(double v, const QString &symbol = QStringLiteral("$"))
 {
-    // "$1.850.000" sin decimales (formato ticket DIAN)
+    // "$1.850.000" sin decimales (formato ticket)
     long long cop = llround(v);
     QString digits = QString::number(qAbs(cop));
     QString grouped;
@@ -28,17 +28,36 @@ static QString money(double v)
         digits.chop(3);
     }
     grouped.prepend(digits);
-    return (cop < 0 ? QStringLiteral("-$") : QStringLiteral("$")) + grouped;
+    return (cop < 0 ? QStringLiteral("-") + symbol : symbol) + grouped;
+}
+
+QString TicketPrinter::formatQty(double qty)
+{
+    QString s = QString::number(qty, 'f', 3);
+    while (s.contains(u'.') && (s.endsWith(u'0')))
+        s.chop(1);
+    if (s.endsWith(u'.'))
+        s.chop(1);
+    return s;
 }
 
 QString TicketPrinter::buildText(const Ticket &t)
 {
     const QString now =
         QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    const QString sym = t.currencySymbol.isEmpty() ? QStringLiteral("$") : t.currencySymbol;
     QStringList lines;
     lines << QString(42, u'=');
-    lines << QStringLiteral("   SISTEMA DE VENTAS — COLOMBIA (DIAN)").leftJustified(42);
-    lines << QStringLiteral("   Comercio genérico: abarrotes/electrónica").leftJustified(42);
+    const QString title = t.businessName.isEmpty()
+        ? QStringLiteral("SISTEMA DE VENTAS")
+        : t.businessName.left(42);
+    lines << QStringLiteral("   %1").arg(title).leftJustified(42);
+    if (!t.businessNit.isEmpty())
+        lines << QStringLiteral("   NIT: %1").arg(t.businessNit).leftJustified(42);
+    if (!t.businessAddress.isEmpty())
+        lines << QStringLiteral("   %1").arg(t.businessAddress.left(36)).leftJustified(42);
+    if (!t.businessPhone.isEmpty())
+        lines << QStringLiteral("   Tel: %1").arg(t.businessPhone).leftJustified(42);
     lines << QString(42, u'=');
     lines << QStringLiteral("Fecha: %1  Factura: %2").arg(now, t.saleId);
     lines << QStringLiteral("Cliente: %1  NIT: %2").arg(t.clientName, t.clientNit);
@@ -56,30 +75,43 @@ QString TicketPrinter::buildText(const Ticket &t)
         subtotal += l.subtotal;
         lines << QStringLiteral("%1 %2 %3 %4")
                      .arg(l.name.left(16), -16)
-                     .arg(l.qty, 4)
-                     .arg(money(l.price), 10)
-                     .arg(money(l.subtotal), 10);
+                     .arg(formatQty(l.qty), 4)
+                     .arg(money(l.price, sym), 10)
+                     .arg(money(l.subtotal, sym), 10);
+        // Fase 3: serial en el ticket (garantía).
+        if (!l.serial.trimmed().isEmpty())
+            lines << QStringLiteral("  SN: %1").arg(l.serial.trimmed());
     }
     lines << QString(42, u'-');
-    lines << QStringLiteral("Subtotal: %1 COP").arg(money(subtotal));
+    lines << QStringLiteral("Subtotal: %1").arg(money(subtotal, sym));
     if (t.discount > 0)
-        lines << QStringLiteral("Descuento (%1): -%2 COP").arg(t.promoCode, money(t.discount));
-    lines << QStringLiteral("IVA 19% DIAN: %1 COP").arg(money(t.tax));
-    lines << QStringLiteral("TOTAL: %1 COP").arg(money(t.total));
+        lines << QStringLiteral("Descuento (%1): -%2").arg(t.promoCode, money(t.discount, sym));
+    if (t.taxLines.size() > 1) {
+        // Fase 1: desglose por tasa (base + impuesto por tasa).
+        for (const Ticket::TaxLine &tl : t.taxLines) {
+            lines << QStringLiteral("%1: base %2 imp %3")
+                         .arg(tl.label, money(tl.base, sym), money(tl.tax, sym));
+        }
+        lines << QStringLiteral("Impuestos: %1").arg(money(t.tax, sym));
+    } else {
+        lines << QStringLiteral("%1: %2").arg(t.taxLabel.isEmpty() ? QStringLiteral("Impuesto") : t.taxLabel,
+                                              money(t.tax, sym));
+    }
+    lines << QStringLiteral("TOTAL: %1").arg(money(t.total, sym));
     lines << QString(42, u'-');
     lines << QStringLiteral("Pagos:");
     for (auto it = t.payments.begin(); it != t.payments.end(); ++it) {
         if (it.value() != 0)
-            lines << QStringLiteral("  %1 %2 COP")
+            lines << QStringLiteral("  %1 %2")
                           .arg(it.key().first(1).toUpper() + it.key().mid(1), -12)
-                          .arg(money(it.value()));
+                          .arg(money(it.value(), sym));
     }
-    lines << QStringLiteral("Cambio: %1 COP").arg(money(t.change));
+    lines << QStringLiteral("Cambio: %1").arg(money(t.change, sym));
     lines << QString(42, u'-');
-    lines << QStringLiteral("Gracias por su compra! — Resolución DIAN");
+    lines << QStringLiteral("Gracias por su compra!");
     lines << QStringLiteral("Modo offline: ticket guardado, se sincroniza al reconectar");
     lines << QString(42, u'=');
-    lines << QStringLiteral("Software: Sistema Ventas Qt6/QML — COP — Colombia");
+    lines << QStringLiteral("Software: Sistema Ventas Qt6/QML — %1").arg(t.businessName);
     return lines.join(u'\n');
 }
 

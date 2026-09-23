@@ -33,7 +33,7 @@ void InventoryController::refresh()
     emit movementsChanged();
 }
 
-QVariantMap InventoryController::adjust(const QString &sku, int delta, const QString &reason,
+QVariantMap InventoryController::adjust(const QString &sku, double delta, const QString &reason,
                                         const QString &user)
 {
     const auto r = m_service->registerAdjustment(sku, delta, reason, user);
@@ -43,7 +43,7 @@ QVariantMap InventoryController::adjust(const QString &sku, int delta, const QSt
     return {{"ok", true}, {"newStock", r.value().newStock}};
 }
 
-QVariantMap InventoryController::transfer(const QString &sku, int qty, const QString &to,
+QVariantMap InventoryController::transfer(const QString &sku, double qty, const QString &to,
                                           const QString &reason, const QString &user)
 {
     const auto r = m_service->transfer(sku, qty, to, reason, user);
@@ -86,7 +86,7 @@ void PurchasesController::refresh()
     emit ordersChanged();
 }
 
-QVariantMap PurchasesController::create(const QString &supplier, const QString &sku, int qty,
+QVariantMap PurchasesController::create(const QString &supplier, const QString &sku, double qty,
                                         const QString &user)
 {
     const auto r = m_service->create(supplier, sku, qty, user);

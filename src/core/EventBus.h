@@ -27,6 +27,7 @@ public:
     static const QString SyncStatusChanged;
     static const QString CashOpened;
     static const QString CashClosed;
+    static const QString SettingsChanged;
 
     explicit EventBus(QObject *parent = nullptr);
 

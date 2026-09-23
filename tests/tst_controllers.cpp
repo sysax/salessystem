@@ -6,6 +6,7 @@
 #include "controllers/PosController.h"
 #include "controllers/SalesController.h"
 #include "core/DatabaseManager.h"
+#include "TestDb.h"
 #include "core/EventBus.h"
 #include "repositories/AuditRepository.h"
 #include "repositories/CajaRepository.h"
@@ -31,6 +32,8 @@ private slots:
         QVERIFY(m_tmp.isValid());
         m_dbm = new DatabaseManager(this);
         QVERIFY(m_dbm->initialize(m_tmp.filePath(QStringLiteral("ctl.db"))));
+        // Datos demo solo-tests (la app siembra base limpia)
+        QVERIFY(TestDb::loadDemo(m_dbm->database()));
         QSqlDatabase db = m_dbm->database();
         auto *bus = new EventBus(this);
         auto *audit = new AuditRepository(db, this);
@@ -42,13 +45,14 @@ private slots:
         auto *promos = new PromoRepository(db, products, audit, this);
         auto *authSvc = new AuthService(db, bus, this);
         auto *salesSvc = new SalesService(db, products, sales, inventory, clients, caja,
-                                          promos, bus, this);
+                                          promos, bus, nullptr, nullptr, nullptr, this);
         auto *sync = new SyncService(db, bus, this);
         auto *printer = new TicketPrinter(m_tmp.path(), this);
         m_auth = new AuthController(authSvc, this);
-        m_pos = new PosController(salesSvc, products, promos, caja, printer, sync, this);
-        m_catalog = new CatalogController(products, this);
-        m_salesCtl = new SalesController(sales, salesSvc, this);
+        m_pos = new PosController(salesSvc, products, promos, caja, printer, sync,
+                                      nullptr, nullptr, this);
+        m_catalog = new CatalogController(products, nullptr, nullptr, this);
+        m_salesCtl = new SalesController(sales, salesSvc, nullptr, nullptr, this);
     }
 
     void authFlow()

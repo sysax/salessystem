@@ -9,6 +9,7 @@
 #include <QRandomGenerator>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QSqlRecord>
 
 #include <unordered_map>
 #include <vector>
@@ -189,6 +190,9 @@ Result<AuthService::LoginResult> AuthService::login(const QString &username,
         r.username = username;
         r.role = q.value(QStringLiteral("role")).toString();
         r.totpRequired = q.value(QStringLiteral("totp_enabled")).toInt() != 0;
+        // Columna nueva (migración): en BDs sin migrar se asume sin cambio forzoso.
+        const int mustCol = q.record().indexOf(QStringLiteral("must_change_password"));
+        r.mustChangePassword = mustCol >= 0 && q.value(mustCol).toInt() != 0;
         if (m_bus)
             m_bus->publish(EventBus::UserLoggedIn, {{"username", username}, {"role", r.role}});
         return Result<LoginResult>::success(r);
@@ -283,8 +287,8 @@ StatusResult AuthService::addUser(const QString &username, const QString &passwo
         return StatusResult::failure(QStringLiteral("Contraseña mínimo 4 caracteres"));
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
-        "INSERT INTO users (username, password, role, active, failed_attempts, created_at) "
-        "VALUES (?,?,?,?,?,?)"));
+        "INSERT INTO users (username, password, role, active, failed_attempts, created_at, "
+        "must_change_password) VALUES (?,?,?,?,?,?,1)"));
     q.addBindValue(username);
     q.addBindValue(hashPassword(password));
     q.addBindValue(role);
@@ -306,7 +310,9 @@ StatusResult AuthService::updateUser(const QString &username, const QString &new
     if (!newPassword.isEmpty()) {
         if (newPassword.size() < MinPasswordLength)
             return StatusResult::failure(QStringLiteral("Contraseña mínimo 4"));
-        q.prepare(QStringLiteral("UPDATE users SET password=? WHERE username=?"));
+        // Clave puesta por un admin: el usuario debe personalizarla al entrar.
+        q.prepare(QStringLiteral(
+            "UPDATE users SET password=?, must_change_password=1 WHERE username=?"));
         q.addBindValue(hashPassword(newPassword));
         q.addBindValue(username);
         if (!q.exec())
@@ -346,13 +352,42 @@ StatusResult AuthService::resetPassword(const QString &username, const QString &
     if (newPassword.size() < MinPasswordLength)
         return StatusResult::failure(QStringLiteral("Contraseña mínimo 4"));
     QSqlQuery q(m_db);
+    // Reset de admin: el usuario debe personalizar la clave al próximo ingreso.
     q.prepare(QStringLiteral(
-        "UPDATE users SET password=?, failed_attempts=0, locked_until=NULL WHERE username=?"));
+        "UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
+        "must_change_password=1 WHERE username=?"));
     q.addBindValue(hashPassword(newPassword));
     q.addBindValue(username);
     if (!q.exec() || q.numRowsAffected() == 0)
         return StatusResult::failure(QStringLiteral("Usuario no encontrado"));
     audit(QStringLiteral("sistema"), QStringLiteral("reset_password"), username);
+    return StatusResult::success({});
+}
+
+StatusResult AuthService::changePassword(const QString &username,
+                                         const QString &currentPassword,
+                                         const QString &newPassword)
+{
+    if (newPassword.size() < MinPasswordLength)
+        return StatusResult::failure(QStringLiteral("Contraseña mínimo 4"));
+    if (newPassword == currentPassword)
+        return StatusResult::failure(QStringLiteral("La nueva clave debe ser distinta"));
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT password FROM users WHERE username=?"));
+    q.addBindValue(username);
+    if (!q.exec() || !q.next())
+        return StatusResult::failure(QStringLiteral("Usuario no encontrado"));
+    if (!verifyPassword(q.value(0).toString(), currentPassword))
+        return StatusResult::failure(QStringLiteral("La clave actual no coincide"));
+    QSqlQuery up(m_db);
+    up.prepare(QStringLiteral(
+        "UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
+        "must_change_password=0 WHERE username=?"));
+    up.addBindValue(hashPassword(newPassword));
+    up.addBindValue(username);
+    if (!up.exec() || up.numRowsAffected() == 0)
+        return StatusResult::failure(QStringLiteral("Usuario no encontrado"));
+    audit(username, QStringLiteral("cambio_clave"), {});
     return StatusResult::success({});
 }
 
@@ -528,8 +563,10 @@ StatusResult AuthService::redeemRecovery(const QString &username, const QString 
     if (!exp.isValid() || QDateTime::currentDateTime() > exp)
         return StatusResult::failure(QStringLiteral("Token expirado (30 min)"));
     QSqlQuery up(m_db);
+    // El usuario eligió su propia clave vía token: ya no hay cambio pendiente.
     up.prepare(QStringLiteral(
-        "UPDATE users SET password=?, failed_attempts=0, locked_until=NULL WHERE username=?"));
+        "UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
+        "must_change_password=0 WHERE username=?"));
     up.addBindValue(hashPassword(newPassword));
     up.addBindValue(username);
     up.exec();

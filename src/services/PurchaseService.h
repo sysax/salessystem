@@ -24,7 +24,7 @@ public:
                              InventoryRepository *inventory, PayablesRepository *payables,
                              AuditRepository *audit = nullptr, QObject *parent = nullptr);
 
-    Result<Purchase> create(const QString &supplierName, const QString &sku, int qty,
+    Result<Purchase> create(const QString &supplierName, const QString &sku, double qty,
                             const QString &user);
     Result<Purchase> receive(const QString &folio, const QString &user);
     Result<Purchase> cancel(const QString &folio, const QString &user);

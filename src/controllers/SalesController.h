@@ -5,6 +5,7 @@
 #include <QVariantMap>
 
 #include "../repositories/SaleRepository.h"
+#include "../repositories/SerialRepository.h"
 #include "../services/SalesService.h"
 
 // Historial, documentos y notas (antes SalesScreen).
@@ -15,7 +16,8 @@ class SalesController : public QObject
 
 public:
     explicit SalesController(SaleRepository *sales, SalesService *service,
-                             QObject *parent = nullptr);
+                             SerialRepository *serials = nullptr,
+                             ProductRepository *products = nullptr, QObject *parent = nullptr);
 
     QVariantList sales() const { return m_sales; }
 
@@ -31,6 +33,10 @@ public:
                                        const QString &reason, const QString &user);
     Q_INVOKABLE QVariantMap debitNote(const QString &id, double amount,
                                       const QString &reason, const QString &user);
+    // Fase 3: garantía por serial + RMA.
+    Q_INVOKABLE QVariantMap warrantyFor(const QString &serial) const;
+    Q_INVOKABLE QVariantMap markRma(const QString &serial, const QString &notes,
+                                    const QString &user);
 
     static QVariantMap toMap(const Sale &s);
 
@@ -40,5 +46,7 @@ signals:
 private:
     SaleRepository *m_repos = nullptr;
     SalesService *m_service = nullptr;
+    SerialRepository *m_serials = nullptr;
+    ProductRepository *m_products = nullptr;
     QVariantList m_sales;
 };

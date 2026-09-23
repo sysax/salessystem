@@ -1,7 +1,12 @@
 #include "SalesController.h"
 
-SalesController::SalesController(SaleRepository *sales, SalesService *service, QObject *parent)
-    : QObject(parent), m_repos(sales), m_service(service)
+#include "../domain/Attrs.h"
+
+SalesController::SalesController(SaleRepository *sales, SalesService *service,
+                                 SerialRepository *serials, ProductRepository *products,
+                                 QObject *parent)
+    : QObject(parent), m_repos(sales), m_service(service), m_serials(serials),
+      m_products(products)
 {
     refresh();
 }
@@ -42,8 +47,15 @@ QVariantMap SalesController::detail(const QString &id) const
         return {{"ok", false}, {"error", QStringLiteral("No encontrada")}};
     QVariantMap d = toMap(*s);
     QVariantList items;
-    for (const SaleItem &it : m_repos->itemsFor(id))
-        items << QVariantMap{{"productId", it.productId}, {"qty", it.qty}, {"subtotal", it.subtotal}};
+    for (const SaleItem &it : m_repos->itemsFor(id)) {
+        QVariantMap m{{"productId", it.productId},
+                      {"qty", it.qty},
+                      {"subtotal", it.subtotal},
+                      {"serial", it.serial}};
+        if (it.attrsJson.trimmed() != QStringLiteral("{}") && !it.attrsJson.trimmed().isEmpty())
+            m["attrs"] = it.attrsJson;
+        items << m;
+    }
     d["items"] = items;
     d["ok"] = true;
     return d;
@@ -97,4 +109,31 @@ QVariantMap SalesController::debitNote(const QString &id, double amount,
         return {{"ok", false}, {"error", r.error()}};
     refresh();
     return {{"ok", true}, {"id", r.value().id}};
+}
+
+QVariantMap SalesController::warrantyFor(const QString &serial) const
+{
+    if (!m_serials || !m_products)
+        return {{"ok", false}, {"error", QStringLiteral("Sin repositorio de seriales")}};
+    const auto s = m_serials->find(serial);
+    if (!s)
+        return {{"ok", false}, {"error", QStringLiteral("Serial no registrado")}};
+    int months = 12;
+    if (const auto p = m_products->findBySku(s->sku))
+        months = Attrs::integer(p->attrsJson, Attrs::KWarrantyMonths, 12);
+    QVariantMap r = m_serials->warrantyStatus(serial, months);
+    r["ok"] = r.value(QStringLiteral("error"), {}).toString().isEmpty();
+    return r;
+}
+
+QVariantMap SalesController::markRma(const QString &serial, const QString &notes,
+                                     const QString &user)
+{
+    Q_UNUSED(user);
+    if (!m_serials)
+        return {{"ok", false}, {"error", QStringLiteral("Sin repositorio de seriales")}};
+    const auto r = m_serials->setStatus(serial, QStringLiteral("rma"), notes);
+    if (!r.ok())
+        return {{"ok", false}, {"error", r.error()}};
+    return {{"ok", true}};
 }

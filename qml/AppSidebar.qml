@@ -27,6 +27,7 @@ ColumnLayout {
         { "key": "reports", "label": "Reportes", "icon": "📈", "sc": "Ctrl+6" },
         { "key": "promos", "label": "Promociones", "icon": "🎟️", "sc": "" },
         { "key": "users", "label": "Usuarios", "icon": "👤", "sc": "" },
+        { "key": "settings", "label": "Configuración", "icon": "⚙️", "sc": "" },
     ]
 
     Label {

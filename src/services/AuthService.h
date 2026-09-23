@@ -26,6 +26,7 @@ public:
     struct LoginResult {
         bool ok = false;
         bool totpRequired = false;
+        bool mustChangePassword = false; // clave por defecto: forzar cambio
         QString username;
         QString role;
         QString error;
@@ -59,6 +60,9 @@ public:
                             const QString &newRole);
     StatusResult setUserActive(const QString &username, bool active);
     StatusResult resetPassword(const QString &username, const QString &newPassword);
+    // Cambio propio de clave (verifica la actual): limpia must_change_password.
+    StatusResult changePassword(const QString &username, const QString &currentPassword,
+                                const QString &newPassword);
     StatusResult deleteUser(const QString &username);
     QList<UserInfo> listUsers() const;
     std::optional<UserInfo> findUser(const QString &username) const;

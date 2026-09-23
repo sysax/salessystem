@@ -14,7 +14,7 @@ PurchaseService::PurchaseService(QSqlDatabase db, PurchaseRepository *purchases,
 }
 
 Result<Purchase> PurchaseService::create(const QString &supplierName, const QString &sku,
-                                         int qty, const QString &user)
+                                         double qty, const QString &user)
 {
     const auto sup = m_suppliers->findByName(supplierName);
     if (!sup)
@@ -63,7 +63,7 @@ Result<Purchase> PurchaseService::receive(const QString &folio, const QString &u
         const auto prod = m_products->findBySku(it.sku);
         if (!prod)
             continue;
-        const int before = prod->stock;
+        const double before = prod->stock;
         m_products->setStockBySku(it.sku, before + it.qty);
         m_inventory->record(it.sku, prod->name, QStringLiteral("Entrada"), it.qty, before,
                             before + it.qty, QStringLiteral("Recepción %1").arg(folio), user);

@@ -16,7 +16,7 @@ struct CartLine {
     QString sku;
     QString cat;
     double price = 0.0;
-    int qty = 0;
+    double qty = 0.0; // Fase 2: decimal (2x1/3x2 solo cuentan unidades enteras)
     double subtotal = 0.0;
 };
 

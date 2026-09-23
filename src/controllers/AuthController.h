@@ -23,6 +23,9 @@ public:
 
     Q_INVOKABLE QVariantMap login(const QString &username, const QString &password);
     Q_INVOKABLE QVariantMap verifyTotp(const QString &code);
+    Q_INVOKABLE QVariantMap changePassword(const QString &username,
+                                           const QString &currentPassword,
+                                           const QString &newPassword);
     Q_INVOKABLE void logout();
     Q_INVOKABLE bool canAccess(const QString &screen) const;
 
@@ -35,4 +38,5 @@ private:
     QString m_role;
     QString m_pendingUser; // login OK con contraseña, falta 2FA
     QString m_pendingRole;
+    bool m_pendingMustChange = false;
 };

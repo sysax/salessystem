@@ -3,6 +3,8 @@
 #include <QSqlError>
 #include <QSqlQuery>
 
+#include <cmath>
+
 PromoRepository::PromoRepository(QSqlDatabase db, ProductRepository *products,
                                  AuditRepository *audit, QObject *parent)
     : QObject(parent), m_db(std::move(db)), m_products(products), m_audit(audit)
@@ -125,7 +127,7 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart,
             QStringLiteral("Promo %1 no existe o inactiva").arg(code.trimmed()));
 
     double subtotal = 0.0;
-    int qtyTotal = 0;
+    double qtyTotal = 0.0;
     for (const CartLine &l : cart) {
         subtotal += l.subtotal;
         qtyTotal += l.qty;
@@ -168,8 +170,9 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart,
         for (const CartLine &l : cart) {
             if (m_products) {
                 if (const auto p = lookup(m_products, l.productId)) {
+                    // Fase 2: solo unidades enteras participan del 2x1.
                     if (p->sku == sku && l.qty >= 2)
-                        discount += (l.qty / 2) * p->price;
+                        discount += std::floor(l.qty / 2.0) * p->price;
                 }
             }
         }
@@ -180,7 +183,7 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart,
                 if (const auto p = lookup(m_products, l.productId)) {
                     if (p->sku.toLower() == key || p->cat.toLower() == key) {
                         if (l.qty >= 3)
-                            discount += (l.qty / 3) * p->price;
+                            discount += std::floor(l.qty / 3.0) * p->price;
                     }
                 }
             }

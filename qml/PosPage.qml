@@ -16,11 +16,128 @@ RowLayout {
     readonly property int rowHCart: 64
 
     function addProduct(productId) {
+        // Fase 2: si es pesable, pedir cantidad decimal; si no, agregar 1.
+        var p = null;
+        var prods = catalog.products || [];
+        for (var i = 0; i < prods.length; ++i) {
+            if (prods[i].id === productId) {
+                p = prods[i];
+                break;
+            }
+        }
+        if (p && Utils.isWeighable(p.unit)) {
+            qtyDialog.productId = productId;
+            qtyDialog.productName = p.name + " (" + money(p.price) + " / " + (p.unit || "kg") + ")";
+            qtyField.text = "1";
+            qtyErr.text = "";
+            qtyDialog.open();
+            return;
+        }
         var r = pos.addToCart(productId, 1);
-        if (!r.ok)
+        if (!r.ok) {
             Utils.showToast("error", r.error, 3000);
-        else
+            return;
+        }
+        // Fase 3: producto con serial → pedir IMEI para la línea recién creada.
+        if (r.needsSerial) {
+            serialDialog.cartIndex = pos.cart.length - 1;
+            serialDialog.productId = productId;
+            serialField.text = "";
+            serialErr.text = "";
+            serialDialog.open();
+        } else {
             Utils.showToast("success", "Agregado al carrito", 1500);
+        }
+        // Fase 3: producto con receta → pedir Nº (no bloquea, valida al cobrar).
+        if (p && root.needsReceta(p)) {
+            recetaDialog.cartIndex = pos.cart.length - 1;
+            recetaDialog.productName = p.name;
+            recetaField.text = "";
+            recetaErr.text = "";
+            recetaDialog.open();
+        }
+    }
+
+    function needsReceta(p) {
+        try {
+            var at = JSON.parse(p.attrsJson || "{}");
+            return !!at.requires_prescription;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Fase 3: ¿alguna línea del carrito exige receta sin informar?
+    function missingReceta() {
+        var cart = pos.cart || [];
+        var prods = catalog.products || [];
+        for (var i = 0; i < cart.length; ++i) {
+            var line = cart[i];
+            if (line.receta && line.receta !== "")
+                continue;
+            for (var j = 0; j < prods.length; ++j) {
+                if (prods[j].id === line.productId && root.needsReceta(prods[j]))
+                    return prods[j].name;
+            }
+        }
+        return "";
+    }
+
+    // Fase 2: visibleProducts = filtro local por categoría.
+    property var visibleProducts: []
+
+    function refreshProducts() {
+        var out = [];
+        var prods = catalog.products || [];
+        for (var i = 0; i < prods.length; ++i) {
+            if (root.productVisible(prods[i]))
+                out.push(prods[i]);
+        }
+        root.visibleProducts = out;
+    }
+
+    Component.onCompleted: root.refreshProducts()
+
+    Connections {
+        target: catalog
+        function onProductsChanged() { root.refreshProducts(); }
+        function onCategoriesChanged() {
+            catFilter.model = root.catNames();
+            root.refreshProducts();
+        }
+    }
+
+    function catNames() {
+        var out = ["Todas"];
+        var cats = [];
+        try { cats = catalog.categories || []; } catch (e) {}
+        for (var i = 0; i < cats.length; ++i) {
+            if (((cats[i].parentId || 0) === 0) && out.indexOf(cats[i].name) < 0)
+                out.push(cats[i].name);
+        }
+        return out;
+    }
+
+    function productVisible(m) {
+        if (!m)
+            return false;
+        var f = catFilter.currentText || "Todas";
+        if (!f || f === "Todas" || f === qsTr("Todas"))
+            return true;
+        if ((m.cat || "") === f)
+            return true;
+        // Subcategoría cuya madre es la seleccionada
+        var cats = [];
+        try { cats = catalog.categories || []; } catch (e) {}
+        for (var k = 0; k < cats.length; ++k) {
+            if (cats[k].name === (m.subcat || "") && cats[k].parentId) {
+                for (var l = 0; l < cats.length; ++l) {
+                    if (cats[l].id === cats[k].parentId && cats[l].name === f)
+                        return true;
+                }
+            }
+        }
+        return false;
     }
 
     function askRemoveLine(idx, name) {
@@ -71,17 +188,34 @@ RowLayout {
                 onClicked: catalog.search(searchField.text)
             }
         }
+        RowLayout {
+            spacing: Theme.spacingSmall
+            // Fase 2: filtro por categoría (local, sobre catalog.products).
+            ComboBox {
+                id: catFilter
+                Layout.fillWidth: true
+                implicitHeight: root.touchH
+                model: root.catNames()
+                onCurrentTextChanged: {
+                    root.refreshProducts();
+                    productList.positionViewAtBeginning();
+                }
+            }
+        }
         ListView {
+            id: productList
             Layout.fillWidth: true
             Layout.preferredHeight: 200
             clip: true
-            model: catalog.products
-            visible: (catalog.products || []).length > 0
+            model: root.visibleProducts
+            visible: root.visibleProducts.length > 0
             delegate: SwipeDelegate {
                 id: prodDelegate
                 width: ListView.view.width
                 height: root.rowHProduct
-                text: modelData.name + "  ·  " + money(modelData.price) + "  ·  stock " + modelData.stock
+                text: modelData.name + "  ·  " + money(modelData.price)
+                      + (modelData.unit && modelData.unit !== "unidad" ? " / " + modelData.unit : "")
+                      + "  ·  stock " + Utils.formatQty(modelData.stock)
                 font.pixelSize: Theme.fontM
                 onClicked: root.addProduct(modelData.id)
                 // Deslizar para revelar acción táctil "Añadir"
@@ -106,10 +240,10 @@ RowLayout {
         }
         EmptyState {
             Layout.fillWidth: true
-            visible: (catalog.products || []).length === 0
+            visible: root.visibleProducts.length === 0
             icon: "🔍"
             title: qsTr("Sin productos para vender")
-            hint: qsTr("Busca de nuevo o da de alta productos en el catálogo.")
+            hint: qsTr("Busca de nuevo, cambia la categoría o da de alta productos en el catálogo.")
         }
         RowLayout {
             spacing: Theme.spacingSmall
@@ -161,7 +295,10 @@ RowLayout {
                 contentItem: RowLayout {
                     spacing: Theme.spacingSmall
                     Label {
-                        text: modelData.name + " × " + modelData.qty
+                        text: modelData.name + " × " + Utils.formatQty(modelData.qty)
+                              + (modelData.unit && modelData.unit !== "unidad" ? " " + modelData.unit : "")
+                              + (modelData.serial ? "\nSN: " + modelData.serial : "")
+                              + (modelData.receta ? " · Rx: " + modelData.receta : "")
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                         font.pixelSize: Theme.fontM
@@ -172,8 +309,14 @@ RowLayout {
                         implicitHeight: root.touchH
                         font.pixelSize: Theme.fontL
                         Accessible.name: qsTr("Disminuir cantidad")
-                        onClicked: pos.setQty(index, modelData.qty - 1)
-                        enabled: modelData.qty > 1
+                        // Fase 2: en pesables se edita exacto; en enteros, pasos de 1.
+                        onClicked: {
+                            if (Utils.isWeighable(modelData.unit))
+                                root.editCartQty(index, modelData);
+                            else
+                                pos.setQty(index, modelData.qty - 1);
+                        }
+                        enabled: modelData.qty > 1 || Utils.isWeighable(modelData.unit)
                     }
                     Button {
                         text: "+"
@@ -181,7 +324,12 @@ RowLayout {
                         implicitHeight: root.touchH
                         font.pixelSize: Theme.fontL
                         Accessible.name: qsTr("Aumentar cantidad")
-                        onClicked: pos.setQty(index, modelData.qty + 1)
+                        onClicked: {
+                            if (Utils.isWeighable(modelData.unit))
+                                root.editCartQty(index, modelData);
+                            else
+                                pos.setQty(index, modelData.qty + 1);
+                        }
                     }
                     Label {
                         text: money(modelData.subtotal)
@@ -223,8 +371,18 @@ RowLayout {
                     font.pixelSize: Theme.fontM
                 }
                 Label {
-                    text: qsTr("IVA: ") + money(pos.totals.tax)
+                    text: qsTr("Impuestos: ") + money(pos.totals.tax)
                     font.pixelSize: Theme.fontM
+                }
+                // Fase 1: desglose por tasa (solo si hay más de una)
+                Repeater {
+                    model: (pos.totals.taxBreakdown && pos.totals.taxBreakdown.length > 1)
+                           ? pos.totals.taxBreakdown : []
+                    Label {
+                        text: "  · " + modelData.name + ": " + money(modelData.tax)
+                        font.pixelSize: Theme.fontS
+                        opacity: 0.8
+                    }
                 }
                 Label {
                     text: qsTr("TOTAL: ") + money(pos.totals.total)
@@ -300,7 +458,13 @@ RowLayout {
                         pays["efectivo"] = cash;
                 }
                 Utils.showLoading(qsTr("Procesando venta..."));
-                var r = pos.checkout(clientField.text, pays, methodBox.currentText, auth.currentUser);
+                var missing = root.missingReceta();
+                if (missing !== "") {
+                    Utils.hideLoading();
+                    Utils.showToast("error", qsTr("Receta requerida para: ") + missing, 4000);
+                    return;
+                }
+                var r = pos.checkout(clientField.text, pays, methodBox.currentText, auth.currentUser, auth.currentRole);
                 Utils.hideLoading();
                 if (r.ok) {
                     Utils.showToast("success", "Venta " + r.saleId + " · Cambio " + money(r.change), 3000);
@@ -349,6 +513,16 @@ RowLayout {
         }
     }
 
+    // Fase 2: editar cantidad exacta de una línea pesable del carrito.
+    function editCartQty(idx, line) {
+        qtyDialog.productId = -1;
+        qtyDialog.cartIndex = idx;
+        qtyDialog.productName = (line.name || "") + (line.unit ? " (" + line.unit + ")" : "");
+        qtyField.text = Utils.formatQty(line.qty);
+        qtyErr.text = "";
+        qtyDialog.open();
+    }
+
     // Confirmación antes de eliminar una línea (acción destructiva)
     Dialog {
         id: confirmRemoveDialog
@@ -387,6 +561,166 @@ RowLayout {
         onAccepted: {
             pos.clearCart();
             Utils.showToast("info", "Carrito vaciado", 2000);
+        }
+    }
+
+    // Fase 2: cantidad decimal para productos a granel (agregar o editar línea).
+    Dialog {
+        id: qtyDialog
+        title: qsTr("Cantidad")
+        modal: true
+        width: 320
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property int productId: -1
+        property int cartIndex: -1
+        property string productName: ""
+        onOpened: qtyField.forceActiveFocus()
+        ColumnLayout {
+            width: 280
+            Label {
+                text: qtyDialog.productName
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                font.bold: true
+            }
+            TextField {
+                id: qtyField
+                placeholderText: qsTr("Cantidad (ej. 0.350)")
+                Layout.fillWidth: true
+                validator: DoubleValidator { bottom: 0.001; decimals: 3 }
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+            }
+            Label {
+                id: qtyErr
+                color: Theme.error
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+        }
+        onAccepted: {
+            var q = parseFloat(qtyField.text) || 0;
+            if (q <= 0) {
+                qtyErr.text = qsTr("Cantidad mayor a 0.");
+                open();
+                return;
+            }
+            if (qtyDialog.cartIndex >= 0) {
+                pos.setQty(qtyDialog.cartIndex, q);
+                Utils.showToast("success", "Cantidad: " + Utils.formatQty(q), 1500);
+            } else {
+                var r = pos.addToCart(qtyDialog.productId, q);
+                if (!r.ok) {
+                    qtyErr.text = r.error;
+                    open();
+                    return;
+                }
+                Utils.showToast("success", "Agregado: " + Utils.formatQty(q), 1500);
+            }
+            qtyDialog.cartIndex = -1;
+            qtyDialog.productId = -1;
+        }
+        onRejected: {
+            qtyDialog.cartIndex = -1;
+            qtyDialog.productId = -1;
+        }
+    }
+
+    // Fase 3: serial/IMEI para la línea recién agregada (y edición).
+    Dialog {
+        id: serialDialog
+        title: qsTr("Serial / IMEI")
+        modal: true
+        width: 320
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property int cartIndex: -1
+        property int productId: -1
+        onOpened: {
+            serialField.forceActiveFocus();
+            serialList.model = serialDialog.productId >= 0
+                ? pos.inStockSerials(serialDialog.productId) : [];
+        }
+        ColumnLayout {
+            width: 280
+            Label {
+                text: qsTr("Escanee o seleccione el serial:")
+                Layout.fillWidth: true
+            }
+            TextField {
+                id: serialField
+                placeholderText: qsTr("Serial / IMEI")
+                Layout.fillWidth: true
+            }
+            ListView {
+                id: serialList
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(160, (count || 0) * 40)
+                visible: (count || 0) > 0
+                clip: true
+                delegate: ItemDelegate {
+                    width: ListView.view.width
+                    text: modelData.serial + (modelData.imei2 ? " / " + modelData.imei2 : "")
+                    onClicked: serialField.text = modelData.serial
+                }
+                ScrollBar.vertical: ScrollBar {}
+            }
+            Label {
+                id: serialErr
+                color: Theme.error
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+        }
+        onAccepted: {
+            if (serialField.text.trim() === "") {
+                serialErr.text = qsTr("Serial requerido para este producto.");
+                open();
+                return;
+            }
+            var r = pos.setLineSerial(serialDialog.cartIndex, serialField.text);
+            if (!r.ok) {
+                serialErr.text = r.error;
+                open();
+                return;
+            }
+            Utils.showToast("success", "Serial registrado", 1500);
+        }
+    }
+
+    // Fase 3: Nº de receta para productos que la exigen.
+    Dialog {
+        id: recetaDialog
+        title: qsTr("Receta médica")
+        modal: true
+        width: 320
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property int cartIndex: -1
+        property string productName: ""
+        onOpened: recetaField.forceActiveFocus()
+        ColumnLayout {
+            width: 280
+            Label {
+                text: qsTr("Nº de receta para \"%1\":").arg(recetaDialog.productName)
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            TextField {
+                id: recetaField
+                placeholderText: qsTr("Nº receta")
+                Layout.fillWidth: true
+            }
+            Label {
+                id: recetaErr
+                color: Theme.error
+                Layout.fillWidth: true
+            }
+        }
+        onAccepted: {
+            if (recetaField.text.trim() === "") {
+                recetaErr.text = qsTr("Indique el Nº de receta (se valida al cobrar).");
+                open();
+                return;
+            }
+            pos.setLineReceta(recetaDialog.cartIndex, recetaField.text);
         }
     }
 

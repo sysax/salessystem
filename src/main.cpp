@@ -14,6 +14,7 @@
 #include "controllers/OpsControllers.h"
 #include "controllers/PosController.h"
 #include "controllers/SalesController.h"
+#include "controllers/SettingsController.h"
 #include "core/DatabaseManager.h"
 #include "core/EventBus.h"
 #include "repositories/AuditRepository.h"
@@ -25,8 +26,12 @@
 #include "repositories/PromoRepository.h"
 #include "repositories/PurchaseRepository.h"
 #include "repositories/SaleRepository.h"
+#include "repositories/SettingsRepository.h"
+#include "repositories/CategoryRepository.h"
+#include "repositories/SerialRepository.h"
 #include "services/AuthService.h"
 #include "services/CreditService.h"
+#include "services/SettingsService.h"
 #include "services/InventoryService.h"
 #include "services/PurchaseService.h"
 #include "services/ReportService.h"
@@ -60,10 +65,14 @@ int main(int argc, char *argv[])
     PurchaseRepository purchases(conn, &audit);
     ReceivablesRepository cxc(conn, &sales, &audit);
     PayablesRepository cxp(conn, &audit);
+    SettingsRepository settingsRepo(conn);
+    CategoryRepository categories(conn);
+    SerialRepository serials(conn);
 
     AuthService auth(conn, &bus);
+    SettingsService settingsSvc(&settingsRepo, &bus);
     SalesService salesSvc(conn, &products, &sales, &inventory, &clients, &caja, &promos,
-                          &bus);
+                          &bus, &settingsSvc, &audit, &serials);
     InventoryService invSvc(conn, &products, &inventory, &bus);
     PurchaseService purSvc(conn, &purchases, &products, &suppliers, &inventory, &cxp,
                            &audit);
@@ -74,10 +83,12 @@ int main(int argc, char *argv[])
     TicketPrinter printer;
 
     AuthController authCtl(&auth);
-    DashboardController dashCtl(&reports, &inventory);
-    PosController posCtl(&salesSvc, &products, &promos, &caja, &printer, &sync);
-    CatalogController catalogCtl(&products);
-    SalesController salesCtl(&sales, &salesSvc);
+    SettingsController settingsCtl(&settingsSvc, &auth);
+    DashboardController dashCtl(&reports, &inventory, &products);
+    PosController posCtl(&salesSvc, &products, &promos, &caja, &printer, &sync, &settingsSvc,
+                         &serials);
+    CatalogController catalogCtl(&products, &categories, &settingsSvc);
+    SalesController salesCtl(&sales, &salesSvc, &serials, &products);
     ClientsController clientsCtl(&clients, &cxcSvc);
     SuppliersController suppliersCtl(&suppliers);
     InventoryController inventoryCtl(&invSvc, &inventory, &products);
@@ -90,6 +101,7 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("db"), &db);
     engine.rootContext()->setContextProperty(QStringLiteral("auth"), &authCtl);
+    engine.rootContext()->setContextProperty(QStringLiteral("settingsCtl"), &settingsCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("dash"), &dashCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("pos"), &posCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("catalog"), &catalogCtl);

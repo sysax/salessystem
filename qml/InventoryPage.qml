@@ -2,6 +2,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Utils.js" as Utils
 import QtSalesSystem
 import "components"
 
@@ -61,7 +62,7 @@ ColumnLayout {
         visible: (inventoryCtl.movements || []).length > 0
         delegate: Label {
             width: ListView.view.width
-            text: modelData.ts + "  " + modelData.sku + "  " + modelData.type + "  " + (modelData.qty > 0 ? "+" : "") + modelData.qty + "  (" + modelData.before + "→" + modelData.after + ")"
+            text: modelData.ts + "  " + modelData.sku + "  " + modelData.type + "  " + (modelData.qty > 0 ? "+" : "") + Utils.formatQty(modelData.qty) + "  (" + Utils.formatQty(modelData.before) + "→" + Utils.formatQty(modelData.after) + ")"
         }
         ScrollBar.vertical: ScrollBar {}
     }
@@ -99,7 +100,7 @@ ColumnLayout {
             }
         }
         onAccepted: {
-            var r = inventoryCtl.adjust(aSku.text, parseInt(aQty.text) || 0, aReason.text, auth.currentUser);
+            var r = inventoryCtl.adjust(aSku.text, parseFloat(aQty.text) || 0, aReason.text, auth.currentUser);
             if (!r.ok) {
                 aErr.text = r.error;
                 open();
@@ -135,7 +136,7 @@ ColumnLayout {
             }
         }
         onAccepted: {
-            var r = inventoryCtl.transfer(tSku.text, parseInt(tQty.text) || 0, tDest.text, tReason.text, auth.currentUser);
+            var r = inventoryCtl.transfer(tSku.text, parseFloat(tQty.text) || 0, tDest.text, tReason.text, auth.currentUser);
             if (!r.ok) {
                 tErr.text = r.error;
                 open();

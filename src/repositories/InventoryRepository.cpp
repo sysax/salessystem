@@ -11,8 +11,8 @@ InventoryRepository::InventoryRepository(QSqlDatabase db, AuditRepository *audit
 }
 
 bool InventoryRepository::record(const QString &sku, const QString &productName,
-                                 const QString &type, int qty, int before, int after,
-                                 const QString &reason, const QString &user)
+                                 const QString &type, double qty, double before,
+                                 double after, const QString &reason, const QString &user)
 {
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
@@ -38,9 +38,9 @@ InventoryMovement InventoryRepository::rowToMovement(const QSqlQuery &q)
     m.sku = q.value(QStringLiteral("sku")).toString();
     m.product = q.value(QStringLiteral("product")).toString();
     m.type = q.value(QStringLiteral("type")).toString();
-    m.qty = q.value(QStringLiteral("qty")).toInt();
-    m.before = q.value(QStringLiteral("before_qty")).toInt();
-    m.after = q.value(QStringLiteral("after_qty")).toInt();
+    m.qty = q.value(QStringLiteral("qty")).toDouble();
+    m.before = q.value(QStringLiteral("before_qty")).toDouble();
+    m.after = q.value(QStringLiteral("after_qty")).toDouble();
     m.reason = q.value(QStringLiteral("reason")).toString();
     m.user = q.value(QStringLiteral("user")).toString();
     return m;

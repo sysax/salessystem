@@ -20,7 +20,7 @@ class InventoryService : public QObject
 public:
     struct StockResult {
         QString sku;
-        int newStock = 0;
+        double newStock = 0.0;
         double newCost = 0.0;
     };
     struct Valuation {
@@ -33,14 +33,14 @@ public:
                               QObject *parent = nullptr);
 
     // Entrada por compra: costo promedio ponderado + movimiento "Entrada"
-    Result<StockResult> registerPurchase(int productId, int qty, double cost,
+    Result<StockResult> registerPurchase(int productId, double qty, double cost,
                                          const QString &supplier, const QString &invoice,
                                          const QString &user);
     // Ajuste ±: motivo obligatorio, nunca stock negativo
-    Result<StockResult> registerAdjustment(const QString &sku, int delta,
+    Result<StockResult> registerAdjustment(const QString &sku, double delta,
                                            const QString &reason, const QString &user);
     // Cambio de ubicación (sin mover unidades)
-    StatusResult transfer(const QString &sku, int qty, const QString &toLocation,
+    StatusResult transfer(const QString &sku, double qty, const QString &toLocation,
                           const QString &reason, const QString &user);
 
     QList<Product> lowStock(double multiplier = 1.0) const;

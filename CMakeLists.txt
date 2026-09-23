@@ -44,6 +44,12 @@ add_library(sales_core STATIC
     src/repositories/PurchaseRepository.cpp
     src/repositories/CreditRepository.h
     src/repositories/CreditRepository.cpp
+    src/repositories/SettingsRepository.h
+    src/repositories/SettingsRepository.cpp
+    src/repositories/CategoryRepository.h
+    src/repositories/CategoryRepository.cpp
+    src/repositories/SerialRepository.h
+    src/repositories/SerialRepository.cpp
     src/services/Totp.h
     src/services/Totp.cpp
     src/services/AuthService.h
@@ -62,6 +68,8 @@ add_library(sales_core STATIC
     src/services/SyncService.cpp
     src/services/CreditService.h
     src/services/CreditService.cpp
+    src/services/SettingsService.h
+    src/services/SettingsService.cpp
     src/services/TicketPrinter.h
     src/services/TicketPrinter.cpp
     src/controllers/AuthController.h
@@ -78,6 +86,8 @@ add_library(sales_core STATIC
     src/controllers/MgmtControllers.cpp
     src/controllers/OpsControllers.h
     src/controllers/OpsControllers.cpp
+    src/controllers/SettingsController.h
+    src/controllers/SettingsController.cpp
 )
 target_link_libraries(sales_core PUBLIC
     Qt6::Core
@@ -97,6 +107,20 @@ qt_add_resources(sales_core "sql_files"
         sql/schema.sql
         sql/seed.sql
         sql/seed_min.sql
+        sql/seeds/farmacia.sql
+        sql/seeds/abarrotes.sql
+        sql/seeds/celulares.sql
+        sql/seeds/ferreteria.sql
+        sql/seeds/ropa.sql
+        sql/seeds/restaurante.sql
+        sql/seeds/cafeteria.sql
+        sql/seeds/panaderia.sql
+        sql/seeds/peluqueria.sql
+        sql/seeds/taller.sql
+        sql/seeds/lavanderia.sql
+        sql/seeds/consultorio.sql
+        sql/seeds/veterinaria.sql
+        sql/seeds/miscelanea.sql
 )
 
 qt_add_executable(QtSalesSystemApp
@@ -133,6 +157,7 @@ qt_add_qml_module(QtSalesSystemApp
         qml/ReceivablesPage.qml
         qml/PayablesPage.qml
         qml/ReportsPage.qml
+        qml/SettingsPage.qml
         qml/PromosPage.qml
         qml/UsersPage.qml
         qml/Utils.js

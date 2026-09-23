@@ -45,6 +45,40 @@ ColumnLayout {
             opacity: 0.7
         }
     }
+    // Fase 3: verificación de garantía / RMA por serial.
+    GroupBox {
+        title: qsTr("Garantía / RMA")
+        Layout.fillWidth: true
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: Theme.spacingSmall
+            RowLayout {
+                TextField {
+                    id: warrantyField
+                    placeholderText: qsTr("Serial / IMEI")
+                    Layout.fillWidth: true
+                    onAccepted: root.checkWarranty()
+                }
+                Button {
+                    text: qsTr("Verificar")
+                    onClicked: root.checkWarranty()
+                }
+                Button {
+                    text: qsTr("Pasar a RMA")
+                    enabled: warrantyMsg.text !== "" && auth.currentRole === "Administrador"
+                    onClicked: {
+                        var r = salesCtl.markRma(warrantyField.text.trim(), "RMA desde ventas", auth.currentUser);
+                        warrantyMsg.text = r.ok ? qsTr("Serial en RMA.") : r.error;
+                    }
+                }
+            }
+            Label {
+                id: warrantyMsg
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+        }
+    }
     RowLayout {
         spacing: Theme.spacingSmall
         SortHeader {
@@ -257,5 +291,13 @@ ColumnLayout {
 
     function money(v) {
         return ApplicationWindow.window.money(v);
+    }
+
+    function checkWarranty() {
+        var r = salesCtl.warrantyFor(warrantyField.text.trim());
+        if (!r.ok)
+            warrantyMsg.text = r.error;
+        else
+            warrantyMsg.text = (r.detail || "") + " · " + (r.serial || "");
     }
 }

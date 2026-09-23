@@ -29,11 +29,16 @@ public:
     Q_INVOKABLE QVariantMap taxes() const;
     Q_INVOKABLE QVariantMap kpis() const;
 
+    // Fase 3: próximos a vencer (lista {sku,name,lote,vencimiento,stock}).
+    Q_INVOKABLE QVariantList expiringProducts(int days = 30) const;
+
     // Exporta CSV operativo/financiero; retorna ruta o "" en error.
+    // Cabecera con business_name/NIT de `settings` (Fase 0 multinegocio).
     Q_INVOKABLE QString exportCsv(const QString &type, const QString &dir) const;
     // Exporta PDF (QPdfWriter); retorna ruta o "" en error.
     Q_INVOKABLE QString exportPdf(const QString &type, const QString &dir) const;
 
 private:
+    QString setting(const QString &key, const QString &fallback = {}) const;
     QSqlDatabase m_db;
 };

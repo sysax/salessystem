@@ -43,26 +43,28 @@ ctest --test-dir build   # 11 suites QtTest
 QT_QUICK_CONTROLS_STYLE=Material ./build/qtsales
 ```
 
-La base SQLite se crea/siembra sola en `AppDataLocation/sistema_ventas.db`
+La base SQLite se crea sola en `AppDataLocation/sistema_ventas.db`
 (`QTSALES_DB=<ruta>` para usar otra; el esquema es compatible con la BD
-del sistema Python anterior).
+del sistema Python anterior, con migración automática de columnas).
+
+La base arranca limpia: solo el usuario `admin` (clave `admin123`); en el
+primer ingreso la app exige cambiar la contraseña por defecto. Sin datos
+demo: productos, clientes, ventas y demás se crean operando el sistema.
 
 ```bash
-# Probar con BD vacía (solo esquema): se siembra con demo + usuarios
+# Probar con otra ruta (arranca limpia: solo admin)
 QTSALES_DB=/tmp/ventas_vacia.db ./build/qtsales
-# Probar sin datos demo (solo los 5 usuarios, cero productos/ventas)
-QTSALES_DB=/tmp/ventas_cero.db QTSALES_SIN_DEMO=1 ./build/qtsales
 ```
 
-## Usuarios de prueba
+## Usuario inicial
 
 | Usuario | Clave | Rol |
 |---------|-------|-----|
 | admin | admin123 | Administrador |
-| vendedor | venta123 | Vendedor |
-| cajero | caja123 | Cajero |
-| almacen | alma123 | Almacén |
-| contador | conta123 | Contador |
+
+En el primer ingreso se exige cambiar la clave por defecto (no se puede
+operar sin hacerlo). Los demás usuarios los crea el admin en el módulo
+Usuarios; toda clave asignada por un admin también exige cambio al entrar.
 
 ## Estructura
 
@@ -77,8 +79,8 @@ QTSALES_DB=/tmp/ventas_cero.db QTSALES_SIN_DEMO=1 ./build/qtsales
 │   │                       #  Sync, Credit, Dian, TicketPrinter, Totp
 │   └── controllers/        # 13 controllers Q_PROPERTY/Q_INVOKABLE
 ├── qml/                    # Main + 14 páginas + sidebar, Material
-├── sql/schema.sql + seed.sql (embebidos en el binario vía .qrc)
-├── tests/                  # 11 suites QtTest (ctest)
+├── sql/schema.sql + seed.sql (solo admin, embebidos en el binario vía .qrc)
+├── tests/                  # 12 suites QtTest (ctest; datos demo en tests/fixtures/)
 └── fases.md                # Especificación original de los 12 módulos
 ```
 

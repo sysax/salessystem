@@ -31,6 +31,9 @@ public:
 
     // Utilidad fase 1: conteo de filas por tabla para verificar el seed.
     Q_INVOKABLE int tableRowCount(const QString &table) const;
+    // Fase 2: aplica sql/seeds/<name>.sql (INSERT OR IGNORE, idempotente).
+    // Solo añade: no borra usuarios, ventas ni productos existentes.
+    Q_INVOKABLE bool applySeedFile(const QString &name);
 
 signals:
     void openChanged();

@@ -9,9 +9,48 @@
 
 #include <limits>
 
+#include "../domain/Attrs.h"
+
 ProductRepository::ProductRepository(QSqlDatabase db, AuditRepository *audit, QObject *parent)
     : QObject(parent), m_db(std::move(db)), m_audit(audit)
 {
+}
+
+const QStringList ProductRepository::Units = {
+    QStringLiteral("unidad"), QStringLiteral("g"),  QStringLiteral("kg"),
+    QStringLiteral("ml"),     QStringLiteral("l"),  QStringLiteral("caja"),
+    QStringLiteral("paquete"), QStringLiteral("metro"),
+};
+
+bool ProductRepository::isWeighable(const QString &unit)
+{
+    const QString u = unit.trimmed().toLower();
+    return u == QLatin1String("g") || u == QLatin1String("kg") || u == QLatin1String("ml")
+        || u == QLatin1String("l");
+}
+
+QString ProductRepository::normalizeUnit(const QString &unit)
+{
+    const QString u = unit.trimmed().toLower();
+    return Units.contains(u) ? u : QString();
+}
+
+bool ProductRepository::isValidEan13(const QString &barcode)
+{
+    const QString b = barcode.trimmed();
+    if (b.size() != 13)
+        return false;
+    for (const QChar c : b) {
+        if (!c.isDigit())
+            return false;
+    }
+    int sum = 0;
+    for (int i = 0; i < 12; ++i) {
+        const int d = b[i].digitValue();
+        sum += (i % 2 == 0) ? d : d * 3;
+    }
+    const int check = (10 - (sum % 10)) % 10;
+    return check == b[12].digitValue();
 }
 
 Product ProductRepository::rowToProduct(const QSqlQuery &q)
@@ -31,9 +70,9 @@ Product ProductRepository::rowToProduct(const QSqlQuery &q)
     p.priceWholesale = q.value(QStringLiteral("price_wholesale")).toDouble();
     p.tax = q.value(QStringLiteral("tax")).toString();
     p.unit = q.value(QStringLiteral("unit")).toString();
-    p.stock = q.value(QStringLiteral("stock")).toInt();
-    p.stockMin = q.value(QStringLiteral("stock_min")).toInt();
-    p.stockMax = q.value(QStringLiteral("stock_max")).toInt();
+    p.stock = q.value(QStringLiteral("stock")).toDouble();
+    p.stockMin = q.value(QStringLiteral("stock_min")).toDouble();
+    p.stockMax = q.value(QStringLiteral("stock_max")).toDouble();
     p.location = q.value(QStringLiteral("location")).toString();
     p.status = q.value(QStringLiteral("status")).toString();
     p.image = q.value(QStringLiteral("image")).toString();
@@ -41,15 +80,27 @@ Product ProductRepository::rowToProduct(const QSqlQuery &q)
     p.vencimiento = q.value(QStringLiteral("vencimiento")).toString();
     p.isKit = q.value(QStringLiteral("is_kit")).toInt() != 0;
     p.kitJson = q.value(QStringLiteral("kit_json")).toString();
+    // Columna aditiva Fase 3: en BDs legadas aún no existe → '{}'.
+    p.attrsJson = q.value(QStringLiteral("attrs_json")).toString();
+    if (p.attrsJson.trimmed().isEmpty())
+        p.attrsJson = QStringLiteral("{}");
     return p;
 }
 
 QString ProductRepository::generateBarcode(const QString &sku)
 {
-    // EAN-13 con prefijo Colombia 770 (antes: hash() de Python)
+    // EAN-13 con prefijo Colombia 770 (antes: hash() de Python).
+    // Fase 3: el 13.er dígito es el verificador calculado (antes era azar).
     const quint64 h = qHash(sku);
     // QString::number evita la sobrecarga ambigua de QString::arg numérico (GCC + Qt 6.4)
-    return QStringLiteral("770") + QString::number(h % 10000000000ULL).rightJustified(10, u'0');
+    QString base = QStringLiteral("770")
+        + QString::number(h % 1000000000ULL).rightJustified(9, u'0');
+    int sum = 0;
+    for (int i = 0; i < 12; ++i) {
+        const int d = base[i].digitValue();
+        sum += (i % 2 == 0) ? d : d * 3;
+    }
+    return base + QString::number((10 - (sum % 10)) % 10);
 }
 
 QList<Product> ProductRepository::list() const
@@ -132,12 +183,34 @@ Result<Product> ProductRepository::add(const Product &pin)
         return Result<Product>::failure(QStringLiteral("Nombre mínimo 2 caracteres"));
     if (p.price <= 0 || p.stock < 0)
         return Result<Product>::failure(QStringLiteral("Precio >0 y stock >=0"));
+    // Fase 3: vencimiento con formato válido si se informa; attrs JSON objeto.
+    if (!p.vencimiento.trimmed().isEmpty()
+        && !QDate::fromString(p.vencimiento.trimmed(), Qt::ISODate).isValid())
+        return Result<Product>::failure(
+            QStringLiteral("Vencimiento inválido (use AAAA-MM-DD)"));
+    if (!Attrs::isObject(p.attrsJson))
+        return Result<Product>::failure(QStringLiteral("Atributos inválidos (JSON objeto)"));
+    // Fase 3: barcode de 13 dígitos debe ser EAN-13 válido (UPC-12 e
+    // internos de otra longitud se aceptan para no romper legacy).
+    if (p.barcode.trimmed().size() == 13 && !isValidEan13(p.barcode))
+        return Result<Product>::failure(
+            QStringLiteral("EAN-13 inválido (dígito verificador)"));
+    // Fase 2: unidad canónica. En alta se exige; en edición se preservan
+    // valores legacy (p. ej. "pieza") salvo que se cambien a otro inválido.
+    if (!normalizeUnit(p.unit).isEmpty()) {
+        p.unit = normalizeUnit(p.unit);
+    } else if (!p.unit.trimmed().isEmpty()) {
+        return Result<Product>::failure(
+            QStringLiteral("Unidad inválida (válidas: %1)").arg(Units.join(u", ")));
+    } else {
+        p.unit = QStringLiteral("unidad");
+    }
     if (p.priceBuy <= 0)
         p.priceBuy = p.price * 0.7;
     if (p.priceWholesale <= 0)
         p.priceWholesale = p.price * 0.9;
-    if (p.vencimiento.isEmpty() && p.cat == QLatin1String("Abarrotes"))
-        p.vencimiento = QDate::currentDate().addDays(180).toString(Qt::ISODate);
+    // Fase 3: sin auto-vencimientos (el +180d anterior inventaba fechas y
+    // sabotea require_expiry; el vencimiento lo informa el usuario).
     if (p.barcode.size() < 8)
         p.barcode = generateBarcode(p.sku);
     if (p.isKit) {
@@ -158,8 +231,8 @@ Result<Product> ProductRepository::add(const Product &pin)
     q.prepare(QStringLiteral(
         "INSERT INTO products (sku, barcode, name, description, cat, subcat, brand, supplier, "
         "price, price_buy, price_wholesale, tax, unit, stock, stock_min, stock_max, location, "
-        "status, image, lote, vencimiento, is_kit, kit_json) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
+        "status, image, lote, vencimiento, is_kit, kit_json, attrs_json) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(p.sku);
     q.addBindValue(p.barcode);
     q.addBindValue(p.name);
@@ -183,6 +256,7 @@ Result<Product> ProductRepository::add(const Product &pin)
     q.addBindValue(p.vencimiento.isEmpty() ? QVariant() : p.vencimiento);
     q.addBindValue(p.isKit ? 1 : 0);
     q.addBindValue(p.kitJson);
+    q.addBindValue(p.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}") : p.attrsJson);
     if (!q.exec())
         return Result<Product>::failure(q.lastError().text());
     return Result<Product>::success(*findBySku(p.sku));
@@ -190,18 +264,34 @@ Result<Product> ProductRepository::add(const Product &pin)
 
 Result<Product> ProductRepository::update(const QString &sku, const Product &p)
 {
-    if (!findBySku(sku))
+    const auto cur = findBySku(sku);
+    if (!cur)
         return Result<Product>::failure(
             QStringLiteral("Producto SKU %1 no encontrado").arg(sku));
     if (p.price <= 0 || p.priceBuy <= 0 || p.stock < 0 || p.stockMin < 0 || p.stockMax < 0)
         return Result<Product>::failure(QStringLiteral("Precio >0 y stocks >=0"));
+    if (!p.vencimiento.trimmed().isEmpty()
+        && !QDate::fromString(p.vencimiento.trimmed(), Qt::ISODate).isValid())
+        return Result<Product>::failure(
+            QStringLiteral("Vencimiento inválido (use AAAA-MM-DD)"));
+    if (!Attrs::isObject(p.attrsJson))
+        return Result<Product>::failure(QStringLiteral("Atributos inválidos (JSON objeto)"));
+    // Unidad legacy preservada salvo cambio explícito a valor inválido.
+    QString unit = p.unit;
+    if (unit != cur->unit) {
+        unit = normalizeUnit(unit);
+        if (unit.isEmpty())
+            return Result<Product>::failure(
+                QStringLiteral("Unidad inválida (válidas: %1)").arg(Units.join(u", ")));
+    }
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
-        "UPDATE products SET name=?, cat=?, brand=?, supplier=?, description=?, price=?, "
+        "UPDATE products SET name=?, cat=?, subcat=?, brand=?, supplier=?, description=?, price=?, "
         "price_buy=?, price_wholesale=?, tax=?, unit=?, stock=?, stock_min=?, stock_max=?, "
-        "location=?, status=?, image=?, lote=?, vencimiento=?, barcode=? WHERE sku=?"));
+        "location=?, status=?, image=?, lote=?, vencimiento=?, barcode=?, attrs_json=? WHERE sku=?"));
     q.addBindValue(p.name);
     q.addBindValue(p.cat);
+    q.addBindValue(p.subcat);
     q.addBindValue(p.brand);
     q.addBindValue(p.supplier);
     q.addBindValue(p.description);
@@ -209,7 +299,7 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p)
     q.addBindValue(p.priceBuy);
     q.addBindValue(p.priceWholesale);
     q.addBindValue(p.tax);
-    q.addBindValue(p.unit);
+    q.addBindValue(unit);
     q.addBindValue(p.stock);
     q.addBindValue(p.stockMin);
     q.addBindValue(p.stockMax);
@@ -219,6 +309,7 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p)
     q.addBindValue(p.lote.isEmpty() ? QVariant() : p.lote);
     q.addBindValue(p.vencimiento.isEmpty() ? QVariant() : p.vencimiento);
     q.addBindValue(p.barcode);
+    q.addBindValue(p.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}") : p.attrsJson);
     q.addBindValue(sku);
     if (!q.exec())
         return Result<Product>::failure(q.lastError().text());
@@ -236,7 +327,7 @@ StatusResult ProductRepository::remove(const QString &sku)
     return StatusResult::success({});
 }
 
-bool ProductRepository::setStockById(int id, int stock)
+bool ProductRepository::setStockById(int id, double stock)
 {
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("UPDATE products SET stock=? WHERE id=?"));
@@ -245,7 +336,7 @@ bool ProductRepository::setStockById(int id, int stock)
     return q.exec() && q.numRowsAffected() > 0;
 }
 
-bool ProductRepository::setStockBySku(const QString &sku, int stock)
+bool ProductRepository::setStockBySku(const QString &sku, double stock)
 {
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("UPDATE products SET stock=? WHERE sku=?"));
@@ -275,22 +366,22 @@ QList<KitComponent> ProductRepository::kitComponents(const QString &sku) const
     for (const auto &c : arr) {
         KitComponent k;
         k.sku = c.toObject().value(QStringLiteral("sku")).toString();
-        k.qty = c.toObject().value(QStringLiteral("qty")).toInt();
+        k.qty = c.toObject().value(QStringLiteral("qty")).toDouble();
         out << k;
     }
     return out;
 }
 
-int ProductRepository::kitStock(const QList<KitComponent> &components) const
+double ProductRepository::kitStock(const QList<KitComponent> &components) const
 {
-    int minStock = std::numeric_limits<int>::max();
+    double minStock = std::numeric_limits<double>::max();
     for (const KitComponent &c : components) {
         const auto p = findBySku(c.sku);
         if (!p || c.qty <= 0)
-            return 0;
-        minStock = std::min(minStock, p->stock / c.qty);
+            return 0.0;
+        minStock = std::min(minStock, std::floor(p->stock / c.qty));
     }
-    return minStock == std::numeric_limits<int>::max() ? 0 : minStock;
+    return minStock == std::numeric_limits<double>::max() ? 0.0 : minStock;
 }
 
 Result<Product> ProductRepository::createKit(const QString &sku, const QString &name,

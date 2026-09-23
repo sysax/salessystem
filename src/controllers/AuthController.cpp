@@ -13,14 +13,19 @@ QVariantMap AuthController::login(const QString &username, const QString &passwo
     if (r.value().totpRequired) {
         m_pendingUser = r.value().username;
         m_pendingRole = r.value().role;
+        m_pendingMustChange = r.value().mustChangePassword;
         return {{"ok", false},
                 {"totpRequired", true},
+                {"mustChangePassword", m_pendingMustChange},
                 {"pendingUser", m_pendingUser}};
     }
     m_user = r.value().username;
     m_role = r.value().role;
     emit sessionChanged();
-    return {{"ok", true}, {"user", m_user}, {"role", m_role}};
+    return {{"ok", true},
+            {"user", m_user},
+            {"role", m_role},
+            {"mustChangePassword", r.value().mustChangePassword}};
 }
 
 QVariantMap AuthController::verifyTotp(const QString &code)
@@ -31,10 +36,22 @@ QVariantMap AuthController::verifyTotp(const QString &code)
         return {{"ok", false}, {"error", QStringLiteral("Código 2FA inválido")}};
     m_user = m_pendingUser;
     m_role = m_pendingRole;
+    const bool mustChange = m_pendingMustChange;
     m_pendingUser.clear();
     m_pendingRole.clear();
+    m_pendingMustChange = false;
     emit sessionChanged();
-    return {{"ok", true}, {"user", m_user}, {"role", m_role}};
+    return {{"ok", true}, {"user", m_user}, {"role", m_role}, {"mustChangePassword", mustChange}};
+}
+
+QVariantMap AuthController::changePassword(const QString &username,
+                                           const QString &currentPassword,
+                                           const QString &newPassword)
+{
+    const auto r = m_auth->changePassword(username, currentPassword, newPassword);
+    if (!r.ok())
+        return {{"ok", false}, {"error", r.error()}};
+    return {{"ok", true}};
 }
 
 void AuthController::logout()
@@ -43,6 +60,9 @@ void AuthController::logout()
         m_auth->logout(m_user);
     m_user.clear();
     m_role.clear();
+    m_pendingUser.clear();
+    m_pendingRole.clear();
+    m_pendingMustChange = false;
     emit sessionChanged();
 }
 

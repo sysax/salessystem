@@ -59,7 +59,8 @@ ApplicationWindow {
             "payables": {"label": "Cuentas por pagar", "icon": "💸", "section": "Finanzas"},
             "reports": {"label": "Reportes", "icon": "📈", "section": "Finanzas"},
             "promos": {"label": "Promociones", "icon": "🎟️", "section": "Ventas"},
-            "users": {"label": "Usuarios", "icon": "👤", "section": "Sistema"}
+            "users": {"label": "Usuarios", "icon": "👤", "section": "Sistema"},
+            "settings": {"label": "Configuración", "icon": "⚙️", "section": "Sistema"}
         };
         return map[key] || {"label": key, "icon": "•", "section": ""};
     }
@@ -119,13 +120,20 @@ ApplicationWindow {
             return promosPage;
         case "users":
             return usersPage;
+        case "settings":
+            return settingsPage;
         default:
             return dashboardPage;
         }
     }
 
-    // Formato COP "$ 1.850.000"
+    // Formato de moneda con el símbolo de settingsCtl (Fase 0 multinegocio).
     function money(v) {
+        var sym = "$ ";
+        try {
+            if (settingsCtl && settingsCtl.settings["currency_symbol"])
+                sym = settingsCtl.settings["currency_symbol"] + " ";
+        } catch (e) {}
         var n = Math.round(v);
         var neg = n < 0;
         n = Math.abs(n).toString();
@@ -134,7 +142,7 @@ ApplicationWindow {
             out = "." + n.slice(-3) + out;
             n = n.slice(0, -3);
         }
-        return (neg ? "-$ " : "$ ") + n + out;
+        return (neg ? "-" + sym : sym) + n + out;
     }
 
     header: ToolBar {
@@ -306,6 +314,10 @@ ApplicationWindow {
         id: usersPage
         visible: false
     }
+    SettingsPage {
+        id: settingsPage
+        visible: false
+    }
 
     // Atajos de teclado (mejora #10): navegación rápida entre módulos principales.
     // navigate() ya valida sesión y permiso por rol.
@@ -340,6 +352,7 @@ ApplicationWindow {
             if (auth.loggedIn) {
                 root.tickClock();
                 root.recheckOnline();
+                settingsCtl.setRole(auth.currentRole);
                 dash.refresh();
             }
         }

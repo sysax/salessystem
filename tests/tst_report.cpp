@@ -1,7 +1,8 @@
-// ReportService contra seed: verifica consultas agregadas.
+// ReportService contra fixture demo: verifica consultas agregadas.
 #include <QtTest>
 
 #include "core/DatabaseManager.h"
+#include "TestDb.h"
 #include "services/ReportService.h"
 
 #include <QTemporaryDir>
@@ -16,6 +17,8 @@ private slots:
         QVERIFY(m_tmp.isValid());
         m_dbm = new DatabaseManager(this);
         QVERIFY(m_dbm->initialize(m_tmp.filePath(QStringLiteral("report.db"))));
+        // Datos demo solo-tests (la app siembra base limpia)
+        QVERIFY(TestDb::loadDemo(m_dbm->database()));
         m_rep = new ReportService(m_dbm->database(), this);
     }
 
@@ -85,6 +88,48 @@ private slots:
         const QString fin = m_rep->exportCsv(QStringLiteral("financiero"), m_tmp.path());
         QVERIFY(!fin.isEmpty() && QFile::exists(fin));
         QVERIFY(m_rep->exportCsv(QStringLiteral("x"), QStringLiteral("/no/existe/dir")).isEmpty());
+    }
+
+    void taxBreakdown()
+    {
+        // Fase 1: venta con tax_breakdown JSON se desglosa por tasa;
+        // el histórico sin breakdown sigue en iva_19.
+        QSqlQuery q(m_dbm->database());
+        QVERIFY(q.exec(QStringLiteral(
+            "INSERT INTO sales (id, date, client, total, subtotal, tax, status, tax_breakdown) "
+            "VALUES ('VTAX1','2026-09-20','Mostrador',21900,20000,1900,'Pagada',"
+            "'[{\"name\":\"Excluido\",\"rate\":0,\"base\":10000,\"tax\":0},"
+            "{\"name\":\"IVA 19%\",\"rate\":19,\"base\":10000,\"tax\":1900}]')")));
+        const QVariantMap tx = m_rep->taxes();
+        QVERIFY(tx.contains("breakdown"));
+        const QVariantList bd = tx["breakdown"].toList();
+        QVERIFY(bd.size() >= 2);
+        bool seen0 = false, seen19 = false;
+        for (const QVariant &v : bd) {
+            const QVariantMap m = v.toMap();
+            if (m["rate"].toDouble() == 0.0)
+                seen0 = true;
+            if (m["rate"].toDouble() == 19.0 && m["tax"].toDouble() >= 1900.0)
+                seen19 = true;
+        }
+        QVERIFY(seen0 && seen19);
+        QVERIFY(tx["total"].toDouble() >= 1900.0);
+    }
+
+    void csvCarriesBusinessHeader()
+    {
+        // Fase 0: la cabecera del CSV usa business_name/NIT de `settings`.
+        QSqlQuery q(m_dbm->database());
+        QVERIFY(q.exec(QStringLiteral(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES "
+            "('business_name','Farmacia La Salud'),('business_nit','900123456-7')")));
+        const QString path = m_rep->exportCsv(QStringLiteral("financiero"), m_tmp.path());
+        QVERIFY(!path.isEmpty());
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString content = QString::fromUtf8(f.readAll());
+        QVERIFY(content.contains(QStringLiteral("Farmacia La Salud")));
+        QVERIFY(content.contains(QStringLiteral("900123456-7")));
     }
 
     void pdfExport()

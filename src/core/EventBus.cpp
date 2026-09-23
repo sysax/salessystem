@@ -8,6 +8,7 @@ const QString EventBus::InventoryUpdated = QStringLiteral("inventory_updated");
 const QString EventBus::SyncStatusChanged = QStringLiteral("sync_status_changed");
 const QString EventBus::CashOpened = QStringLiteral("cash_opened");
 const QString EventBus::CashClosed = QStringLiteral("cash_closed");
+const QString EventBus::SettingsChanged = QStringLiteral("settings_changed");
 
 EventBus::EventBus(QObject *parent)
     : QObject(parent)

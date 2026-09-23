@@ -218,6 +218,35 @@ ScrollView {
                 opacity: 0.85
             }
         }
+
+        // Fase 3: próximos a vencer.
+        RowLayout {
+            spacing: Theme.spacingSmall
+            visible: (dash.data.expiring30 || []).length > 0
+            Label {
+                text: qsTr("⏳ Por vencer ≤30 días (%1)").arg((dash.data.expiring30 || []).length)
+                font.bold: true
+                font.pixelSize: Theme.fontML
+                Layout.fillWidth: true
+                color: Theme.warning
+            }
+            ToolButton {
+                text: qsTr("Ver reporte →")
+                Accessible.name: qsTr("Ir a reportes")
+                onClicked: root.go("reports")
+            }
+        }
+        Repeater {
+            model: dash.data.expiring30 || []
+            delegate: Label {
+                visible: index < 5
+                text: "• " + modelData.name + "  lote " + (modelData.lote || "—")
+                      + "  vence " + modelData.vencimiento
+                width: parent.width
+                elide: Text.ElideRight
+                opacity: 0.85
+            }
+        }
     }
 
     function money(v) {

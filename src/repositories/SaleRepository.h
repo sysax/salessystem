@@ -39,6 +39,8 @@ public:
         QString docType; // vacío ⇒ default DIAN/offline
         QList<SaleItem> items; // productId, qty, subtotal por línea
         bool offline = false;
+        // Fase 1: desglose por tasa (JSON de SalesService::bucketsToJson).
+        QString taxBreakdownJson;
     };
 
     explicit SaleRepository(QSqlDatabase db, ClientRepository *clients = nullptr,

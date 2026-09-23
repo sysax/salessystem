@@ -10,7 +10,7 @@ InventoryService::InventoryService(QSqlDatabase db, ProductRepository *products,
 }
 
 Result<InventoryService::StockResult> InventoryService::registerPurchase(
-    int productId, int qty, double cost, const QString &supplier, const QString &invoice,
+    int productId, double qty, double cost, const QString &supplier, const QString &invoice,
     const QString &user)
 {
     if (qty <= 0)
@@ -21,7 +21,7 @@ Result<InventoryService::StockResult> InventoryService::registerPurchase(
         return Result<StockResult>::failure(
             QStringLiteral("Producto %1 no existe").arg(productId));
 
-    const int newStock = p->stock + qty;
+    const double newStock = p->stock + qty;
     const double newCost =
         (p->stock * p->priceBuy + qty * cost) / (newStock > 0 ? newStock : 1);
     Product upd = *p;
@@ -46,7 +46,7 @@ Result<InventoryService::StockResult> InventoryService::registerPurchase(
 }
 
 Result<InventoryService::StockResult> InventoryService::registerAdjustment(
-    const QString &sku, int delta, const QString &reason, const QString &user)
+    const QString &sku, double delta, const QString &reason, const QString &user)
 {
     if (delta == 0)
         return Result<StockResult>::failure(
@@ -58,8 +58,8 @@ Result<InventoryService::StockResult> InventoryService::registerAdjustment(
     if (!p)
         return Result<StockResult>::failure(
             QStringLiteral("SKU %1 no encontrado").arg(sku));
-    const int newStock = p->stock + delta;
-    if (newStock < 0)
+    const double newStock = p->stock + delta;
+    if (newStock < -1e-9)
         return Result<StockResult>::failure(
             QStringLiteral("No se puede ajustar. Stock actual: %1, Ajuste: %2. "
                            "Resultaría en stock negativo.")
@@ -78,7 +78,7 @@ Result<InventoryService::StockResult> InventoryService::registerAdjustment(
     return Result<StockResult>::success(r);
 }
 
-StatusResult InventoryService::transfer(const QString &sku, int qty, const QString &toLocation,
+StatusResult InventoryService::transfer(const QString &sku, double qty, const QString &toLocation,
                                         const QString &reason, const QString &user)
 {
     const auto p = m_products->findBySku(sku);

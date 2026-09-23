@@ -19,6 +19,33 @@ ColumnLayout {
     property int totalRows: 0
     property int pageCount: 1
 
+    // Fase 1: nombres de tasas desde Configuración (sin SQL en QML).
+    function taxNames() {
+        try {
+            var raw = settingsCtl.settings["tax_rates_json"] || "[]";
+            var arr = JSON.parse(raw);
+            var out = [];
+            for (var i = 0; i < arr.length; ++i) {
+                if (arr[i].name)
+                    out.push(arr[i].name);
+            }
+            return out.length > 0 ? out : ["IVA 19%", "Excluido"];
+        } catch (e) {
+            return ["IVA 19%", "Excluido"];
+        }
+    }
+    function defaultTaxName() {
+        try {
+            var d = parseFloat(settingsCtl.settings["default_tax_rate"]);
+            var arr = JSON.parse(settingsCtl.settings["tax_rates_json"] || "[]");
+            for (var i = 0; i < arr.length; ++i) {
+                if (parseFloat(arr[i].rate) === d)
+                    return arr[i].name;
+            }
+        } catch (e) {}
+        return "IVA 19%";
+    }
+
     RowLayout {
         TextField {
             id: searchField
@@ -120,8 +147,8 @@ ColumnLayout {
                     horizontalAlignment: Text.AlignRight
                 }
                 Label {
-                    text: String(modelData.stock)
-                    Layout.preferredWidth: 90
+                    text: Utils.formatQty(modelData.stock) + (modelData.unit ? " " + modelData.unit : "")
+                    Layout.preferredWidth: 110
                     horizontalAlignment: Text.AlignRight
                     color: modelData.stock <= 0 ? "red" : palette.text
                     font.bold: modelData.stock <= 0
@@ -136,7 +163,7 @@ ColumnLayout {
         visible: root.viewRows.length === 0
         icon: "📦"
         title: (catalog.products || []).length === 0 ? qsTr("Sin productos") : qsTr("Sin resultados")
-        hint: (catalog.products || []).length === 0 ? qsTr("Crea el primero con “Nuevo” o importa desde Compras.") : qsTr("Ajusta el filtro o la búsqueda.")
+        hint: (catalog.products || []).length === 0 ? qsTr("Crea el primero con “Nuevo”, importa desde Compras o inicializa el catálogo del rubro en Configuración.") : qsTr("Ajusta el filtro o la búsqueda.")
         actionText: (catalog.products || []).length === 0 ? qsTr("Nuevo producto") : ""
         onAction: {
             editDialog.sku = "";
@@ -155,6 +182,41 @@ ColumnLayout {
         onNext: { if (root.page < root.pageCount - 1) { root.page++; root.refreshView(); } }
         onLast: { root.page = root.pageCount - 1; root.refreshView(); }
         onSizeChanged: function(size) { root.pageSize = size; root.page = 0; root.refreshView(); }
+    }
+
+    // Fase 2: categorías desde el diccionario (sin SQL en QML).
+    function rootCatNames() {
+        var out = [];
+        var cats = catalog.categories || [];
+        for (var i = 0; i < cats.length; ++i) {
+            if ((cats[i].parentId || 0) === 0)
+                out.push(cats[i].name);
+        }
+        return out;
+    }
+    function catIdByName(name) {
+        var cats = catalog.categories || [];
+        for (var i = 0; i < cats.length; ++i) {
+            if (cats[i].name === name && ((cats[i].parentId || 0) === 0))
+                return cats[i].id;
+        }
+        return 0;
+    }
+    function subcatNames(parentId) {
+        var out = [];
+        if (!parentId)
+            return out;
+        var cats = catalog.categories || [];
+        for (var i = 0; i < cats.length; ++i) {
+            if ((cats[i].parentId || 0) === parentId)
+                out.push(cats[i].name);
+        }
+        return out;
+    }
+    function reloadCats() {
+        var bt = "";
+        try { bt = settingsCtl.settings["business_type"] || ""; } catch (e) {}
+        catalog.reloadCategories(bt);
     }
 
     function setSort(key) {
@@ -216,16 +278,59 @@ ColumnLayout {
         root.viewRows = out;
     }
 
-    Component.onCompleted: refreshView()
+    Component.onCompleted: { refreshView(); reloadCats(); }
 
     Connections {
         target: catalog
         function onProductsChanged() { root.refreshView(); }
+        function onCategoriesChanged() { root.refreshView(); }
+    }
+    Connections {
+        target: settingsCtl
+        function onSettingsChanged() { root.reloadCats(); }
     }
 
     Dialog {
         id: editDialog
-        onOpened: fName.forceActiveFocus()
+        onOpened: {
+            fName.forceActiveFocus();
+            // Preseleccionar impuesto actual (o default al crear)
+            var cur = editDialog.fields.tax || defaultTaxName();
+            var names = taxNames();
+            var idx = names.indexOf(cur);
+            if (idx >= 0) {
+                fTax.currentIndex = idx;
+            } else {
+                fTax.editText = cur;
+            }
+            // Fase 2: preseleccionar categoría/subcategoría/unidad
+            var cn = editDialog.fields.cat || "";
+            var ci = rootCatNames().indexOf(cn);
+            if (ci >= 0) {
+                fCat.currentIndex = ci;
+            } else if (cn !== "") {
+                fCat.editText = cn;
+            }
+            var sid = catIdByName(fCat.editText !== "" ? fCat.editText : fCat.currentText);
+            fSubcat.model = subcatNames(sid);
+            var sn = editDialog.fields.subcat || "";
+            var si = fSubcat.model.indexOf(sn);
+            if (si >= 0)
+                fSubcat.currentIndex = si;
+            else if (sn !== "")
+                fSubcat.editText = sn;
+            var un = editDialog.fields.unit || "";
+            try { un = un || settingsCtl.settings["weight_unit_default"] || "unidad"; } catch (e) {}
+            var ui = fUnit.model.indexOf(un);
+            fUnit.currentIndex = ui >= 0 ? ui : 0;
+            // Fase 3: flags desde attrs_json.
+            var at = {};
+            try { at = JSON.parse(editDialog.fields.attrsJson || "{}"); } catch (e) {}
+            fTrackSerial.checked = !!at.track_serial;
+            fReceta.checked = !!at.requires_prescription;
+            fControlled.checked = !!at.controlled;
+            fWarranty.text = at.warranty_months !== undefined ? String(at.warranty_months) : "";
+        }
         title: sku === "" ? qsTr("Nuevo producto") : qsTr("Editar ") + sku
         modal: true
         standardButtons: Dialog.Save | Dialog.Cancel
@@ -249,15 +354,121 @@ ColumnLayout {
                 TextField {
                     id: fStock
                     text: editDialog.fields.stock !== undefined ? editDialog.fields.stock : ""
-                    placeholderText: qsTr("Stock")
-                    validator: IntValidator { bottom: 0; top: 9999999 }
-                    inputMethodHints: Qt.ImhDigitsOnly
+                    placeholderText: qsTr("Stock (admite decimales)")
+                    validator: DoubleValidator { bottom: 0; decimals: 3 }
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
+                }
+                ComboBox {
+                    id: fUnit
+                    model: ["unidad", "g", "kg", "ml", "l", "caja", "paquete", "metro"]
+                    ToolTip.text: qsTr("Unidad de medida")
+                    ToolTip.visible: hovered
                 }
             }
-            TextField {
-                id: fCat
-                text: editDialog.fields.cat || ""
-                placeholderText: qsTr("Categoría")
+            Label {
+                // Fase 2: precio por kilo informativo para granel.
+                visible: fUnit.currentText === "g" || fUnit.currentText === "kg"
+                         || fUnit.currentText === "ml" || fUnit.currentText === "l"
+                text: {
+                    var p = parseFloat(fPrice.text) || 0;
+                    var u = fUnit.currentText;
+                    var perKg = (u === "g") ? p * 1000 : (u === "ml" ? p * 1000 : p);
+                    return qsTr("Equivale a %1 por %2").arg(money(perKg)).arg(u === "ml" || u === "l" ? "L" : "kg");
+                }
+                font.pixelSize: Theme.fontS
+                opacity: 0.7
+            }
+            RowLayout {
+                ComboBox {
+                    id: fCat
+                    Layout.fillWidth: true
+                    editable: true
+                    model: rootCatNames()
+                    ToolTip.text: qsTr("Categoría (lista de Configuración + libres)")
+                    ToolTip.visible: hovered
+                    onCurrentTextChanged: {
+                        var sid = catIdByName(currentText);
+                        fSubcat.model = subcatNames(sid);
+                    }
+                }
+                ComboBox {
+                    id: fSubcat
+                    Layout.fillWidth: true
+                    editable: true
+                    model: []
+                    ToolTip.text: qsTr("Subcategoría")
+                    ToolTip.visible: hovered
+                }
+            }
+            // Fase 3: lote + vencimiento (obligatorios si require_expiry).
+            RowLayout {
+                TextField {
+                    id: fLote
+                    text: editDialog.fields.lote || ""
+                    placeholderText: qsTr("Lote")
+                    Layout.fillWidth: true
+                }
+                TextField {
+                    id: fVenc
+                    text: editDialog.fields.vencimiento || ""
+                    placeholderText: qsTr("Vence AAAA-MM-DD")
+                    inputMask: "9999-99-99;_"
+                    Layout.fillWidth: true
+                }
+            }
+            Label {
+                visible: {
+                    try { return settingsCtl.settings["require_expiry"] === "1"; } catch (e) { return false; }
+                }
+                text: qsTr("Este negocio exige lote y vencimiento.")
+                font.pixelSize: Theme.fontS
+                color: Theme.warning
+            }
+            // Fase 3: flags por vertical (seriales, receta, controlado, garantía).
+            GridLayout {
+                columns: 2
+                CheckBox {
+                    id: fTrackSerial
+                    text: qsTr("Lleva serial/IMEI")
+                }
+                CheckBox {
+                    id: fReceta
+                    text: qsTr("Requiere receta")
+                }
+                CheckBox {
+                    id: fControlled
+                    text: qsTr("Controlado (supervisor)")
+                }
+                RowLayout {
+                    Label { text: qsTr("Garantía (meses)") }
+                    TextField {
+                        id: fWarranty
+                        placeholderText: "12"
+                        maximumLength: 3
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        Layout.preferredWidth: 70
+                    }
+                }
+            }
+            ComboBox {
+                id: fTax
+                Layout.fillWidth: true
+                editable: true
+                model: taxNames()
+                ToolTip.text: qsTr("Impuesto de la ficha (lista de Configuración)")
+                ToolTip.visible: hovered
+            }
+            Label {
+                id: legacyTaxHint
+                visible: {
+                    var cur = fTax.editText !== "" ? fTax.editText : fTax.currentText;
+                    return cur !== "" && taxNames().indexOf(cur) < 0;
+                }
+                text: qsTr("Ese impuesto no está en la lista: se liquidará la tasa por defecto.")
+                font.pixelSize: Theme.fontS
+                color: Theme.warning
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
             }
             Label {
                 id: editErr
@@ -267,7 +478,7 @@ ColumnLayout {
                 // Ayuda reactiva: primer problema del formulario (validación en vivo)
                 text: fName.text.trim() === "" ? qsTr("Ingrese el nombre") :
                       !fPrice.acceptableInput ? qsTr("Precio inválido (≥ 0)") :
-                      !fStock.acceptableInput ? qsTr("Stock inválido (entero ≥ 0)") : ""
+                      !fStock.acceptableInput ? qsTr("Stock inválido (≥ 0, admite decimales)") : ""
                 color: Theme.error
                 visible: text !== ""
             }
@@ -279,11 +490,34 @@ ColumnLayout {
             });
         }
         onAccepted: {
+            var taxVal = fTax.editText !== "" ? fTax.editText : fTax.currentText;
+            var catVal = fCat.editText !== "" ? fCat.editText : fCat.currentText;
+            var subVal = fSubcat.editText !== "" ? fSubcat.editText : fSubcat.currentText;
+            // Fase 3: attrs_json (preserva claves desconocidas de la ficha).
+            var at = {};
+            try { at = JSON.parse(editDialog.fields.attrsJson || "{}"); } catch (e) {}
+            at.track_serial = fTrackSerial.checked;
+            at.requires_prescription = fReceta.checked;
+            at.controlled = fControlled.checked;
+            var wm = parseInt(fWarranty.text);
+            if (!isNaN(wm) && wm > 0)
+                at.warranty_months = wm;
+            else
+                delete at.warranty_months;
+            var venc = fVenc.text.replace(/_/g, "").trim();
+            if (venc === "----" || venc === "--" || venc === "")
+                venc = "";
             var fields = {
                 "name": fName.text,
                 "price": parseFloat(fPrice.text) || 0,
-                "stock": parseInt(fStock.text) || 0,
-                "cat": fCat.text || "General"
+                "stock": parseFloat(fStock.text) || 0,
+                "cat": catVal || "General",
+                "subcat": subVal || "",
+                "unit": fUnit.currentText || "unidad",
+                "tax": taxVal || defaultTaxName(),
+                "lote": fLote.text.trim(),
+                "vencimiento": venc,
+                "attrsJson": JSON.stringify(at)
             };
             var r;
             if (editDialog.sku === "") {

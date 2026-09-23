@@ -5,6 +5,7 @@
 #include "controllers/MgmtControllers.h"
 #include "controllers/OpsControllers.h"
 #include "core/DatabaseManager.h"
+#include "TestDb.h"
 #include "core/EventBus.h"
 #include "repositories/AuditRepository.h"
 #include "repositories/CajaRepository.h"
@@ -35,6 +36,8 @@ private slots:
         QVERIFY(m_tmp.isValid());
         m_dbm = new DatabaseManager(this);
         QVERIFY(m_dbm->initialize(m_tmp.filePath(QStringLiteral("mgmt.db"))));
+        // Datos demo solo-tests (la app siembra base limpia)
+        QVERIFY(TestDb::loadDemo(m_dbm->database()));
         QSqlDatabase db = m_dbm->database();
         auto *bus = new EventBus(this);
         auto *audit = new AuditRepository(db, this);

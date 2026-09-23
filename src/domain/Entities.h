@@ -22,21 +22,24 @@ struct Product {
     double priceWholesale = 0.0;
     QString tax = QStringLiteral("IVA 19%");
     QString unit = QStringLiteral("unidad");
-    int stock = 0;
-    int stockMin = 5;
-    int stockMax = 50;
+    // Fase 2: cantidades decimales (granel). SQLite guarda REAL sin ALTER.
+    double stock = 0.0;
+    double stockMin = 5.0;
+    double stockMax = 50.0;
     QString location;
     QString status = QStringLiteral("activo");
     QString image;
     QString lote;
     QString vencimiento;
+    // Fase 3: metadatos por vertical (JSON objeto).
+    QString attrsJson = QStringLiteral("{}");
     bool isKit = false;
     QString kitJson = QStringLiteral("[]");
 };
 
 struct KitComponent {
     QString sku;
-    int qty = 0;
+    double qty = 0.0;
 };
 
 struct Client {
@@ -73,11 +76,14 @@ struct Supplier {
     double balance = 0.0;
 };
 
-// Línea de venta (carrito y sale_items)
+// Línea de venta (carrito y sale_items). qty decimal desde Fase 2 (granel).
 struct SaleItem {
     int productId = 0;
-    int qty = 0;
+    double qty = 0.0;
     double subtotal = 0.0;
+    // Fase 3: metadatos de línea (receta) + serial vendido.
+    QString attrsJson = QStringLiteral("{}");
+    QString serial;
 };
 
 struct Sale {
@@ -88,6 +94,8 @@ struct Sale {
     double total = 0.0;
     double subtotal = 0.0;
     double tax = 0.0;
+    // Fase 1: desglose por tasa (JSON); vacío en ventas históricas.
+    QString taxBreakdown;
     double discount = 0.0;
     QString promo;
     QString status;
@@ -104,7 +112,7 @@ struct Sale {
 
 struct PurchaseItem {
     QString sku;
-    int qty = 0;
+    double qty = 0.0;
     double priceBuy = 0.0;
 };
 
@@ -158,9 +166,9 @@ struct InventoryMovement {
     QString sku;
     QString product;
     QString type; // Entrada|Salida|Transferencia|Devolución
-    int qty = 0;
-    int before = 0;
-    int after = 0;
+    double qty = 0.0;
+    double before = 0.0;
+    double after = 0.0;
     QString reason;
     QString user;
 };
@@ -168,7 +176,7 @@ struct InventoryMovement {
 struct InventoryValue {
     double costValue = 0.0;
     double saleValue = 0.0;
-    long long units = 0;
+    double units = 0.0;
 };
 
 struct Payable {

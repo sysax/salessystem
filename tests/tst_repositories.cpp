@@ -3,6 +3,7 @@
 #include <QtTest>
 
 #include "core/DatabaseManager.h"
+#include "TestDb.h"
 #include "repositories/AuditRepository.h"
 #include "repositories/CajaRepository.h"
 #include "repositories/ClientRepository.h"
@@ -27,6 +28,8 @@ private slots:
         QVERIFY(m_tmp.isValid());
         m_dbm = new DatabaseManager(this);
         QVERIFY(m_dbm->initialize(m_tmp.filePath(QStringLiteral("repos.db"))));
+        // Datos demo solo-tests (la app siembra base limpia)
+        QVERIFY(TestDb::loadDemo(m_dbm->database()));
         QSqlDatabase db = m_dbm->database();
         m_audit = new AuditRepository(db, this);
         m_products = new ProductRepository(db, m_audit, this);

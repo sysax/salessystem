@@ -49,6 +49,8 @@ Sale SaleRepository::rowToSale(const QSqlQuery &q)
     s.estado = q.value(QStringLiteral("estado")).toString();
     s.dianCufe = q.value(QStringLiteral("dian_cufe")).toString();
     s.dianStatus = q.value(QStringLiteral("dian_status")).toString();
+    // Columna aditiva Fase 1: en BDs legadas aún no existe → "" (QVariant inválido).
+    s.taxBreakdown = q.value(QStringLiteral("tax_breakdown")).toString();
     return s;
 }
 
@@ -77,15 +79,22 @@ QList<SaleItem> SaleRepository::itemsFor(const QString &saleId) const
 {
     QList<SaleItem> out;
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("SELECT product_id, qty, subtotal FROM sale_items WHERE sale_id=?"));
+    // SELECT *: las columnas Fase 3 (attrs_json, serial) pueden no existir en
+    // BDs legadas — q.value() con nombre ausente retorna inválido (patrón
+    // rowToSale/tax_breakdown), en vez de fallar como la lista explícita.
+    q.prepare(QStringLiteral("SELECT * FROM sale_items WHERE sale_id=?"));
     q.addBindValue(saleId);
     if (!q.exec())
         return out;
     while (q.next()) {
         SaleItem it;
-        it.productId = q.value(0).toInt();
-        it.qty = q.value(1).toInt();
-        it.subtotal = q.value(2).toDouble();
+        it.productId = q.value(QStringLiteral("product_id")).toInt();
+        it.qty = q.value(QStringLiteral("qty")).toDouble();
+        it.subtotal = q.value(QStringLiteral("subtotal")).toDouble();
+        it.attrsJson = q.value(QStringLiteral("attrs_json")).toString();
+        if (it.attrsJson.trimmed().isEmpty())
+            it.attrsJson = QStringLiteral("{}");
+        it.serial = q.value(QStringLiteral("serial")).toString();
         out << it;
     }
     return out;
@@ -149,7 +158,7 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     q.prepare(QStringLiteral(
         "INSERT INTO sales (id, date, client, vendedor, total, subtotal, tax, discount, promo, "
         "status, doc_type, payment, payments_json, paid, balance, due, estado, dian_cufe, "
-        "dian_status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
+        "dian_status, tax_breakdown) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(folio);
     q.addBindValue(today);
     q.addBindValue(s.clientName);
@@ -169,6 +178,7 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     q.addBindValue(status);
     q.addBindValue(cufe);
     q.addBindValue(dianStatus);
+    q.addBindValue(s.taxBreakdownJson);
     if (!q.exec())
         return Result<Sale>::failure(q.lastError().text());
 
@@ -179,17 +189,21 @@ Result<Sale> SaleRepository::create(const NewSale &s)
         if (cur.exec() && cur.next()) {
             QSqlQuery up(m_db);
             up.prepare(QStringLiteral("UPDATE products SET stock=? WHERE id=?"));
-            up.addBindValue(cur.value(0).toInt() - it.qty);
+            up.addBindValue(cur.value(0).toDouble() - it.qty);
             up.addBindValue(it.productId);
             up.exec();
         }
         QSqlQuery ins(m_db);
         ins.prepare(QStringLiteral(
-            "INSERT INTO sale_items (sale_id, product_id, qty, subtotal) VALUES (?,?,?,?)"));
+            "INSERT INTO sale_items (sale_id, product_id, qty, subtotal, attrs_json, serial) "
+            "VALUES (?,?,?,?,?,?)"));
         ins.addBindValue(folio);
         ins.addBindValue(it.productId);
         ins.addBindValue(it.qty);
         ins.addBindValue(it.subtotal);
+        ins.addBindValue(it.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}")
+                                                          : it.attrsJson);
+        ins.addBindValue(it.serial);
         ins.exec();
     }
 

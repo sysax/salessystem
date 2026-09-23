@@ -19,7 +19,7 @@ QList<PurchaseItem> PurchaseRepository::parseItems(const QString &json)
         const QJsonObject o = v.toObject();
         PurchaseItem it;
         it.sku = o.value(QStringLiteral("sku")).toString();
-        it.qty = o.value(QStringLiteral("qty")).toInt();
+        it.qty = o.value(QStringLiteral("qty")).toDouble();
         it.priceBuy = o.value(QStringLiteral("price_buy")).toDouble();
         out << it;
     }

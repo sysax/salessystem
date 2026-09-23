@@ -64,6 +64,14 @@ ScrollView {
                 text: qsTr("Exportar PDF")
                 onClicked: msg.text = reports.exportPdf("operativo", exportDir())
             }
+            Button {
+                text: qsTr("CSV vencimientos")
+                onClicked: msg.text = reports.exportCsv("vencimientos", exportDir())
+            }
+        }
+        Label {
+            text: qsTr("Por vencer (30 días): %1").arg(reports.expiringProducts(30).length)
+            wrapMode: Text.Wrap
         }
         Label {
             id: msg

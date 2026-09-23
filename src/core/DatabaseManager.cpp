@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QRegularExpression>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QStandardPaths>
@@ -67,10 +68,11 @@ int DatabaseManager::tableRowCount(const QString &table) const
         QStringLiteral("sales"),        QStringLiteral("sale_items"),
         QStringLiteral("purchases"),    QStringLiteral("inventory_movements"),
         QStringLiteral("payables"),     QStringLiteral("payments_cxc"),
-        QStringLiteral("payments_cxp"), QStringLiteral("promos"),
+        QStringLiteral("payments_cxp"),         QStringLiteral("promos"),
         QStringLiteral("audit_log"),    QStringLiteral("caja"),
         QStringLiteral("counters"),     QStringLiteral("outbox"),
         QStringLiteral("settings"),     QStringLiteral("recovery_tokens"),
+        QStringLiteral("categories"),
     };
     if (!kAllowed.contains(table))
         return -1;
@@ -118,6 +120,22 @@ bool DatabaseManager::applySqlFile(const QString &resourcePath, const QString &d
     return true;
 }
 
+bool DatabaseManager::applySeedFile(const QString &name)
+{
+    // Nombres válidos: letras minúsculas (coincide con business_type).
+    if (name.trimmed().isEmpty()
+        || !QRegularExpression(QStringLiteral("^[a-z]+$")).match(name.trimmed()).hasMatch()) {
+        m_status = QStringLiteral("seed inválido: ") + name;
+        emit openChanged();
+        return false;
+    }
+    const QString clean = name.trimmed();
+    const bool ok = applySqlFile(QStringLiteral(":/sql/seeds/%1.sql").arg(clean),
+                                 QStringLiteral("sql/seeds/%1.sql").arg(clean));
+    emit openChanged();
+    return ok;
+}
+
 bool DatabaseManager::ensureSeeded()
 {
     // Réplica de _seed_if_empty (data/db.py): solo siembra con BD virgen.
@@ -126,7 +144,7 @@ bool DatabaseManager::ensureSeeded()
         return false;
     if (q.value(0).toInt() > 0)
         return true;
-    // Modo sin demo: solo usuarios (QTSALES_SIN_DEMO=1), cero datos de negocio.
+    // Base limpia: solo admin (seed.sql y seed_min.sql siembran lo mismo).
     if (qgetenv("QTSALES_SIN_DEMO") == QByteArrayLiteral("1"))
         return applySqlFile(QStringLiteral(":/sql/seed_min.sql"), QStringLiteral("sql/seed_min.sql"));
     return applySqlFile(QStringLiteral(":/sql/seed.sql"), QStringLiteral("sql/seed.sql"));
@@ -151,11 +169,16 @@ bool DatabaseManager::migrateLegacyColumns()
         {"users", "totp_secret", "totp_secret TEXT DEFAULT NULL"},
         {"users", "totp_enabled", "totp_enabled INTEGER DEFAULT 0"},
         {"users", "recovery_json", "recovery_json TEXT DEFAULT '[]'"},
+        {"users", "must_change_password", "must_change_password INTEGER DEFAULT 0"},
         {"products", "image", "image TEXT DEFAULT NULL"},
         {"products", "lote", "lote TEXT DEFAULT NULL"},
         {"products", "vencimiento", "vencimiento TEXT DEFAULT NULL"},
         {"products", "is_kit", "is_kit INTEGER DEFAULT 0"},
         {"products", "kit_json", "kit_json TEXT DEFAULT '[]'"},
+        {"sales", "tax_breakdown", "tax_breakdown TEXT DEFAULT ''"}, // Fase 1: desglose por tasa
+        {"products", "attrs_json", "attrs_json TEXT DEFAULT '{}'"}, // Fase 3: metadatos vertical
+        {"sale_items", "attrs_json", "attrs_json TEXT DEFAULT '{}'"},
+        {"sale_items", "serial", "serial TEXT DEFAULT ''"},
     };
     for (const Column &c : kColumns) {
         if (!ensureColumn(QString::fromLatin1(c.table),
