@@ -126,6 +126,9 @@ bool DatabaseManager::ensureSeeded()
         return false;
     if (q.value(0).toInt() > 0)
         return true;
+    // Modo sin demo: solo usuarios (QTSALES_SIN_DEMO=1), cero datos de negocio.
+    if (qgetenv("QTSALES_SIN_DEMO") == QByteArrayLiteral("1"))
+        return applySqlFile(QStringLiteral(":/sql/seed_min.sql"), QStringLiteral("sql/seed_min.sql"));
     return applySqlFile(QStringLiteral(":/sql/seed.sql"), QStringLiteral("sql/seed.sql"));
 }
 

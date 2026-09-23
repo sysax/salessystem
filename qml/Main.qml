@@ -19,6 +19,7 @@ ApplicationWindow {
     Component.onCompleted: {
         Utils.registerToast(globalToastItem);
         Utils.registerLoading(globalLoadingItem);
+        root.tickClock();
     }
 
     Material.theme: Material.Light
@@ -26,6 +27,49 @@ ApplicationWindow {
     Material.accent: Theme.accent
 
     property string currentScreen: "login"
+
+    // Header útil (mejora #12): reloj, estado de red y alertas.
+    property string clockText: "--/-- --:--:--"
+    property bool online: true
+
+    function tickClock() {
+        clockText = Qt.formatDateTime(new Date(), "dd/MM HH:mm:ss");
+    }
+
+    function recheckOnline() {
+        // isOnline() bloquea hasta 1.5s solo sin red; por eso se llama al login,
+        // cada 120s y manualmente, nunca en cada navegación.
+        online = syncSvc.isOnline();
+        return online;
+    }
+
+    // Mejora #5: metadatos para breadcrumbs + sidebar (etiqueta, icono, sección).
+    function screenMeta(key) {
+        var map = {
+            "login": {"label": "Ingresar", "icon": "🔑", "section": "Sistema"},
+            "dashboard": {"label": "Tablero", "icon": "📊", "section": "Principal"},
+            "pos": {"label": "Punto de venta", "icon": "🛒", "section": "Principal"},
+            "products": {"label": "Productos", "icon": "📦", "section": "Catálogo"},
+            "sales": {"label": "Ventas", "icon": "🧾", "section": "Ventas"},
+            "clients": {"label": "Clientes", "icon": "👥", "section": "Ventas"},
+            "inventory": {"label": "Inventario", "icon": "🏬", "section": "Catálogo"},
+            "purchases": {"label": "Compras", "icon": "🛍️", "section": "Catálogo"},
+            "suppliers": {"label": "Proveedores", "icon": "🚚", "section": "Catálogo"},
+            "receivables": {"label": "Cuentas por cobrar", "icon": "💳", "section": "Finanzas"},
+            "payables": {"label": "Cuentas por pagar", "icon": "💸", "section": "Finanzas"},
+            "reports": {"label": "Reportes", "icon": "📈", "section": "Finanzas"},
+            "promos": {"label": "Promociones", "icon": "🎟️", "section": "Ventas"},
+            "users": {"label": "Usuarios", "icon": "👤", "section": "Sistema"}
+        };
+        return map[key] || {"label": key, "icon": "•", "section": ""};
+    }
+
+    function crumbText() {
+        var m = screenMeta(currentScreen);
+        if (currentScreen === "login" || currentScreen === "dashboard")
+            return m.icon + " " + m.label;
+        return m.section + "  ›  " + m.icon + " " + m.label;
+    }
 
     function navigate(screen) {
         if (!auth.canAccess(screen)) {
@@ -96,13 +140,27 @@ ApplicationWindow {
     header: ToolBar {
         RowLayout {
             anchors.fill: parent
+            spacing: 4
             ToolButton {
                 text: "\u2630"
                 enabled: auth.loggedIn
+                Accessible.name: qsTr("Abrir menú")
                 onClicked: drawer.open()
             }
+            // Breadcrumb clicable: ir al tablero
+            ToolButton {
+                visible: auth.loggedIn && currentScreen !== "dashboard" && currentScreen !== "login"
+                text: qsTr("Tablero")
+                Accessible.name: qsTr("Ir al tablero")
+                onClicked: root.navigate("dashboard")
+            }
             Label {
-                text: qsTr("Sistema de Ventas  ·  ") + currentScreen + (auth.loggedIn ? "  ·  " + auth.currentUser + " (" + auth.currentRole + ")" : "")
+                visible: auth.loggedIn && currentScreen !== "dashboard" && currentScreen !== "login"
+                text: "›"
+                opacity: 0.6
+            }
+            Label {
+                text: qsTr("Sistema de Ventas  ·  ") + crumbText() + (auth.loggedIn ? "  ·  " + auth.currentUser + " (" + auth.currentRole + ")" : "")
                 elide: Label.ElideRight
                 Layout.fillWidth: true
             }
@@ -110,6 +168,34 @@ ApplicationWindow {
                 visible: pos.pendingSync > 0
                 text: qsTr("⏳ %1 por sincronizar").arg(pos.pendingSync)
                 color: Material.color(Material.Orange)
+            }
+            // Reloj en vivo
+            Label {
+                visible: auth.loggedIn
+                text: "🕒 " + clockText
+                Accessible.name: qsTr("Fecha y hora actual")
+            }
+            // Estado de red (clic = re-chequear)
+            ToolButton {
+                visible: auth.loggedIn
+                text: online ? qsTr("🟢") : qsTr("🔴")
+                Accessible.name: online ? qsTr("En línea. Activar para comprobar conexión") : qsTr("Sin conexión. Activar para reintentar")
+                ToolTip.text: online ? qsTr("En línea") : qsTr("Sin conexión — clic para reintentar")
+                ToolTip.visible: hovered
+                onClicked: {
+                    var ok = recheckOnline();
+                    Utils.showToast(ok ? "success" : "warning",
+                        ok ? qsTr("Conexión disponible") : qsTr("Sin conexión: se trabaja offline"), 2500);
+                }
+            }
+            // Alerta de stock bajo → inventario
+            ToolButton {
+                visible: auth.loggedIn && (dash.data.lowStockAlerts || 0) > 0
+                text: qsTr("⚠️ %1").arg(dash.data.lowStockAlerts)
+                Accessible.name: qsTr("Alerta de stock bajo. Ir a inventario")
+                ToolTip.text: qsTr("Stock bajo — ir a inventario")
+                ToolTip.visible: hovered
+                onClicked: root.navigate("inventory")
             }
             ToolButton {
                 visible: auth.loggedIn
@@ -124,10 +210,12 @@ ApplicationWindow {
 
     Drawer {
         id: drawer
-        width: 260
+        width: 280
         height: parent.height
         AppSidebar {
+            id: sidebar
             anchors.fill: parent
+            currentKey: root.currentScreen
             onGo: screen => root.navigate(screen)
         }
     }
@@ -135,6 +223,11 @@ ApplicationWindow {
     StackView {
         id: stack
         anchors.fill: parent
+        // Respiro general: todas las pantallas llevan margen superior y lateral.
+        // Login no se altera (contenido centrado de ancho fijo).
+        anchors.topMargin: Theme.spacingSmall
+        anchors.leftMargin: Theme.marginMedium
+        anchors.rightMargin: Theme.marginMedium
         initialItem: loginPage
     }
     
@@ -175,6 +268,7 @@ ApplicationWindow {
     SalesPage {
         id: salesPage
         visible: false
+        onGo: screen => root.navigate(screen)
     }
     ClientsPage {
         id: clientsPage
@@ -211,5 +305,43 @@ ApplicationWindow {
     UsersPage {
         id: usersPage
         visible: false
+    }
+
+    // Atajos de teclado (mejora #10): navegación rápida entre módulos principales.
+    // navigate() ya valida sesión y permiso por rol.
+    Shortcut { sequence: "Ctrl+1"; enabled: auth.loggedIn; onActivated: root.navigate("dashboard") }
+    Shortcut { sequence: "Ctrl+2"; enabled: auth.loggedIn; onActivated: root.navigate("pos") }
+    Shortcut { sequence: "Ctrl+3"; enabled: auth.loggedIn; onActivated: root.navigate("products") }
+    Shortcut { sequence: "Ctrl+4"; enabled: auth.loggedIn; onActivated: root.navigate("sales") }
+    Shortcut { sequence: "Ctrl+5"; enabled: auth.loggedIn; onActivated: root.navigate("inventory") }
+    Shortcut { sequence: "Ctrl+6"; enabled: auth.loggedIn; onActivated: root.navigate("reports") }
+    Shortcut {
+        sequence: "Ctrl+M"; enabled: auth.loggedIn
+        onActivated: drawer.visible ? drawer.close() : drawer.open()
+    }
+
+    // Motores del header útil (mejora #12)
+    Timer {
+        interval: 1000
+        running: true
+        repeat: true
+        onTriggered: root.tickClock()
+    }
+    Timer {
+        id: netTimer
+        interval: 120000
+        running: auth.loggedIn
+        repeat: true
+        onTriggered: root.recheckOnline()
+    }
+    Connections {
+        target: auth
+        function onSessionChanged() {
+            if (auth.loggedIn) {
+                root.tickClock();
+                root.recheckOnline();
+                dash.refresh();
+            }
+        }
     }
 }

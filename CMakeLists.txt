@@ -96,6 +96,7 @@ qt_add_resources(sales_core "sql_files"
     FILES
         sql/schema.sql
         sql/seed.sql
+        sql/seed_min.sql
 )
 
 qt_add_executable(QtSalesSystemApp
@@ -137,6 +138,10 @@ qt_add_qml_module(QtSalesSystemApp
         qml/Utils.js
         qml/components/Toast.qml
         qml/components/LoadingOverlay.qml
+        qml/components/SortHeader.qml
+        qml/components/Pager.qml
+        qml/components/EmptyState.qml
+        qml/components/ConfirmDialog.qml
 )
 
 target_link_libraries(QtSalesSystemApp PRIVATE

@@ -2,18 +2,19 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
 
 ScrollView {
     id: root
 
     ColumnLayout {
         width: root.width - 24
-        spacing: 10
+        spacing: Theme.spacingMedium
 
         RowLayout {
             Label {
                 text: qsTr("Reportes")
-                font.pixelSize: 20
+                font.pixelSize: Theme.fontXL
                 font.bold: true
                 Layout.fillWidth: true
             }

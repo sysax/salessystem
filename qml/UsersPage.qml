@@ -2,15 +2,17 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
+import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
 
     RowLayout {
         Label {
             text: qsTr("Usuarios y roles")
-            font.pixelSize: 18
+            font.pixelSize: Theme.fontL
             font.bold: true
             Layout.fillWidth: true
         }
@@ -24,6 +26,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: usersCtl.users
+        visible: (usersCtl.users || []).length > 0
         delegate: RowLayout {
             width: ListView.view.width
             Label {
@@ -50,13 +53,24 @@ ColumnLayout {
         }
         ScrollBar.vertical: ScrollBar {}
     }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (usersCtl.users || []).length === 0
+        icon: "👤"
+        title: qsTr("Sin usuarios")
+        hint: qsTr("Crea el primero con “Nuevo” y asigna rol + 2FA.")
+        actionText: qsTr("Nuevo usuario")
+        onAction: addDialog.open()
+    }
     Label {
         id: msg
-        color: "red"
+        color: Theme.error
     }
 
     Dialog {
         id: addDialog
+        onOpened: uName.forceActiveFocus()
         title: qsTr("Nuevo usuario")
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -76,7 +90,7 @@ ColumnLayout {
             }
             Label {
                 id: uErr
-                color: "red"
+                color: Theme.error
             }
         }
         onAccepted: {
@@ -89,6 +103,7 @@ ColumnLayout {
     }
     Dialog {
         id: resetDialog
+        onOpened: rPass.forceActiveFocus()
         title: qsTr("Nueva clave para ") + username
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel

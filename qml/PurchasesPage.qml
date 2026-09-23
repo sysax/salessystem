@@ -2,15 +2,18 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
+import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
+    property string pendingCancelOc: ""
 
     RowLayout {
         Label {
             text: qsTr("Órdenes de compra")
-            font.pixelSize: 18
+            font.pixelSize: Theme.fontL
             font.bold: true
             Layout.fillWidth: true
         }
@@ -24,6 +27,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: purchasesCtl.orders
+        visible: (purchasesCtl.orders || []).length > 0
         delegate: RowLayout {
             width: ListView.view.width
             Label {
@@ -44,21 +48,45 @@ ColumnLayout {
                 text: qsTr("Cancelar")
                 enabled: modelData.status === "Pendiente"
                 onClicked: {
-                    var r = purchasesCtl.cancel(modelData.id, auth.currentUser);
-                    if (!r.ok)
-                        msg.text = r.error;
+                    root.pendingCancelOc = modelData.id;
+                    confirmCancelOc.open();
                 }
             }
         }
         ScrollBar.vertical: ScrollBar {}
     }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (purchasesCtl.orders || []).length === 0
+        icon: "🛍️"
+        title: qsTr("Sin órdenes de compra")
+        hint: qsTr("Crea la primera con “Nueva OC”; al recibirla se actualiza inventario y CxP.")
+        actionText: qsTr("Nueva OC")
+        onAction: createDialog.open()
+    }
     Label {
         id: msg
-        color: "red"
+        color: Theme.error
+    }
+
+    ConfirmDialog {
+        id: confirmCancelOc
+        title: qsTr("Cancelar orden")
+        message: qsTr("¿Cancelar la orden %1? No se puede deshacer.").arg(root.pendingCancelOc)
+        confirmText: qsTr("Sí, cancelar")
+        onAccepted: {
+            var r = purchasesCtl.cancel(root.pendingCancelOc, auth.currentUser);
+            if (!r.ok)
+                msg.text = r.error;
+            root.pendingCancelOc = "";
+        }
+        onRejected: root.pendingCancelOc = ""
     }
 
     Dialog {
         id: createDialog
+        onOpened: cSupplier.forceActiveFocus()
         title: qsTr("Nueva orden de compra")
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -77,7 +105,7 @@ ColumnLayout {
             }
             Label {
                 id: cErr
-                color: "red"
+                color: Theme.error
             }
         }
         onAccepted: {

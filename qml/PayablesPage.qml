@@ -2,14 +2,16 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
+import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
 
     Label {
         text: qsTr("Cuentas por pagar")
-        font.pixelSize: 18
+        font.pixelSize: Theme.fontL
         font.bold: true
     }
     ListView {
@@ -17,6 +19,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: cxpCtl.pending
+        visible: (cxpCtl.pending || []).length > 0
         delegate: RowLayout {
             width: ListView.view.width
             Label {
@@ -34,13 +37,22 @@ ColumnLayout {
         }
         ScrollBar.vertical: ScrollBar {}
     }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (cxpCtl.pending || []).length === 0
+        icon: "✅"
+        title: qsTr("Sin cuentas por pagar")
+        hint: qsTr("No hay facturas pendientes a proveedores.")
+    }
     Label {
         id: msg
-        color: "red"
+        color: Theme.error
     }
 
     Dialog {
         id: payDialog
+        onOpened: payAmount.forceActiveFocus()
         title: qsTr("Pagar ") + payId
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel

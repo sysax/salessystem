@@ -1,84 +1,201 @@
 // Punto de venta: carrito, pagos mixtos, promos, ticket, caja (antes pos.py).
+// Mejora #4 POS mejorado: botones táctiles 48px, confirmación al eliminar, swipe gestures.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "Utils.js" as Utils
+import QtSalesSystem
+import "components"
 
 RowLayout {
     id: root
-    spacing: 12
+    spacing: Theme.spacingMedium
+
+    readonly property int touchH: 48   // objetivo táctil mínimo
+    readonly property int rowHProduct: 56
+    readonly property int rowHCart: 64
+
+    function addProduct(productId) {
+        var r = pos.addToCart(productId, 1);
+        if (!r.ok)
+            Utils.showToast("error", r.error, 3000);
+        else
+            Utils.showToast("success", "Agregado al carrito", 1500);
+    }
+
+    function askRemoveLine(idx, name) {
+        confirmRemoveDialog.removeIndex = idx;
+        confirmRemoveDialog.removeName = name || "";
+        confirmRemoveDialog.open();
+    }
+
+    // Lógica de cobro: Efectivo/Mixto exigen efectivo >= total (Crédito y demás, no).
+    function cashNeeded() {
+        return methodBox.currentText === "Efectivo" || methodBox.currentText === "Mixto";
+    }
+    function cashValue() {
+        return parseFloat(cashField.text) || 0;
+    }
+    function cartTotal() {
+        return (pos.totals && pos.totals.total) || 0;
+    }
+    function canCharge() {
+        if (pos.cart.length === 0)
+            return false;
+        if (!cashNeeded())
+            return true;
+        if (cartTotal() <= 0)
+            return true; // promo cubre el total
+        return cashField.acceptableInput && cashValue() >= cartTotal();
+    }
 
     // Izquierda: búsqueda + carrito
     ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        spacing: 8
+        spacing: Theme.spacingSmall
 
         RowLayout {
+            spacing: Theme.spacingSmall
             TextField {
                 id: searchField
                 placeholderText: qsTr("Buscar producto (nombre, SKU, código)")
                 Layout.fillWidth: true
+                implicitHeight: root.touchH
                 onAccepted: catalog.search(text)
             }
             Button {
                 text: qsTr("Buscar")
+                implicitHeight: root.touchH
+                implicitWidth: 110
                 onClicked: catalog.search(searchField.text)
             }
         }
         ListView {
             Layout.fillWidth: true
-            Layout.preferredHeight: 180
+            Layout.preferredHeight: 200
             clip: true
             model: catalog.products
-            delegate: ItemDelegate {
+            visible: (catalog.products || []).length > 0
+            delegate: SwipeDelegate {
+                id: prodDelegate
                 width: ListView.view.width
+                height: root.rowHProduct
                 text: modelData.name + "  ·  " + money(modelData.price) + "  ·  stock " + modelData.stock
-                onClicked: {
-                    var r = pos.addToCart(modelData.id, 1);
-                    if (!r.ok)
-                        Utils.showToast("error", r.error, 3000);
-                    else
-                        Utils.showToast("success", "Agregado al carrito", 1500);
+                font.pixelSize: Theme.fontM
+                onClicked: root.addProduct(modelData.id)
+                // Deslizar para revelar acción táctil "Añadir"
+                swipe.right: Button {
+                    text: qsTr("Añadir +")
+                    implicitHeight: root.rowHProduct
+                    implicitWidth: 120
+                    onClicked: {
+                        prodDelegate.swipe.close();
+                        root.addProduct(modelData.id);
+                    }
+                }
+                swipe.onCompleted: {
+                    // Swipe completo a la derecha también agrega
+                    if (swipe.position > 0.5) {
+                        swipe.close();
+                        root.addProduct(modelData.id);
+                    }
                 }
             }
             ScrollBar.vertical: ScrollBar {}
         }
+        EmptyState {
+            Layout.fillWidth: true
+            visible: (catalog.products || []).length === 0
+            icon: "🔍"
+            title: qsTr("Sin productos para vender")
+            hint: qsTr("Busca de nuevo o da de alta productos en el catálogo.")
+        }
+        RowLayout {
+            spacing: Theme.spacingSmall
+            Label {
+                text: qsTr("Carrito (%1)").arg(pos.cart.length)
+                font.bold: true
+                font.pixelSize: Theme.fontML
+                Layout.fillWidth: true
+            }
+            Button {
+                text: qsTr("Vaciar")
+                implicitHeight: root.touchH
+                visible: pos.cart.length > 0
+                onClicked: confirmClearDialog.open()
+            }
+        }
         Label {
-            text: qsTr("Carrito")
-            font.bold: true
+            visible: pos.cart.length === 0
+            text: qsTr("Carrito vacío — toca un producto para agregar. Desliza un producto para añadir rápido.")
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            opacity: 0.7
         }
         ListView {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
             model: pos.cart
-            delegate: RowLayout {
+            delegate: SwipeDelegate {
+                id: cartDelegate
                 width: ListView.view.width
-                Label {
-                    text: modelData.name + " × " + modelData.qty
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-                Button {
-                    text: "−"
-                    onClicked: pos.setQty(index, modelData.qty - 1)
-                    enabled: modelData.qty > 1
-                }
-                Button {
-                    text: "+"
-                    onClicked: pos.setQty(index, modelData.qty + 1)
-                }
-                Label {
-                    text: money(modelData.subtotal)
-                    Layout.preferredWidth: 110
-                    horizontalAlignment: Text.AlignRight
-                }
-                Button {
-                    text: "✕"
+                height: root.rowHCart
+                // Deslizar a la izquierda revela Eliminar
+                swipe.left: Button {
+                    text: qsTr("Eliminar")
+                    implicitHeight: root.rowHCart
+                    implicitWidth: 120
                     onClicked: {
-                        pos.removeLine(index);
-                        Utils.showToast("info", "Producto eliminado", 2000);
+                        cartDelegate.swipe.close();
+                        root.askRemoveLine(index, modelData.name);
+                    }
+                }
+                swipe.onCompleted: {
+                    if (swipe.position < -0.5) {
+                        swipe.close();
+                        root.askRemoveLine(index, modelData.name);
+                    }
+                }
+                contentItem: RowLayout {
+                    spacing: Theme.spacingSmall
+                    Label {
+                        text: modelData.name + " × " + modelData.qty
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        font.pixelSize: Theme.fontM
+                    }
+                    Button {
+                        text: "−"
+                        implicitWidth: root.touchH
+                        implicitHeight: root.touchH
+                        font.pixelSize: Theme.fontL
+                        Accessible.name: qsTr("Disminuir cantidad")
+                        onClicked: pos.setQty(index, modelData.qty - 1)
+                        enabled: modelData.qty > 1
+                    }
+                    Button {
+                        text: "+"
+                        implicitWidth: root.touchH
+                        implicitHeight: root.touchH
+                        font.pixelSize: Theme.fontL
+                        Accessible.name: qsTr("Aumentar cantidad")
+                        onClicked: pos.setQty(index, modelData.qty + 1)
+                    }
+                    Label {
+                        text: money(modelData.subtotal)
+                        Layout.preferredWidth: 110
+                        horizontalAlignment: Text.AlignRight
+                        font.pixelSize: Theme.fontM
+                    }
+                    Button {
+                        text: "✕"
+                        implicitWidth: root.touchH
+                        implicitHeight: root.touchH
+                        font.pixelSize: Theme.fontML
+                        Accessible.name: qsTr("Eliminar del carrito")
+                        onClicked: root.askRemoveLine(index, modelData.name)
                     }
                 }
             }
@@ -88,38 +205,46 @@ RowLayout {
 
     // Derecha: totales + cobro + caja
     ColumnLayout {
-        Layout.preferredWidth: 300
+        Layout.preferredWidth: 320
         Layout.fillHeight: true
-        spacing: 8
+        spacing: Theme.spacingSmall
 
         GroupBox {
             title: qsTr("Totales")
             Layout.fillWidth: true
             ColumnLayout {
+                spacing: 4
                 Label {
                     text: qsTr("Subtotal: ") + money(pos.totals.subtotal)
+                    font.pixelSize: Theme.fontM
                 }
                 Label {
                     text: qsTr("Descuento: ") + money(pos.totals.discount)
+                    font.pixelSize: Theme.fontM
                 }
                 Label {
                     text: qsTr("IVA: ") + money(pos.totals.tax)
+                    font.pixelSize: Theme.fontM
                 }
                 Label {
                     text: qsTr("TOTAL: ") + money(pos.totals.total)
                     font.bold: true
-                    font.pixelSize: 18
+                    font.pixelSize: Theme.fontXL
                 }
             }
         }
         RowLayout {
+            spacing: Theme.spacingSmall
             TextField {
                 id: promoField
                 placeholderText: qsTr("Código promo")
                 Layout.fillWidth: true
+                implicitHeight: root.touchH
             }
             Button {
                 text: qsTr("Aplicar")
+                implicitHeight: root.touchH
+                implicitWidth: 100
                 onClicked: {
                     var r = pos.applyPromo(promoField.text);
                     if (r.ok)
@@ -132,24 +257,41 @@ RowLayout {
         ComboBox {
             id: methodBox
             Layout.fillWidth: true
+            implicitHeight: root.touchH
             model: ["Efectivo", "Transferencia", "Tarjeta", "Credito", "Mixto"]
         }
         TextField {
             id: cashField
             placeholderText: qsTr("Efectivo recibido")
             Layout.fillWidth: true
+            implicitHeight: root.touchH
             inputMethodHints: Qt.ImhDigitsOnly
+            validator: DoubleValidator { bottom: 0 }
         }
         TextField {
             id: clientField
             placeholderText: qsTr("Cliente (opcional)")
             Layout.fillWidth: true
+            implicitHeight: root.touchH
+        }
+        Label {
+            // Ayuda reactiva: cambio o faltante según el efectivo ingresado
+            visible: root.cashNeeded() && pos.cart.length > 0 && cashField.text !== ""
+            text: root.cashValue() >= root.cartTotal()
+                  ? qsTr("Cambio: ") + money(root.cashValue() - root.cartTotal())
+                  : qsTr("Faltan: ") + money(root.cartTotal() - root.cashValue())
+            color: root.cashValue() >= root.cartTotal() ? Theme.success : Theme.error
+            font.bold: true
+            font.pixelSize: Theme.fontM
         }
         Button {
             text: qsTr("Cobrar")
             highlighted: true
             Layout.fillWidth: true
-            enabled: pos.cart.length > 0
+            implicitHeight: 56
+            font.bold: true
+            font.pixelSize: Theme.fontL
+            enabled: root.canCharge()
             onClicked: {
                 var pays = {};
                 if (methodBox.currentText === "Mixto" || methodBox.currentText === "Efectivo") {
@@ -157,7 +299,9 @@ RowLayout {
                     if (cash > 0)
                         pays["efectivo"] = cash;
                 }
+                Utils.showLoading(qsTr("Procesando venta..."));
                 var r = pos.checkout(clientField.text, pays, methodBox.currentText, auth.currentUser);
+                Utils.hideLoading();
                 if (r.ok) {
                     Utils.showToast("success", "Venta " + r.saleId + " · Cambio " + money(r.change), 3000);
                     cashField.text = "";
@@ -171,17 +315,23 @@ RowLayout {
             title: qsTr("Caja")
             Layout.fillWidth: true
             ColumnLayout {
+                spacing: Theme.spacingSmall
                 Label {
                     text: pos.caja.open ? qsTr("Abierta · esperado %1").arg(money(pos.caja.expected)) : qsTr("Cerrada")
+                    font.pixelSize: Theme.fontM
                 }
                 RowLayout {
+                    spacing: Theme.spacingSmall
                     TextField {
                         id: cajaField
                         placeholderText: qsTr("Monto")
                         Layout.fillWidth: true
+                        implicitHeight: root.touchH
                     }
                     Button {
                         text: pos.caja.open ? qsTr("Cerrar") : qsTr("Abrir")
+                        implicitHeight: root.touchH
+                        implicitWidth: 100
                         onClicked: {
                             var r = pos.caja.open ? pos.closeCaja(parseFloat(cajaField.text) || 0, auth.currentUser) : pos.openCaja(parseFloat(cajaField.text) || 0, auth.currentUser);
                             if (r.ok) {
@@ -196,6 +346,47 @@ RowLayout {
                     }
                 }
             }
+        }
+    }
+
+    // Confirmación antes de eliminar una línea (acción destructiva)
+    Dialog {
+        id: confirmRemoveDialog
+        title: qsTr("Eliminar producto")
+        modal: true
+        width: 320
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property int removeIndex: -1
+        property string removeName: ""
+        Label {
+            text: qsTr("¿Eliminar \"%1\" del carrito?").arg(confirmRemoveDialog.removeName)
+            wrapMode: Text.WordWrap
+            width: 280
+        }
+        onAccepted: {
+            if (removeIndex >= 0) {
+                pos.removeLine(removeIndex);
+                Utils.showToast("info", "Producto eliminado", 2000);
+            }
+            removeIndex = -1;
+        }
+        onRejected: removeIndex = -1
+    }
+
+    Dialog {
+        id: confirmClearDialog
+        title: qsTr("Vaciar carrito")
+        modal: true
+        width: 320
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        Label {
+            text: qsTr("¿Vaciar todo el carrito? Esta acción no se puede deshacer.")
+            wrapMode: Text.WordWrap
+            width: 280
+        }
+        onAccepted: {
+            pos.clearCart();
+            Utils.showToast("info", "Carrito vaciado", 2000);
         }
     }
 

@@ -2,15 +2,20 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Utils.js" as Utils
+import QtSalesSystem
+import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
+    property string pendingRemoveId: ""
+    property string pendingRemoveCode: ""
 
     RowLayout {
         Label {
             text: qsTr("Promociones y descuentos")
-            font.pixelSize: 18
+            font.pixelSize: Theme.fontL
             font.bold: true
             Layout.fillWidth: true
         }
@@ -23,7 +28,7 @@ ColumnLayout {
     }
     Label {
         text: qsTr("Tipos: porcentaje · monto_fijo · 2x1 · 3x2 · volumen · cupon · happy_hour")
-        font.pixelSize: 11
+        font.pixelSize: Theme.fontXS
         opacity: 0.7
     }
     ListView {
@@ -31,6 +36,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: promosCtl.promos
+        visible: (promosCtl.promos || []).length > 0
         delegate: RowLayout {
             width: ListView.view.width
             CheckBox {
@@ -44,14 +50,29 @@ ColumnLayout {
             }
             Button {
                 text: qsTr("Eliminar")
-                onClicked: promosCtl.remove(modelData.id)
+                onClicked: {
+                    root.pendingRemoveId = modelData.id;
+                    root.pendingRemoveCode = modelData.code;
+                    confirmRemovePromo.open();
+                }
             }
         }
         ScrollBar.vertical: ScrollBar {}
     }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (promosCtl.promos || []).length === 0
+        icon: "🎟️"
+        title: qsTr("Sin promociones")
+        hint: qsTr("Crea la primera con “Nueva”: porcentaje, 2x1, cupón, happy hour…")
+        actionText: qsTr("Nueva promoción")
+        onAction: addDialog.open()
+    }
 
     Dialog {
         id: addDialog
+        onOpened: pCode.forceActiveFocus()
         title: qsTr("Nueva promoción")
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -78,7 +99,7 @@ ColumnLayout {
             }
             Label {
                 id: pErr
-                color: "red"
+                color: Theme.error
             }
         }
         onAccepted: {
@@ -94,6 +115,23 @@ ColumnLayout {
                 pErr.text = r.error;
                 open();
             }
+        }
+    }
+
+    ConfirmDialog {
+        id: confirmRemovePromo
+        title: qsTr("Eliminar promoción")
+        message: qsTr("¿Eliminar la promoción %1? Dejará de aplicarse en el POS.").arg(root.pendingRemoveCode)
+        confirmText: qsTr("Sí, eliminar")
+        onAccepted: {
+            promosCtl.remove(root.pendingRemoveId);
+            Utils.showToast("info", qsTr("Promoción eliminada"), 2000);
+            root.pendingRemoveId = "";
+            root.pendingRemoveCode = "";
+        }
+        onRejected: {
+            root.pendingRemoveId = "";
+            root.pendingRemoveCode = "";
         }
     }
 }

@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "Utils.js" as Utils
+import QtSalesSystem
 
 Pane {
     id: root
@@ -10,14 +11,18 @@ Pane {
 
     property bool needTotp: false
 
+    // Focus management (mejora #10): foco inicial y al pedir 2FA
+    onNeedTotpChanged: { if (needTotp) totpField.forceActiveFocus() }
+    Component.onCompleted: userField.forceActiveFocus()
+
     ColumnLayout {
         anchors.centerIn: parent
         width: 320
-        spacing: 10
+        spacing: Theme.spacingMedium
 
         Label {
             text: qsTr("Sistema de Ventas")
-            font.pixelSize: 26
+            font.pixelSize: Theme.fontDisplay
             font.bold: true
             Layout.alignment: Qt.AlignHCenter
         }
@@ -51,7 +56,7 @@ Pane {
         }
         Label {
             text: qsTr("admin / admin123 · vendedor / venta123 · cajero / caja123")
-            font.pixelSize: 11
+            font.pixelSize: Theme.fontXS
             opacity: 0.6
             Layout.alignment: Qt.AlignHCenter
         }

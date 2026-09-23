@@ -149,6 +149,21 @@ Basado en esta implementación, se recomienda continuar con:
   títulos 18/20/22/26, cuerpo 11/12/14).
 - Doc de origen: `docs/mejoras-ui-ux.md`.
 
+### Cierre #9 — Migración total a tokens (rama ux/03-validacion-reactiva)
+
+- Migradas a `Theme` (sin cambio visual salvo lo indicado): `LoginPage` (spacingMedium,
+  fontDisplay, fontXS), `ProductsPage`/`SalesPage`/`ClientsPage`/`SuppliersPage`/`InventoryPage`/
+  `PurchasesPage`/`ReceivablesPage`/`PayablesPage`/`PromosPage`/`UsersPage`/`ReportsPage`
+  (spacingSmall, fontL/fontXL/fontXS, `color: Theme.error` en errores), `Card.qml`
+  (marginMedium, spacingMedium, fontDisplay/fontS/fontXL, success/error semánticos),
+  `EmptyState.qml` (título fontM).
+- Normalizaciones mínimas: `spacing: 10→spacingMedium (12)`, `font 15→fontM (14)`,
+  `"red"→Theme.error` (rojo semántico #F44336).
+- Intencionalmente sin migrar (sin token equivalente, se preserva visual):
+  micro-espaciados 2/4/6, icono emoji 36px de `EmptyState`, `palette.text`.
+- Excepción: `AppSidebar.qml` mantiene literales iguales a Theme porque `tst_sidebar`
+  lo carga aislado sin el módulo registrado.
+
 ## Mejora #3 — Validación reactiva (rama ux/03-validacion-reactiva)
 
 - `ProductsPage`: `DoubleValidator` (precio ≥ 0) e `IntValidator` (stock entero ≥ 0),
@@ -157,3 +172,93 @@ Basado en esta implementación, se recomienda continuar con:
   `payDialog`: monto con `DoubleValidator` (≥ 0.01) y Ok con binding.
 - `LoginPage`: botón Entrar/Verificar deshabilitado con campos vacíos.
 - El chequeo backend en `onAccepted` se conserva como defensa en profundidad.
+
+## Mejora #4 — POS mejorado (táctil + confirmación + swipe)
+
+- `qml/PosPage.qml` (`import QtSalesSystem` para `Theme`):
+  - Botones táctiles: `touchH: 48`, filas producto 56 / carrito 64; Buscar/Aplicar/Abrir-Cerrar
+    a 48px, `Cobrar` a 56px con fuente `fontL` bold, `−/+/✕` a 48×48.
+  - Confirmación destructiva: `confirmRemoveDialog` (Ok|Cancel) antes de `pos.removeLine()`,
+    `confirmClearDialog` antes de `pos.clearCart()`; se eliminó el borrado directo.
+  - Swipe gestures: `SwipeDelegate` en productos (swipe-right “Añadir +”, full-swipe agrega)
+    y en carrito (swipe-left “Eliminar”, full-swipe pide confirmación).
+  - Extra: contador `Carrito (%1)`, empty-state “Carrito vacío…”, `Utils.showLoading/hideLoading`
+    en checkout, `DoubleValidator` en efectivo, tokens `spacingSmall/Medium`, `fontM/ML/L/XL`.
+
+## Mejora #5 — Navegación clara
+
+- `qml/AppSidebar.qml` (sin `import QtSalesSystem` para que `tst_sidebar` lo cargue aislado;
+  valores literales iguales a Theme):
+  - Iconos por módulo (📊🛒📦🧾👥🏬🛍️🚚💳💸📈🎟️👤), filas a 48px, `Accessible.name`.
+  - Indicador pantalla activa: `currentKey` + barra lateral accent + negrita + `highlighted`;
+    `syncCurrent()` alinea `currentIndex` para teclado; `refresh()` por rol intacto.
+- `qml/Main.qml`: `screenMeta()` (label/icono/sección), `crumbText()` (“Sección › Icono Etiqueta”),
+  breadcrumb clicable a Tablero en header, `Drawer` 280px, `sidebar.currentKey: currentScreen`.
+
+## Mejora #6 — Dashboard visual
+
+- `qml/Card.qml`: props `icon/delta/deltaUp/alert` (compat con `title/value`); layout icono + valores,
+  delta verde/rojo, alerta roja.
+- `qml/DashboardPage.qml` (`import QtSalesSystem`): 9 tarjetas con iconos (💰📦👥⏳⚠️📈💹🧮🔄),
+  comparativa hoy-vs-ayer (`dayDeltaText`, badge en header), KPIs financieros (margen bruto/neto,
+  rotación+días), gráfico de barras propio de 7 días (sin Qt Charts para no añadir dependencia/CI),
+  ranking con 🥇🥈🥉 + barra relativa, sección stock-bajo (top 5) con atajos a reportes/inventario.
+
+## Mejora #7 — Tablas funcionales
+
+- `qml/components/SortHeader.qml` + `qml/components/Pager.qml` (reutilizables, registrados en CMake):
+  encabezados con ▲▼, paginador «‹ Pág x/y›» + filas 10/20/50, todo 40-48px táctil.
+- `qml/ProductsPage.qml`: columnas SKU/Nombre/Precio/Stock ordenables, filtro local
+  (nombre/SKU/categoría) + búsqueda servidor, `viewRows` paginado, stock ≤0 en rojo.
+- `qml/SalesPage.qml`: columnas Folio/Cliente/Total/Estado, filtro local
+  (cliente/folio/estado/documento), orden default folio desc.
+- Se mantuvo `ListView` + cabeceras en vez de `TableView` nativo por mejor táctil y
+  consistencia; lógica 100% cliente (bucles clásicos Qt 6.4), patrón extensible al resto.
+
+## Mejora #8 — Empty states
+
+- `qml/components/EmptyState.qml` (nuevo, registrado en CMake): icono + título + hint + botón
+  de acción opcional (`signal action()`), 44px táctil.
+- Aplicado en 11 listas (lista oculta + `EmptyState` visible cuando está vacía):
+  Productos (Sin productos/Sin resultados + Nuevo), Ventas (Sin ventas + Ir al POS con `signal go`
+  cableada en `Main`), POS (🔍 sin productos), Clientes (+ Nuevo), Inventario (alertas ✅
+  + movimientos), Compras (+ Nueva OC), Proveedores (+ Nuevo), CxC/CxP (✅ al día),
+  Promos (+ Nueva), Usuarios (+ Nuevo).
+
+## Mejora #10 — Accesibilidad
+
+- **Atajos de teclado** (`Main.qml`, `Shortcut` con `enabled: auth.loggedIn`; `navigate()`
+  ya valida permiso por rol): `Ctrl+1..6` → Tablero/POS/Productos/Ventas/Inventario/Reportes,
+  `Ctrl+M` abre/cierra el menú. Hints visibles en `AppSidebar` (campo `sc`, fontS 60%).
+- **Focus management**: `LoginPage` foca usuario al abrir y campo 2FA al pedirlo;
+  `onOpened: <campo>.forceActiveFocus()` en los 11 diálogos (producto/cliente/abono,
+  proveedor, usuario nuevo/clave, promo, OC, ajuste/transferencia, CxC/CxP). Tab nativo
+  y cierre con Esc se conservan.
+
+## Mejora #11 — Diálogos responsivos
+
+- `qml/components/ConfirmDialog.qml` (nuevo, registrado en CMake): `message/confirmText/danger`,
+  ancho `min(400, ventana-48)`, mensaje en `ScrollView` topado a 180px, foco inicial en
+  Cancelar (no confirma con Enter por accidente), Ok resaltado si `danger`.
+- Confirmaciones destructivas que faltaban: cancelar venta (`SalesPage`, revierte stock),
+  cancelar OC (`PurchasesPage`, prop `pendingCancelOc`), eliminar promo (`PromosPage`,
+  props `pendingRemoveId/Code` + toast). Bloquear usuario se deja directo (reversible).
+  POS ya cubría eliminar/vaciar carrito (#4).
+- Topes responsivos: detalle de venta `min(420, ventana-64)` × `min(240, ventana-320)`.
+
+## Mejora #12 — Header útil
+
+- `Main.qml`: reloj en vivo `🕒 dd/MM HH:mm:ss` (`Timer` 1s + `tickClock()`), badge de red
+  `🟢/🔴` (clic re-chequea con toast; `ToolTip` + `Accessible.name`), badge `⚠️ N` de stock
+  bajo (`dash.data.lowStockAlerts`) que navega a inventario. Se conserva `⏳ por sincronizar`.
+- Estado de red vía `syncSvc.isOnline()` (TCP 8.8.8.8, bloquea ≤1.5s solo sin red): chequeo
+  al login (`onSessionChanged` + `dash.refresh()`), cada 120s (`netTimer` solo con sesión)
+  y manual; nunca en cada navegación.
+
+## Respiro general de pantallas
+
+- `Main.qml` (`StackView`): `topMargin: Theme.spacingSmall`, laterales
+  `Theme.marginMedium`. Login intacto (contenido centrado de ancho fijo).
+- **Contraste**: `Theme.textOnBright (#1A1A1A)` + `Toast.fgColor` (texto oscuro en
+  success/warning, blanco en info/error); base Material Light sin cambios. `Accessible.name`
+  ya cubría sidebar, paginador, POS y atajos principales.

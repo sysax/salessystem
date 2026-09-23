@@ -2,10 +2,12 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtSalesSystem
+import "components"
 
 ColumnLayout {
     id: root
-    spacing: 8
+    spacing: Theme.spacingSmall
 
     RowLayout {
         TextField {
@@ -32,6 +34,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         model: clientsCtl.clients
+        visible: (clientsCtl.clients || []).length > 0
         delegate: ItemDelegate {
             width: ListView.view.width
             text: modelData.name + "  ·  " + modelData.balance + " saldo  ·  " + modelData.status
@@ -46,6 +49,20 @@ ColumnLayout {
             }
         }
         ScrollBar.vertical: ScrollBar {}
+    }
+    EmptyState {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        visible: (clientsCtl.clients || []).length === 0
+        icon: "👥"
+        title: qsTr("Sin clientes")
+        hint: qsTr("Registra el primero con “Nuevo” para asignar ventas y crédito.")
+        actionText: qsTr("Nuevo cliente")
+        onAction: {
+            editDialog.clientId = -1;
+            editDialog.fields = {};
+            editDialog.open();
+        }
     }
     Label {
         id: stmtLabel
@@ -78,6 +95,7 @@ ColumnLayout {
 
     Dialog {
         id: editDialog
+        onOpened: fName.forceActiveFocus()
         title: clientId < 0 ? qsTr("Nuevo cliente") : qsTr("Editar cliente")
         modal: true
         standardButtons: Dialog.Save | Dialog.Cancel
@@ -108,12 +126,12 @@ ColumnLayout {
             }
             Label {
                 id: editErr
-                color: "red"
+                color: Theme.error
             }
             Label {
                 text: fName.text.trim() === "" ? qsTr("Ingrese el nombre") :
                       !fPhone.acceptableInput ? qsTr("Teléfono inválido") : ""
-                color: "red"
+                color: Theme.error
                 visible: text !== ""
             }
         }
@@ -138,6 +156,7 @@ ColumnLayout {
     }
     Dialog {
         id: payDialog
+        onOpened: payAmount.forceActiveFocus()
         title: qsTr("Abonar ") + saleId
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
