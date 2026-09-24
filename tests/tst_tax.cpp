@@ -25,7 +25,7 @@ class TstTax : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void initTestCase()
     {
         QVERIFY(m_tmp.isValid());
@@ -42,8 +42,8 @@ private slots:
         auto *promos = new PromoRepository(db, m_products, audit, this);
         auto *settingsRepo = new SettingsRepository(db, this);
         m_settings = new SettingsService(settingsRepo, bus, this);
-        m_svc = new SalesService(db, m_products, m_saleRepo, inventory, clients, caja,
-                                 promos, bus, m_settings, nullptr, nullptr, this);
+        m_svc = new SalesService(db, m_products, m_saleRepo, inventory, clients, caja, promos, bus,
+                                 m_settings, nullptr, nullptr, this);
     }
 
     void taxRatesParsing()
@@ -61,31 +61,33 @@ private slots:
                              QStringLiteral("[{\"name\":\"IVA 19%\",\"rate\":19},"
                                             "{\"name\":\"IVA 5%\",\"rate\":5},"
                                             "{\"name\":\"Excluido\",\"rate\":0}]")},
-                            {QStringLiteral("default_tax_rate"), QStringLiteral("5")}})
-                    [QStringLiteral("ok")]
-                        .toBool());
+                            {QStringLiteral("default_tax_rate"),
+                             QStringLiteral("5")}})[QStringLiteral("ok")]
+                    .toBool());
         QCOMPARE(m_settings->taxRates().size(), 3);
         QCOMPARE(m_settings->defaultTaxRateValue(), 5.0);
         QCOMPARE(m_settings->taxNameForRate(5.0), QStringLiteral("IVA 5%"));
 
         // JSON roto → fallback seguro (luego se restaura para los demás tests)
         QSqlQuery q(m_dbm->database());
-        QVERIFY(q.exec(QStringLiteral("UPDATE settings SET value='roto' WHERE key='tax_rates_json'")));
+        QVERIFY(
+            q.exec(QStringLiteral("UPDATE settings SET value='roto' WHERE key='tax_rates_json'")));
         QCOMPARE(m_settings->taxRates().size(), 2);
         QVERIFY(m_settings
                     ->save({{QStringLiteral("tax_rates_json"),
                              QStringLiteral("[{\"name\":\"IVA 19%\",\"rate\":19},"
                                             "{\"name\":\"Excluido\",\"rate\":0}]")},
-                            {QStringLiteral("default_tax_rate"), QStringLiteral("19")}})
-                    [QStringLiteral("ok")]
-                        .toBool());
+                            {QStringLiteral("default_tax_rate"),
+                             QStringLiteral("19")}})[QStringLiteral("ok")]
+                    .toBool());
     }
 
     void mixedTicketBreakdown()
     {
         // Exento $10.000 ×1 + IVA 19% $10.000 ×1 → total 21.900
-        const auto t = m_svc->calculateTotals({SI{mkProduct("T0", "Excluido"), 1},
-                                               SI{mkProduct("T19", "IVA 19%"), 1}});
+        const auto t
+            = m_svc->calculateTotals({SI{.productId = mkProduct("T0", "Excluido"), .qty = 1},
+                                      SI{.productId = mkProduct("T19", "IVA 19%"), .qty = 1}});
         QCOMPARE(t.itemsCount, 2);
         QCOMPARE(t.subtotal, 20000.0);
         QCOMPARE(t.tax, 1900.0);
@@ -125,21 +127,23 @@ private slots:
         QCOMPARE(m_svc->resolveTaxRate(QStringLiteral("Excluido")), 0.0);
         QCOMPARE(m_svc->resolveTaxRate(QStringLiteral("IVA 19%")), 19.0);
         // Cambio de default en settings afecta la próxima resolución (sin recompilar)
-        QVERIFY(m_settings->save({{QStringLiteral("default_tax_rate"), QStringLiteral("0")}})
-                    [QStringLiteral("ok")]
-                        .toBool());
+        QVERIFY(m_settings
+                    ->save({{QStringLiteral("default_tax_rate"),
+                             QStringLiteral("0")}})[QStringLiteral("ok")]
+                    .toBool());
         QCOMPARE(m_svc->resolveTaxRate(QStringLiteral("IVA 8%")), 0.0);
-        QVERIFY(m_settings->save({{QStringLiteral("default_tax_rate"), QStringLiteral("19")}})
-                    [QStringLiteral("ok")]
-                        .toBool());
+        QVERIFY(m_settings
+                    ->save({{QStringLiteral("default_tax_rate"),
+                             QStringLiteral("19")}})[QStringLiteral("ok")]
+                    .toBool());
     }
 
     void createPersistsBreakdown()
     {
-        auto r = m_svc->create({SI{mkProduct("T0", "Excluido"), 1},
-                                SI{mkProduct("T19", "IVA 19%"), 1}},
-                               QStringLiteral("Mostrador"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"));
+        auto r = m_svc->create({SI{.productId = mkProduct("T0", "Excluido"), .qty = 1},
+                                SI{.productId = mkProduct("T19", "IVA 19%"), .qty = 1}},
+                               QStringLiteral("Mostrador"), {}, QStringLiteral("Efectivo"),
+                               QString(), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(r.value().buckets.size(), 2);
         QCOMPARE(r.value().total, 21900.0);
@@ -154,26 +158,27 @@ private slots:
     void decimalGranelTicket()
     {
         // Fase 2: 0.350 kg de tomate a $10.000/kg + 2 cajas de aspirina a $5.000.
-        const int tomato = mkProductFull(QStringLiteral("TOM"), QStringLiteral("Tomate"),
-                                         10000.0, 5.0, QStringLiteral("Excluido"),
-                                         QStringLiteral("kg"));
-        const int asp = mkProductFull(QStringLiteral("ASP"), QStringLiteral("Aspirina"),
-                                      5000.0, 10.0, QStringLiteral("IVA 19%"),
-                                      QStringLiteral("caja"));
-        const auto t = m_svc->calculateTotals({SI{tomato, 0.35}, SI{asp, 2.0}});
+        const int tomato = mkProductFull(QStringLiteral("TOM"), QStringLiteral("Tomate"), 10000.0,
+                                         5.0, QStringLiteral("Excluido"), QStringLiteral("kg"));
+        const int asp = mkProductFull(QStringLiteral("ASP"), QStringLiteral("Aspirina"), 5000.0,
+                                      10.0, QStringLiteral("IVA 19%"), QStringLiteral("caja"));
+        const auto t = m_svc->calculateTotals(
+            {SI{.productId = tomato, .qty = 0.35}, SI{.productId = asp, .qty = 2.0}});
         QCOMPARE(t.total, 3500.0 - 0.0 + 0.0 + 10000.0 + 1900.0); // 15400
         QCOMPARE(t.buckets.size(), 2);
-        auto r = m_svc->create({SI{tomato, 0.35}, SI{asp, 2.0}},
-                               QStringLiteral("Mostrador"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"));
+        auto r = m_svc->create(
+            {SI{.productId = tomato, .qty = 0.35}, SI{.productId = asp, .qty = 2.0}},
+            QStringLiteral("Mostrador"), {}, QStringLiteral("Efectivo"), QString(),
+            QStringLiteral("tester"));
         QVERIFY(r.ok());
         QVERIFY(qFuzzyCompare(r.value().total, 15400.0));
         QCOMPARE(m_products->findById(tomato)->stock, 5.0 - 0.35);
         QCOMPARE(m_products->findById(asp)->stock, 8.0);
         // Stock insuficiente decimal
-        QVERIFY(!m_svc->create({SI{tomato, 99.0}}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QString(),
-                               QStringLiteral("tester")).ok());
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = tomato, .qty = 99.0}}, QStringLiteral("X"), {},
+                              QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"))
+                     .ok());
     }
 
     void legacyMigrationReaddsColumn()
@@ -193,7 +198,7 @@ private slots:
         QVERIFY(found);
     }
 
-private:
+  private:
     int mkProductFull(const QString &sku, const QString &name, double price, double stock,
                       const QString &tax, const QString &unit)
     {
@@ -208,8 +213,8 @@ private:
         p.unit = unit;
         const auto r = m_products->add(p);
         if (!r.ok()) {
-            QTest::qFail(qPrintable(QStringLiteral("mkProductFull add: ") + r.error()),
-                         __FILE__, __LINE__);
+            QTest::qFail(qPrintable(QStringLiteral("mkProductFull add: ") + r.error()), __FILE__,
+                         __LINE__);
             return -1;
         }
         return r.value().id;
@@ -228,8 +233,8 @@ private:
         p.tax = tax;
         const auto r = m_products->add(p);
         if (!r.ok()) {
-            QTest::qFail(qPrintable(QStringLiteral("mkProduct add: ") + r.error()),
-                         __FILE__, __LINE__);
+            QTest::qFail(qPrintable(QStringLiteral("mkProduct add: ") + r.error()), __FILE__,
+                         __LINE__);
             return -1;
         }
         return r.value().id;

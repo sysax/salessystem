@@ -22,8 +22,9 @@ class AuthService : public QObject
 {
     Q_OBJECT
 
-public:
-    struct LoginResult {
+  public:
+    struct LoginResult
+    {
         bool ok = false;
         bool totpRequired = false;
         bool mustChangePassword = false; // clave por defecto: forzar cambio
@@ -31,7 +32,8 @@ public:
         QString role;
         QString error;
     };
-    struct UserInfo {
+    struct UserInfo
+    {
         QString username;
         QString role;
         bool active = true;
@@ -85,7 +87,7 @@ public:
     static QString hashPassword(const QString &password);
     static bool verifyPassword(const QString &stored, const QString &password);
 
-private:
+  private:
     void audit(const QString &user, const QString &action, const QString &detail) const;
     static QString nowIso();
     static bool isLocked(const QString &lockedUntil, bool &expired);

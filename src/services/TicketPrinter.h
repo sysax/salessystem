@@ -17,8 +17,9 @@ class TicketPrinter : public QObject
 {
     Q_OBJECT
 
-public:
-    struct Ticket {
+  public:
+    struct Ticket
+    {
         QString saleId;
         QString clientName;
         QString clientNit = QStringLiteral("NIT");
@@ -32,7 +33,8 @@ public:
         QString businessPhone;
         QString currencySymbol = QStringLiteral("$");
         QString taxLabel = QStringLiteral("IVA");
-        struct Line {
+        struct Line
+        {
             QString name;
             double qty = 0.0; // Fase 2: decimal (granel)
             double price = 0.0;
@@ -41,7 +43,8 @@ public:
         };
         // Fase 1: desglose por tasa (los rellena PosController desde
         // SalesService::Totals::buckets). Vacío ⇒ formato legacy de una línea.
-        struct TaxLine {
+        struct TaxLine
+        {
             QString label;
             double base = 0.0;
             double tax = 0.0;
@@ -55,7 +58,8 @@ public:
         QMap<QString, double> payments;
         double change = 0.0;
     };
-    struct PrintResult {
+    struct PrintResult
+    {
         QString path;
         bool printed = false;
         QString error;
@@ -70,8 +74,11 @@ public:
     Result<PrintResult> print(const Ticket &t) const;
     // Pulso de apertura; true si se pudo escribir en algún dispositivo
     Q_INVOKABLE bool openDrawer() const;
-    QString ticketsDir() const { return m_dir; }
+    QString ticketsDir() const
+    {
+        return m_dir;
+    }
 
-private:
+  private:
     QString m_dir;
 };

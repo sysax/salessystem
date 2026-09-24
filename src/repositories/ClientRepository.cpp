@@ -72,9 +72,8 @@ QList<Client> ClientRepository::search(const QString &text) const
                 out << rowToClient(q);
         return out;
     }
-    q.prepare(QStringLiteral(
-        "SELECT * FROM clients WHERE lower(name) LIKE ? OR lower(nit) LIKE ? "
-        "OR lower(email) LIKE ? ORDER BY id"));
+    q.prepare(QStringLiteral("SELECT * FROM clients WHERE lower(name) LIKE ? OR lower(nit) LIKE ? "
+                             "OR lower(email) LIKE ? ORDER BY id"));
     const QString like = u'%' + t + u'%';
     q.addBindValue(like);
     q.addBindValue(like);
@@ -124,8 +123,7 @@ Result<Client> ClientRepository::add(const Client &cin)
 Result<Client> ClientRepository::update(int id, const Client &c)
 {
     if (!findById(id))
-        return Result<Client>::failure(
-            QStringLiteral("Cliente ID %1 no encontrado").arg(id));
+        return Result<Client>::failure(QStringLiteral("Cliente ID %1 no encontrado").arg(id));
     if (c.discount < 0 || c.discount > 100)
         return Result<Client>::failure(QStringLiteral("Descuento 0-100"));
     QSqlQuery q(m_db);
@@ -158,8 +156,7 @@ StatusResult ClientRepository::remove(int id)
     q.prepare(QStringLiteral("DELETE FROM clients WHERE id=?"));
     q.addBindValue(id);
     if (!q.exec() || q.numRowsAffected() == 0)
-        return StatusResult::failure(
-            QStringLiteral("Cliente ID %1 no encontrado").arg(id));
+        return StatusResult::failure(QStringLiteral("Cliente ID %1 no encontrado").arg(id));
     return StatusResult::success({});
 }
 
@@ -169,8 +166,7 @@ bool ClientRepository::addCredit(const QString &name, double amount)
     if (!c)
         return false;
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "UPDATE clients SET credit=?, balance=? WHERE lower(name)=lower(?)"));
+    q.prepare(QStringLiteral("UPDATE clients SET credit=?, balance=? WHERE lower(name)=lower(?)"));
     q.addBindValue(c->credit + amount);
     q.addBindValue(c->balance + amount);
     q.addBindValue(name.trimmed());
@@ -183,8 +179,7 @@ bool ClientRepository::payCredit(const QString &name, double amount)
     if (!c)
         return false;
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "UPDATE clients SET credit=?, balance=? WHERE lower(name)=lower(?)"));
+    q.prepare(QStringLiteral("UPDATE clients SET credit=?, balance=? WHERE lower(name)=lower(?)"));
     q.addBindValue(std::max(0.0, c->credit - amount));
     q.addBindValue(std::max(0.0, c->balance - amount));
     q.addBindValue(name.trimmed());
@@ -258,9 +253,9 @@ QList<Supplier> SupplierRepository::search(const QString &text) const
                 out << rowToSupplier(q);
         return out;
     }
-    q.prepare(QStringLiteral(
-        "SELECT * FROM suppliers WHERE lower(name) LIKE ? OR lower(nit) LIKE ? "
-        "OR lower(rfc) LIKE ? OR lower(contact) LIKE ? ORDER BY id"));
+    q.prepare(
+        QStringLiteral("SELECT * FROM suppliers WHERE lower(name) LIKE ? OR lower(nit) LIKE ? "
+                       "OR lower(rfc) LIKE ? OR lower(contact) LIKE ? ORDER BY id"));
     const QString like = u'%' + t + u'%';
     q.addBindValue(like);
     q.addBindValue(like);
@@ -305,8 +300,7 @@ Result<Supplier> SupplierRepository::add(const Supplier &sin)
 Result<Supplier> SupplierRepository::update(int id, const Supplier &s)
 {
     if (!findById(id))
-        return Result<Supplier>::failure(
-            QStringLiteral("Proveedor ID %1 no encontrado").arg(id));
+        return Result<Supplier>::failure(QStringLiteral("Proveedor ID %1 no encontrado").arg(id));
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
         "UPDATE suppliers SET name=?, nit=?, rfc=?, contact=?, phone=?, email=?, city=?, "
@@ -333,7 +327,6 @@ StatusResult SupplierRepository::remove(int id)
     q.prepare(QStringLiteral("DELETE FROM suppliers WHERE id=?"));
     q.addBindValue(id);
     if (!q.exec() || q.numRowsAffected() == 0)
-        return StatusResult::failure(
-            QStringLiteral("Proveedor ID %1 no encontrado").arg(id));
+        return StatusResult::failure(QStringLiteral("Proveedor ID %1 no encontrado").arg(id));
     return StatusResult::success({});
 }

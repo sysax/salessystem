@@ -13,7 +13,7 @@ class CajaRepository : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit CajaRepository(QSqlDatabase db, AuditRepository *audit = nullptr,
                             QObject *parent = nullptr);
 
@@ -24,7 +24,7 @@ public:
     // Agrega {id,total} a sales_today_json y recalcula expected (solo si abierta)
     bool recordSale(const QString &saleId, double total);
 
-private:
+  private:
     QSqlDatabase m_db;
     AuditRepository *m_audit = nullptr;
 };

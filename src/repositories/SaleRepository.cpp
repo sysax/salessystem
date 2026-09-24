@@ -10,12 +10,12 @@
 #include "Counters.h"
 
 const QStringList SaleRepository::EstadosVenta = {
-    QStringLiteral("Cotización"), QStringLiteral("Pedido"), QStringLiteral("Facturada"),
-    QStringLiteral("Pagada"), QStringLiteral("Entregada"), QStringLiteral("Cerrada"),
+    QStringLiteral("Cotización"), QStringLiteral("Pedido"),    QStringLiteral("Facturada"),
+    QStringLiteral("Pagada"),     QStringLiteral("Entregada"), QStringLiteral("Cerrada"),
 };
 const QStringList SaleRepository::DocTypes = {
-    QStringLiteral("Cotización"), QStringLiteral("Pedido"), QStringLiteral("Remisión"),
-    QStringLiteral("Factura"), QStringLiteral("Nota crédito"), QStringLiteral("Nota cargo"),
+    QStringLiteral("Cotización"), QStringLiteral("Pedido"),       QStringLiteral("Remisión"),
+    QStringLiteral("Factura"),    QStringLiteral("Nota crédito"), QStringLiteral("Nota cargo"),
 };
 
 SaleRepository::SaleRepository(QSqlDatabase db, ClientRepository *clients, CajaRepository *caja,
@@ -120,8 +120,7 @@ Result<Sale> SaleRepository::create(const NewSale &s)
         paymentStr = s.paymentMethod;
     }
 
-    const QString folio = Counters::next(m_db, QStringLiteral("SALE_COUNTER"),
-                                         QStringLiteral("V"));
+    const QString folio = Counters::next(m_db, QStringLiteral("SALE_COUNTER"), QStringLiteral("V"));
     double paidVal, balanceVal;
     const double creditPart = payments.value(QStringLiteral("credito"), 0.0);
     if (status == QLatin1String("Pagada")) {
@@ -139,17 +138,16 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     if (docType.isEmpty() || docType == QLatin1String("Factura electrónica DIAN"))
         docType = Dian::defaultDocType(m_db);
     const QString cufe = Dian::generateCufe(m_db, folio);
-    const QString dianStatus =
-        s.offline ? QStringLiteral("PENDIENTE_OFFLINE") : QStringLiteral("SINCRONIZADO");
+    const QString dianStatus
+        = s.offline ? QStringLiteral("PENDIENTE_OFFLINE") : QStringLiteral("SINCRONIZADO");
 
     const QString today = QDate::currentDate().toString(Qt::ISODate);
     const QString due = status == QLatin1String("Pendiente")
-        ? QDate::currentDate().addDays(15).toString(Qt::ISODate)
-        : today;
+                            ? QDate::currentDate().addDays(15).toString(Qt::ISODate)
+                            : today;
 
-    QMap<QString, double> storedPayments = payments.isEmpty()
-        ? QMap<QString, double>{{paymentStr.toLower(), s.total}}
-        : payments;
+    QMap<QString, double> storedPayments
+        = payments.isEmpty() ? QMap<QString, double>{{paymentStr.toLower(), s.total}} : payments;
     QJsonObject payObj;
     for (auto it = storedPayments.begin(); it != storedPayments.end(); ++it)
         payObj[it.key()] = it.value();
@@ -201,16 +199,14 @@ Result<Sale> SaleRepository::create(const NewSale &s)
         ins.addBindValue(it.productId);
         ins.addBindValue(it.qty);
         ins.addBindValue(it.subtotal);
-        ins.addBindValue(it.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}")
-                                                          : it.attrsJson);
+        ins.addBindValue(it.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}") : it.attrsJson);
         ins.addBindValue(it.serial);
         ins.exec();
     }
 
     // Crédito a la cuenta del cliente
-    const double creditAmount = status == QLatin1String("Pendiente")
-        ? (payments.isEmpty() ? s.total : creditPart)
-        : 0.0;
+    const double creditAmount
+        = status == QLatin1String("Pendiente") ? (payments.isEmpty() ? s.total : creditPart) : 0.0;
     if (creditAmount > 0 && m_clients)
         m_clients->addCredit(s.clientName, creditAmount);
 
@@ -267,7 +263,8 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     if (!q.exec())
         return Result<Sale>::failure(q.lastError().text());
     if (m_audit)
-        m_audit->log(user, QStringLiteral("doc_%1_creado").arg(docType.toLower().replace(u' ', u'_')),
+        m_audit->log(user,
+                     QStringLiteral("doc_%1_creado").arg(docType.toLower().replace(u' ', u'_')),
                      QStringLiteral("%1 %2 $%3").arg(folio, client).arg(total, 0, 'f', 0));
     return Result<Sale>::success(*find(folio));
 }
@@ -277,8 +274,7 @@ Result<Sale> SaleRepository::advanceStatus(const QString &saleId, const QString 
 {
     const auto s = find(saleId);
     if (!s)
-        return Result<Sale>::failure(
-            QStringLiteral("Venta %1 no encontrada").arg(saleId));
+        return Result<Sale>::failure(QStringLiteral("Venta %1 no encontrada").arg(saleId));
     if (s->status == QLatin1String("Cancelada"))
         return Result<Sale>::failure(QStringLiteral("Venta cancelada no avanza"));
     QSqlQuery q(m_db);
@@ -352,7 +348,8 @@ Result<Sale> SaleRepository::createDebitNote(const QString &saleId, double amoun
     if (!note.ok())
         return note;
     if (m_audit)
-        m_audit->log(user, QStringLiteral("nota_cargo"),
-                     QStringLiteral("%1 ref %2 $%3").arg(note.value().id, saleId).arg(amount, 0, 'f', 0));
+        m_audit->log(
+            user, QStringLiteral("nota_cargo"),
+            QStringLiteral("%1 ref %2 $%3").arg(note.value().id, saleId).arg(amount, 0, 'f', 0));
     return note;
 }

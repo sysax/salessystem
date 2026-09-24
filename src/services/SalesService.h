@@ -28,8 +28,9 @@ class SalesService : public QObject
 {
     Q_OBJECT
 
-public:
-    struct ServiceItem {
+  public:
+    struct ServiceItem
+    {
         int productId = 0;
         double qty = 1.0;
         double priceOverride = 0.0; // 0 ⇒ precio lista
@@ -37,7 +38,8 @@ public:
         QString serial; // Fase 3: IMEI/serial (productos tracked)
         QString receta; // Fase 3: Nº receta (requires_prescription)
     };
-    struct LineTotal {
+    struct LineTotal
+    {
         int productId = 0;
         QString name;
         QString sku;
@@ -54,13 +56,15 @@ public:
         QString serial;
         QString receta;
     };
-    struct TaxBucket {
+    struct TaxBucket
+    {
         QString name;
         double rate = 0.0;
         double base = 0.0; // Σ(subtotal − descuento) de sus líneas
         double tax = 0.0;  // Σ impuesto de sus líneas (agregado, no recalculado)
     };
-    struct Totals {
+    struct Totals
+    {
         double subtotal = 0.0;
         double discount = 0.0;
         double tax = 0.0;
@@ -69,7 +73,8 @@ public:
         QList<LineTotal> lines;
         QList<TaxBucket> buckets; // desglose por tasa
     };
-    struct CreatedSale {
+    struct CreatedSale
+    {
         QString id;
         double total = 0.0;
         QString cufe;
@@ -81,20 +86,17 @@ public:
     explicit SalesService(QSqlDatabase db, ProductRepository *products, SaleRepository *sales,
                           InventoryRepository *inventory, ClientRepository *clients,
                           CajaRepository *caja, PromoRepository *promos, EventBus *bus = nullptr,
-                          SettingsService *settings = nullptr,
-                          AuditRepository *audit = nullptr,
+                          SettingsService *settings = nullptr, AuditRepository *audit = nullptr,
                           SerialRepository *serials = nullptr, QObject *parent = nullptr);
 
     // Crea venta completa. payments: {"efectivo": X, "credito": Y} o vacío +
     // paymentMethod ("Efectivo"|"Credito"|...). promoCode opcional.
     // role: rol del vendedor (productos controlled exigen Administrador).
     Result<CreatedSale> create(const QList<ServiceItem> &items, const QString &clientName,
-                               const QMap<QString, double> &payments,
-                               const QString &paymentMethod, const QString &promoCode,
-                               const QString &vendedor, bool offline = false,
-                               const QString &role = {});
-    Result<CreatedSale> cancel(const QString &saleId, const QString &reason,
-                               const QString &user);
+                               const QMap<QString, double> &payments, const QString &paymentMethod,
+                               const QString &promoCode, const QString &vendedor,
+                               bool offline = false, const QString &role = {});
+    Result<CreatedSale> cancel(const QString &saleId, const QString &reason, const QString &user);
     Totals calculateTotals(const QList<ServiceItem> &items) const;
 
     // Impuesto desde texto BD ("IVA 19%"→19, "19"→19, otro→0). Legacy: se
@@ -108,12 +110,11 @@ public:
     static QString bucketsToJson(const QList<TaxBucket> &buckets);
     static QList<TaxBucket> bucketsFromJson(const QString &json);
 
-private:
+  private:
     Result<Totals> buildTotals(const QList<ServiceItem> &items, QString &error,
                                const QString &clientName = {}) const;
     // Fase 4: precio según lista del cliente (mayorista → price_wholesale).
-    double priceFor(const Product &p, double priceOverride,
-                    const QString &clientName) const;
+    double priceFor(const Product &p, double priceOverride, const QString &clientName) const;
     // Fase 3: producto con seguimiento de serial (flag attrs o seriales registrados).
     bool isTracked(const Product &p) const;
 

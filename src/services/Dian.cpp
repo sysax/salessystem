@@ -40,8 +40,8 @@ QString generateCufe(QSqlDatabase db, const QString &folio)
     // CUFE simulado con formato estable: SHA-1 de los campos clave
     // (en modo real: SHA-1 del XML UBL según resolución DIAN).
     Q_UNUSED(db);
-    const QString raw = folio + u'|'
-        + QDateTime::currentDateTime().toString(Qt::ISODateWithMs).left(19);
+    const QString raw
+        = folio + u'|' + QDateTime::currentDateTime().toString(Qt::ISODateWithMs).left(19);
     return QString::fromLatin1(
         QCryptographicHash::hash(raw.toUtf8(), QCryptographicHash::Sha1).toHex());
 }

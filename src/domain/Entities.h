@@ -7,7 +7,8 @@
 #include <QMap>
 #include <QString>
 
-struct Product {
+struct Product
+{
     int id = 0;
     QString sku;
     QString barcode;
@@ -37,12 +38,14 @@ struct Product {
     QString kitJson = QStringLiteral("[]");
 };
 
-struct KitComponent {
+struct KitComponent
+{
     QString sku;
     double qty = 0.0;
 };
 
-struct Client {
+struct Client
+{
     int id = 0;
     QString name;
     QString nit;
@@ -61,7 +64,8 @@ struct Client {
     QString status = QStringLiteral("activo");
 };
 
-struct Supplier {
+struct Supplier
+{
     int id = 0;
     QString name;
     QString nit;
@@ -77,7 +81,8 @@ struct Supplier {
 };
 
 // Línea de venta (carrito y sale_items). qty decimal desde Fase 2 (granel).
-struct SaleItem {
+struct SaleItem
+{
     int productId = 0;
     double qty = 0.0;
     double subtotal = 0.0;
@@ -86,7 +91,8 @@ struct SaleItem {
     QString serial;
 };
 
-struct Sale {
+struct Sale
+{
     QString id;
     QString date;
     QString client;
@@ -110,13 +116,15 @@ struct Sale {
     QString dianStatus;
 };
 
-struct PurchaseItem {
+struct PurchaseItem
+{
     QString sku;
     double qty = 0.0;
     double priceBuy = 0.0;
 };
 
-struct Purchase {
+struct Purchase
+{
     QString id;
     QString date;
     QString supplier;
@@ -126,7 +134,8 @@ struct Purchase {
     QString notes;
 };
 
-struct Promo {
+struct Promo
+{
     int id = 0;
     QString name;
     QString type; // porcentaje|monto_fijo|2x1|3x2|volumen|cupon|happy_hour
@@ -137,12 +146,14 @@ struct Promo {
     QString desc;
 };
 
-struct CajaSale {
+struct CajaSale
+{
     QString id;
     double total = 0.0;
 };
 
-struct CajaStatus {
+struct CajaStatus
+{
     bool open = false;
     double openingAmount = 0.0;
     QString openingTs;
@@ -152,7 +163,8 @@ struct CajaStatus {
     double expected = 0.0;
 };
 
-struct CajaCloseResult {
+struct CajaCloseResult
+{
     double expected = 0.0;
     double counted = 0.0;
     double diff = 0.0;
@@ -160,7 +172,8 @@ struct CajaCloseResult {
     double totalSales = 0.0;
 };
 
-struct InventoryMovement {
+struct InventoryMovement
+{
     int id = 0;
     QString ts;
     QString sku;
@@ -173,13 +186,15 @@ struct InventoryMovement {
     QString user;
 };
 
-struct InventoryValue {
+struct InventoryValue
+{
     double costValue = 0.0;
     double saleValue = 0.0;
     double units = 0.0;
 };
 
-struct Payable {
+struct Payable
+{
     QString id;
     QString supplier;
     QString due;
@@ -190,7 +205,8 @@ struct Payable {
     QString status;
 };
 
-struct CxcPayment {
+struct CxcPayment
+{
     int id = 0;
     QString saleId;
     QString date;
@@ -199,7 +215,8 @@ struct CxcPayment {
     QString user;
 };
 
-struct AuditEntry {
+struct AuditEntry
+{
     int id = 0;
     QString ts;
     QString user;

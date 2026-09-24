@@ -12,7 +12,7 @@ class ClientRepository : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit ClientRepository(QSqlDatabase db, AuditRepository *audit = nullptr,
                               QObject *parent = nullptr);
 
@@ -31,7 +31,7 @@ public:
 
     static Client rowToClient(const QSqlQuery &q);
 
-private:
+  private:
     QSqlDatabase m_db;
     AuditRepository *m_audit = nullptr;
 };
@@ -41,7 +41,7 @@ class SupplierRepository : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit SupplierRepository(QSqlDatabase db, AuditRepository *audit = nullptr,
                                 QObject *parent = nullptr);
 
@@ -56,7 +56,7 @@ public:
 
     static Supplier rowToSupplier(const QSqlQuery &q);
 
-private:
+  private:
     QSqlDatabase m_db;
     AuditRepository *m_audit = nullptr;
 };

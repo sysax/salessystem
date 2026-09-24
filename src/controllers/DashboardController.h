@@ -15,19 +15,21 @@ class DashboardController : public QObject
     Q_OBJECT
     Q_PROPERTY(QVariantMap data READ data NOTIFY dataChanged)
 
-public:
+  public:
     explicit DashboardController(ReportService *reports, InventoryRepository *inventory,
                                  ProductRepository *products = nullptr,
-                                 SerialRepository *serials = nullptr,
-                                 QObject *parent = nullptr);
+                                 SerialRepository *serials = nullptr, QObject *parent = nullptr);
 
-    QVariantMap data() const { return m_data; }
+    QVariantMap data() const
+    {
+        return m_data;
+    }
     Q_INVOKABLE void refresh();
 
-signals:
+  signals:
     void dataChanged();
 
-private:
+  private:
     static QVariantList toExpiring(const QList<Product> &ps);
 
     ReportService *m_reports = nullptr;

@@ -11,7 +11,7 @@ class ReportService : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit ReportService(QSqlDatabase db, QObject *parent = nullptr);
 
     Q_INVOKABLE QVariantMap stats() const;
@@ -23,7 +23,7 @@ public:
     Q_INVOKABLE double averageTicket() const;
     Q_INVOKABLE QVariantMap salesForPeriod(const QString &range) const; // dia|semana|mes|año
     Q_INVOKABLE QVariantList salesByDay(int days = 7) const;
-    Q_INVOKABLE QVariantMap salesSummary() const; // conteo por estado
+    Q_INVOKABLE QVariantMap salesSummary() const;    // conteo por estado
     Q_INVOKABLE QVariantMap incomeStatement() const; // estado de resultados
     Q_INVOKABLE QVariantMap cashFlow() const;
     Q_INVOKABLE QVariantMap taxes() const;
@@ -47,7 +47,7 @@ public:
     // Exporta PDF (QPdfWriter); retorna ruta o "" en error.
     Q_INVOKABLE QString exportPdf(const QString &type, const QString &dir) const;
 
-private:
+  private:
     QString setting(const QString &key, const QString &fallback = {}) const;
     QSqlDatabase m_db;
 };

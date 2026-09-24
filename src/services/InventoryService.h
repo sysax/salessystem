@@ -17,13 +17,15 @@ class InventoryService : public QObject
 {
     Q_OBJECT
 
-public:
-    struct StockResult {
+  public:
+    struct StockResult
+    {
         QString sku;
         double newStock = 0.0;
         double newCost = 0.0;
     };
-    struct Valuation {
+    struct Valuation
+    {
         double totalValue = 0.0;
         int productsCount = 0;
     };
@@ -37,11 +39,11 @@ public:
                                          const QString &supplier, const QString &invoice,
                                          const QString &user);
     // Ajuste ±: motivo obligatorio, nunca stock negativo
-    Result<StockResult> registerAdjustment(const QString &sku, double delta,
-                                           const QString &reason, const QString &user);
+    Result<StockResult> registerAdjustment(const QString &sku, double delta, const QString &reason,
+                                           const QString &user);
     // Fase 4: merma (salida tipo "Merma" para el reporte de desperdicio).
-    Result<StockResult> registerWaste(const QString &sku, double qty,
-                                      const QString &reason, const QString &user);
+    Result<StockResult> registerWaste(const QString &sku, double qty, const QString &reason,
+                                      const QString &user);
     // Cambio de ubicación (sin mover unidades)
     StatusResult transfer(const QString &sku, double qty, const QString &toLocation,
                           const QString &reason, const QString &user);
@@ -50,7 +52,7 @@ public:
     Valuation valuation() const;
     QList<InventoryMovement> movementsBySku(const QString &sku) const;
 
-private:
+  private:
     QSqlDatabase m_db;
     ProductRepository *m_products = nullptr;
     InventoryRepository *m_inventory = nullptr;

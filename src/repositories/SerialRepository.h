@@ -11,7 +11,8 @@
 
 // Fase 3: seriales/IMEI por producto (tabla serials).
 // status: in_stock | sold | rma | repaired.
-struct SerialInfo {
+struct SerialInfo
+{
     int id = 0;
     int productId = 0;
     QString sku;
@@ -26,7 +27,7 @@ class SerialRepository : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit SerialRepository(QSqlDatabase db, QObject *parent = nullptr);
 
     QList<SerialInfo> inStock(const QString &sku) const;
@@ -42,14 +43,13 @@ public:
     StatusResult sell(const QString &serial, const QString &saleId);
     // Revierte una venta (cancelación): sold → in_stock de esa venta.
     int revertSale(const QString &saleId);
-    StatusResult setStatus(const QString &serial, const QString &status,
-                           const QString &notes = {});
+    StatusResult setStatus(const QString &serial, const QString &status, const QString &notes = {});
 
     // Garantía: fecha venta + warranty_months (attrs del producto).
     QVariantMap warrantyStatus(const QString &serial, int warrantyMonths) const;
 
     static SerialInfo rowToSerial(const QSqlQuery &q);
 
-private:
+  private:
     QSqlDatabase m_db;
 };

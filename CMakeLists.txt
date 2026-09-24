@@ -6,18 +6,43 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Fase 0 (MAP_PRO.md): warnings estrictos en nuestro código
+# (headers de Qt entran como SYSTEM y no se ven afectados).
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    add_compile_options(-Wall -Wextra -Werror)
+    # Los structs del dominio llevan defaults (NSDMI) y se inicializan
+    # parcial con inicializadores designados: ese warning solo mete ruido.
+    add_compile_options(-Wno-missing-field-initializers)
+endif()
+# Sanitizers opcionales: cmake -DENABLE_SANITIZERS=ON (job CI dedicado).
+option(ENABLE_SANITIZERS "Compilar con ASan/UBSan" OFF)
+if(ENABLE_SANITIZERS)
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
+
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Qt 6.11 en ~/Qt (no está en PATH): pasar
 # -DCMAKE_PREFIX_PATH=$HOME/Qt/6.11.2/gcc_64
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Sql Concurrent Test Network Gui)
+find_package(
+    Qt6 REQUIRED
+    COMPONENTS Quick
+               QuickControls2
+               Sql
+               Concurrent
+               Test
+               Network
+               Gui
+)
 
 qt_standard_project_setup()
 
 # Lógica compartida app + tests (sin main.cpp)
-add_library(sales_core STATIC
+add_library(
+    sales_core STATIC
     src/core/DatabaseManager.h
     src/core/DatabaseManager.cpp
     src/core/EventBus.h
@@ -91,43 +116,46 @@ add_library(sales_core STATIC
     src/controllers/SettingsController.h
     src/controllers/SettingsController.cpp
 )
-target_link_libraries(sales_core PUBLIC
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Sql
-    Qt6::Concurrent
-    Qt6::Network
+target_link_libraries(
+    sales_core
+    PUBLIC Qt6::Core
+           Qt6::Gui
+           Qt6::Sql
+           Qt6::Concurrent
+           Qt6::Network
 )
 target_include_directories(sales_core PUBLIC src)
 
 # SQL embebido en sales_core: lo usan la app y los tests por igual
 # (fallback a sql/*.sql en disco para iterar sin recompilar).
-qt_add_resources(sales_core "sql_files"
-    PREFIX "/sql"
-    BASE "sql"
+qt_add_resources(
+    sales_core
+    "sql_files"
+    PREFIX
+    "/sql"
+    BASE
+    "sql"
     FILES
-        sql/schema.sql
-        sql/seed.sql
-        sql/seed_min.sql
-        sql/seeds/farmacia.sql
-        sql/seeds/abarrotes.sql
-        sql/seeds/celulares.sql
-        sql/seeds/ferreteria.sql
-        sql/seeds/ropa.sql
-        sql/seeds/restaurante.sql
-        sql/seeds/cafeteria.sql
-        sql/seeds/panaderia.sql
-        sql/seeds/peluqueria.sql
-        sql/seeds/taller.sql
-        sql/seeds/lavanderia.sql
-        sql/seeds/consultorio.sql
-        sql/seeds/veterinaria.sql
-        sql/seeds/miscelanea.sql
+    sql/schema.sql
+    sql/seed.sql
+    sql/seed_min.sql
+    sql/seeds/farmacia.sql
+    sql/seeds/abarrotes.sql
+    sql/seeds/celulares.sql
+    sql/seeds/ferreteria.sql
+    sql/seeds/ropa.sql
+    sql/seeds/restaurante.sql
+    sql/seeds/cafeteria.sql
+    sql/seeds/panaderia.sql
+    sql/seeds/peluqueria.sql
+    sql/seeds/taller.sql
+    sql/seeds/lavanderia.sql
+    sql/seeds/consultorio.sql
+    sql/seeds/veterinaria.sql
+    sql/seeds/miscelanea.sql
 )
 
-qt_add_executable(QtSalesSystemApp
-    src/main.cpp
-)
+qt_add_executable(QtSalesSystemApp src/main.cpp)
 
 # Qt 6.5+ policy QTP0004: mantener import relativo "components" sin qmldir
 if(COMMAND qt_policy)
@@ -139,47 +167,51 @@ endif()
 # Debe ir ANTES de qt_add_qml_module: el módulo lee las propiedades al crearse.
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
-qt_add_qml_module(QtSalesSystemApp
-    URI QtSalesSystem
-    VERSION 1.0
+qt_add_qml_module(
+    QtSalesSystemApp
+    URI
+    QtSalesSystem
+    VERSION
+    1.0
     QML_FILES
-        qml/Main.qml
-        qml/Theme.qml
-        qml/AppSidebar.qml
-        qml/Card.qml
-        qml/LoginPage.qml
-        qml/DashboardPage.qml
-        qml/PosPage.qml
-        qml/ProductsPage.qml
-        qml/SalesPage.qml
-        qml/ClientsPage.qml
-        qml/SuppliersPage.qml
-        qml/InventoryPage.qml
-        qml/PurchasesPage.qml
-        qml/ReceivablesPage.qml
-        qml/PayablesPage.qml
-        qml/ReportsPage.qml
-        qml/SettingsPage.qml
-        qml/LotsPage.qml
-        qml/SerialsPage.qml
-        qml/PromosPage.qml
-        qml/UsersPage.qml
-        qml/Utils.js
-        qml/components/Toast.qml
-        qml/components/LoadingOverlay.qml
-        qml/components/SortHeader.qml
-        qml/components/Pager.qml
-        qml/components/EmptyState.qml
-        qml/components/ConfirmDialog.qml
-        qml/components/BusinessBadge.qml
+    qml/Main.qml
+    qml/Theme.qml
+    qml/AppSidebar.qml
+    qml/Card.qml
+    qml/LoginPage.qml
+    qml/DashboardPage.qml
+    qml/PosPage.qml
+    qml/ProductsPage.qml
+    qml/SalesPage.qml
+    qml/ClientsPage.qml
+    qml/SuppliersPage.qml
+    qml/InventoryPage.qml
+    qml/PurchasesPage.qml
+    qml/ReceivablesPage.qml
+    qml/PayablesPage.qml
+    qml/ReportsPage.qml
+    qml/SettingsPage.qml
+    qml/LotsPage.qml
+    qml/SerialsPage.qml
+    qml/PromosPage.qml
+    qml/UsersPage.qml
+    qml/Utils.js
+    qml/components/Toast.qml
+    qml/components/LoadingOverlay.qml
+    qml/components/SortHeader.qml
+    qml/components/Pager.qml
+    qml/components/EmptyState.qml
+    qml/components/ConfirmDialog.qml
+    qml/components/BusinessBadge.qml
 )
 
-target_link_libraries(QtSalesSystemApp PRIVATE
-    sales_core
-    Qt6::Quick
-    Qt6::QuickControls2
-    Qt6::Sql
-    Qt6::Concurrent
+target_link_libraries(
+    QtSalesSystemApp
+    PRIVATE sales_core
+            Qt6::Quick
+            Qt6::QuickControls2
+            Qt6::Sql
+            Qt6::Concurrent
 )
 
 # El módulo QML genera un directorio "QtSalesSystem/" en el build;
@@ -191,6 +223,47 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-install(TARGETS QtSalesSystemApp
-    RUNTIME DESTINATION bin
+# Fase 0 (MAP_PRO.md): gates de higiene. Fallan solo con errores reales
+# (qmllint ignora warnings de context properties: exit 0).
+find_program(CLANG_FORMAT_EXE NAMES clang-format)
+if(CLANG_FORMAT_EXE)
+    file(
+        GLOB_RECURSE
+        FORMAT_SOURCES
+        CONFIGURE_DEPENDS
+        ${CMAKE_SOURCE_DIR}/src/*.cpp
+        ${CMAKE_SOURCE_DIR}/src/*.h
+        ${CMAKE_SOURCE_DIR}/tests/*.cpp
+        ${CMAKE_SOURCE_DIR}/tests/*.h
+    )
+    add_custom_target(
+        format-check COMMAND ${CLANG_FORMAT_EXE} --dry-run --Werror ${FORMAT_SOURCES}
+        COMMENT "Verificando formato C++ (.clang-format)"
+    )
+endif()
+find_program(CMAKE_FORMAT_EXE NAMES cmake-format)
+if(CMAKE_FORMAT_EXE)
+    add_custom_target(
+        cmake-format-check COMMAND ${CMAKE_FORMAT_EXE} --check ${CMAKE_SOURCE_DIR}/CMakeLists.txt
+                                   ${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt
+        COMMENT "Verificando formato CMake (.cmake-format.py)"
+    )
+endif()
+find_program(
+    QMLLINT_EXE NAMES qmllint HINTS "${CMAKE_PREFIX_PATH}/bin" "$ENV{HOME}/Qt/6.11.2/gcc_64/bin"
 )
+if(QMLLINT_EXE)
+    file(
+        GLOB
+        QML_LINT_FILES
+        CONFIGURE_DEPENDS
+        ${CMAKE_SOURCE_DIR}/qml/*.qml
+        ${CMAKE_SOURCE_DIR}/qml/components/*.qml
+    )
+    add_custom_target(
+        qml-lint COMMAND ${QMLLINT_EXE} ${QML_LINT_FILES}
+        COMMENT "Lint QML (solo errores de sintaxis)"
+    )
+endif()
+
+install(TARGETS QtSalesSystemApp RUNTIME DESTINATION bin)

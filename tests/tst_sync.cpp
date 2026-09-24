@@ -11,7 +11,7 @@ class TstSync : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void initTestCase()
     {
         QVERIFY(m_tmp.isValid());
@@ -51,7 +51,7 @@ private slots:
         QCOMPARE(m_sync->metrics()["circuit"].toString(), QStringLiteral("closed"));
     }
 
-private:
+  private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_dbm = nullptr;
     SyncService *m_sync = nullptr;

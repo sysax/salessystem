@@ -16,7 +16,7 @@ class DatabaseManager : public QObject
     Q_PROPERTY(QString dbPath READ dbPath CONSTANT)
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY openChanged)
 
-public:
+  public:
     explicit DatabaseManager(QObject *parent = nullptr);
 
     // Abre (o crea + inicializa) la base. customPath vacío =>
@@ -25,9 +25,18 @@ public:
     Q_INVOKABLE void close();
 
     bool isOpen() const;
-    QString dbPath() const { return m_dbPath; }
-    QString statusMessage() const { return m_status; }
-    QSqlDatabase database() const { return m_db; }
+    QString dbPath() const
+    {
+        return m_dbPath;
+    }
+    QString statusMessage() const
+    {
+        return m_status;
+    }
+    QSqlDatabase database() const
+    {
+        return m_db;
+    }
 
     // Utilidad fase 1: conteo de filas por tabla para verificar el seed.
     Q_INVOKABLE int tableRowCount(const QString &table) const;
@@ -35,15 +44,14 @@ public:
     // Solo añade: no borra usuarios, ventas ni productos existentes.
     Q_INVOKABLE bool applySeedFile(const QString &name);
 
-signals:
+  signals:
     void openChanged();
 
-private:
+  private:
     bool applySqlFile(const QString &resourcePath, const QString &diskFallback);
     bool migrateLegacyColumns();
     bool ensureSeeded(); // aplica sql/seed.sql solo si users está vacía
-    bool ensureColumn(const QString &table, const QString &column,
-                      const QString &definition);
+    bool ensureColumn(const QString &table, const QString &column, const QString &definition);
 
     QSqlDatabase m_db;
     QString m_dbPath;

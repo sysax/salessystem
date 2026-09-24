@@ -27,8 +27,8 @@ QList<SerialInfo> SerialRepository::inStock(const QString &sku) const
 {
     QList<SerialInfo> out;
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "SELECT * FROM serials WHERE sku=? AND status='in_stock' ORDER BY id"));
+    q.prepare(
+        QStringLiteral("SELECT * FROM serials WHERE sku=? AND status='in_stock' ORDER BY id"));
     q.addBindValue(sku);
     if (!q.exec())
         return out;
@@ -40,8 +40,7 @@ QList<SerialInfo> SerialRepository::inStock(const QString &sku) const
 int SerialRepository::inStockCount(const QString &sku) const
 {
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "SELECT COUNT(*) FROM serials WHERE sku=? AND status='in_stock'"));
+    q.prepare(QStringLiteral("SELECT COUNT(*) FROM serials WHERE sku=? AND status='in_stock'"));
     q.addBindValue(sku);
     return (q.exec() && q.next()) ? q.value(0).toInt() : 0;
 }
@@ -85,12 +84,10 @@ StatusResult SerialRepository::add(int productId, const QString &sku, const QStr
     if (clean.size() < 4)
         return StatusResult::failure(QStringLiteral("Serial mínimo 4 caracteres"));
     if (find(clean))
-        return StatusResult::failure(
-            QStringLiteral("Serial %1 ya registrado").arg(clean));
+        return StatusResult::failure(QStringLiteral("Serial %1 ya registrado").arg(clean));
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "INSERT INTO serials (product_id, sku, serial, status, imei2, notes) "
-        "VALUES (?,?,?,'in_stock',?,?)"));
+    q.prepare(QStringLiteral("INSERT INTO serials (product_id, sku, serial, status, imei2, notes) "
+                             "VALUES (?,?,?,'in_stock',?,?)"));
     q.addBindValue(productId);
     q.addBindValue(sku);
     q.addBindValue(clean);
@@ -179,6 +176,7 @@ QVariantMap SerialRepository::warrantyStatus(const QString &serial, int warranty
             {"warrantyMonths", warrantyMonths > 0 ? warrantyMonths : 12},
             {"expiresAt", expires.toString(Qt::ISODate)},
             {"inWarranty", active},
-            {"detail", active ? QStringLiteral("En garantía hasta %1").arg(expires.toString(Qt::ISODate))
-                              : QStringLiteral("Garantía vencida el %1").arg(expires.toString(Qt::ISODate))}};
+            {"detail",
+             active ? QStringLiteral("En garantía hasta %1").arg(expires.toString(Qt::ISODate))
+                    : QStringLiteral("Garantía vencida el %1").arg(expires.toString(Qt::ISODate))}};
 }

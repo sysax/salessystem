@@ -18,9 +18,8 @@ QList<Sale> ReceivablesRepository::pending() const
 {
     QList<Sale> out;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral(
-            "SELECT * FROM sales WHERE balance>0 AND status NOT IN "
-            "('Cancelada','Cotización','Pedido')")))
+    if (!q.exec(QStringLiteral("SELECT * FROM sales WHERE balance>0 AND status NOT IN "
+                               "('Cancelada','Cotización','Pedido')")))
         return out;
     while (q.next())
         out << SaleRepository::rowToSale(q);
@@ -72,14 +71,14 @@ Result<Sale> ReceivablesRepository::addPayment(const QString &saleId, double amo
     if (s->balance <= 0)
         return Result<Sale>::failure(QStringLiteral("Venta sin saldo pendiente"));
     if (amount <= 0 || amount > s->balance)
-        return Result<Sale>::failure(
-            QStringLiteral("Monto 0 < %1 <= balance %2").arg(amount, 0, 'f', 2).arg(s->balance, 0, 'f', 2));
+        return Result<Sale>::failure(QStringLiteral("Monto 0 < %1 <= balance %2")
+                                         .arg(amount, 0, 'f', 2)
+                                         .arg(s->balance, 0, 'f', 2));
     const double newBal = s->balance - amount;
     const bool settled = newBal <= 0.01;
     const QString newStatus = settled ? QStringLiteral("Pagada") : s->status;
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "UPDATE sales SET paid=?, balance=?, status=?, estado=? WHERE id=?"));
+    q.prepare(QStringLiteral("UPDATE sales SET paid=?, balance=?, status=?, estado=? WHERE id=?"));
     q.addBindValue(s->paid + amount);
     q.addBindValue(settled ? 0.0 : newBal);
     q.addBindValue(newStatus);
@@ -186,8 +185,10 @@ StatusResult PayablesRepository::create(const Payable &p)
     return StatusResult::success({});
 }
 
-Result<PayablesRepository::PaymentResult> PayablesRepository::addPayment(
-    const QString &payableId, double amount, const QString &method, const QString &user)
+Result<PayablesRepository::PaymentResult> PayablesRepository::addPayment(const QString &payableId,
+                                                                         double amount,
+                                                                         const QString &method,
+                                                                         const QString &user)
 {
     const auto p = find(payableId);
     if (!p)

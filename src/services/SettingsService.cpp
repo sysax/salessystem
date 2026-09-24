@@ -24,22 +24,12 @@ const QString SettingsService::KRequireSerial = QStringLiteral("require_serial")
 const QString SettingsService::KWeightUnit = QStringLiteral("weight_unit_default");
 
 const QStringList SettingsService::BusinessTypes = {
-    QStringLiteral("farmacia"),      QStringLiteral("abarrotes"),
-    QStringLiteral("celulares"),     QStringLiteral("miscelanea"),
-    QStringLiteral("ferreteria"),    QStringLiteral("ropa"),
-    QStringLiteral("restaurante"),   QStringLiteral("cafeteria"),
-    QStringLiteral("panaderia"),     QStringLiteral("peluqueria"),
-    QStringLiteral("taller"),        QStringLiteral("lavanderia"),
-    QStringLiteral("consultorio"),   QStringLiteral("veterinaria"),
+    QStringLiteral("farmacia"),    QStringLiteral("abarrotes"),   QStringLiteral("celulares"),
+    QStringLiteral("miscelanea"),  QStringLiteral("ferreteria"),  QStringLiteral("ropa"),
+    QStringLiteral("restaurante"), QStringLiteral("cafeteria"),   QStringLiteral("panaderia"),
+    QStringLiteral("peluqueria"),  QStringLiteral("taller"),      QStringLiteral("lavanderia"),
+    QStringLiteral("consultorio"), QStringLiteral("veterinaria"),
 };
-
-namespace
-{
-QString withDefault(const QVariantMap &all, const QString &key, const QString &dflt)
-{
-    return all.value(key, dflt).toString();
-}
-} // namespace
 
 SettingsService::SettingsService(SettingsRepository *repo, EventBus *bus, QObject *parent)
     : QObject(parent), m_repo(repo), m_bus(bus)
@@ -161,8 +151,8 @@ QVariantMap SettingsService::all() const
     if (!m.contains(KDefaultTaxRate))
         m[KDefaultTaxRate] = QStringLiteral("19");
     if (!m.contains(KTaxRatesJson))
-        m[KTaxRatesJson] =
-            QStringLiteral("[{\"name\":\"IVA 19%\",\"rate\":19},{\"name\":\"Excluido\",\"rate\":0}]");
+        m[KTaxRatesJson] = QStringLiteral(
+            "[{\"name\":\"IVA 19%\",\"rate\":19},{\"name\":\"Excluido\",\"rate\":0}]");
     if (!m.contains(KMoraRate))
         m[KMoraRate] = QStringLiteral("2");
     if (!m.contains(KRequireExpiry))
@@ -178,9 +168,20 @@ QString SettingsService::validate(const QVariantMap &m, QVariantMap &cleaned) co
 {
     cleaned.clear();
     static const QStringList kKnown = {
-        KBusinessName, KBusinessType, KNit, KAddress, KPhone, KLogoPath,
-        KCurrencySymbol, KCurrencyDecimals, KDefaultTaxRate, KTaxRatesJson,
-        KMoraRate, KRequireExpiry, KRequireSerial, KWeightUnit,
+        KBusinessName,
+        KBusinessType,
+        KNit,
+        KAddress,
+        KPhone,
+        KLogoPath,
+        KCurrencySymbol,
+        KCurrencyDecimals,
+        KDefaultTaxRate,
+        KTaxRatesJson,
+        KMoraRate,
+        KRequireExpiry,
+        KRequireSerial,
+        KWeightUnit,
         QStringLiteral("business_tax_id"),
     };
     for (auto it = m.begin(); it != m.end(); ++it) {
@@ -204,8 +205,7 @@ QString SettingsService::validate(const QVariantMap &m, QVariantMap &cleaned) co
     }
     if (cleaned.contains(KTaxRatesJson)) {
         QJsonParseError err{};
-        const auto doc =
-            QJsonDocument::fromJson(cleaned[KTaxRatesJson].toByteArray(), &err);
+        const auto doc = QJsonDocument::fromJson(cleaned[KTaxRatesJson].toByteArray(), &err);
         if (err.error != QJsonParseError::NoError || !doc.isArray())
             return QStringLiteral("Lista de tasas inválida (JSON array esperado)");
     }

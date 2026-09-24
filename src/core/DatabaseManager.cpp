@@ -7,8 +7,7 @@
 #include <QSqlQuery>
 #include <QStandardPaths>
 
-DatabaseManager::DatabaseManager(QObject *parent)
-    : QObject(parent)
+DatabaseManager::DatabaseManager(QObject *parent) : QObject(parent)
 {
 }
 
@@ -19,8 +18,7 @@ bool DatabaseManager::initialize(const QString &customPath)
 
     m_dbPath = customPath;
     if (m_dbPath.isEmpty()) {
-        const QString dir =
-            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
         QDir().mkpath(dir);
         m_dbPath = dir + QStringLiteral("/sistema_ventas.db");
     }
@@ -68,7 +66,7 @@ int DatabaseManager::tableRowCount(const QString &table) const
         QStringLiteral("sales"),        QStringLiteral("sale_items"),
         QStringLiteral("purchases"),    QStringLiteral("inventory_movements"),
         QStringLiteral("payables"),     QStringLiteral("payments_cxc"),
-        QStringLiteral("payments_cxp"),         QStringLiteral("promos"),
+        QStringLiteral("payments_cxp"), QStringLiteral("promos"),
         QStringLiteral("audit_log"),    QStringLiteral("caja"),
         QStringLiteral("counters"),     QStringLiteral("outbox"),
         QStringLiteral("settings"),     QStringLiteral("recovery_tokens"),
@@ -146,7 +144,8 @@ bool DatabaseManager::ensureSeeded()
         return true;
     // Base limpia: solo admin (seed.sql y seed_min.sql siembran lo mismo).
     if (qgetenv("QTSALES_SIN_DEMO") == QByteArrayLiteral("1"))
-        return applySqlFile(QStringLiteral(":/sql/seed_min.sql"), QStringLiteral("sql/seed_min.sql"));
+        return applySqlFile(QStringLiteral(":/sql/seed_min.sql"),
+                            QStringLiteral("sql/seed_min.sql"));
     return applySqlFile(QStringLiteral(":/sql/seed.sql"), QStringLiteral("sql/seed.sql"));
 }
 
@@ -155,7 +154,8 @@ bool DatabaseManager::migrateLegacyColumns()
     // Réplica de _migrate_users / _migrate_products (data/db.py):
     // ALTER TABLE ADD COLUMN solo si falta. No hashea aquí: el hash
     // PBKDF2 vive en AuthService (fase 2).
-    struct Column {
+    struct Column
+    {
         const char *table;
         const char *name;
         const char *definition; // "NAME TYPE DEFAULT ..."
@@ -176,13 +176,12 @@ bool DatabaseManager::migrateLegacyColumns()
         {"products", "is_kit", "is_kit INTEGER DEFAULT 0"},
         {"products", "kit_json", "kit_json TEXT DEFAULT '[]'"},
         {"sales", "tax_breakdown", "tax_breakdown TEXT DEFAULT ''"}, // Fase 1: desglose por tasa
-        {"products", "attrs_json", "attrs_json TEXT DEFAULT '{}'"}, // Fase 3: metadatos vertical
+        {"products", "attrs_json", "attrs_json TEXT DEFAULT '{}'"},  // Fase 3: metadatos vertical
         {"sale_items", "attrs_json", "attrs_json TEXT DEFAULT '{}'"},
         {"sale_items", "serial", "serial TEXT DEFAULT ''"},
     };
     for (const Column &c : kColumns) {
-        if (!ensureColumn(QString::fromLatin1(c.table),
-                          QString::fromLatin1(c.name),
+        if (!ensureColumn(QString::fromLatin1(c.table), QString::fromLatin1(c.name),
                           QString::fromLatin1(c.definition)))
             return false;
     }
@@ -199,8 +198,7 @@ bool DatabaseManager::ensureColumn(const QString &table, const QString &column,
             return true; // ya existe
     }
     QSqlQuery alter(m_db);
-    if (!alter.exec(
-            QStringLiteral("ALTER TABLE \"%1\" ADD COLUMN %2").arg(table, definition))) {
+    if (!alter.exec(QStringLiteral("ALTER TABLE \"%1\" ADD COLUMN %2").arg(table, definition))) {
         m_status = QStringLiteral("migrate: ") + alter.lastError().text();
         return false;
     }

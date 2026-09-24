@@ -1,7 +1,7 @@
 #include "CatalogController.h"
 
 CatalogController::CatalogController(ProductRepository *products, CategoryRepository *categories,
-                                       SettingsService *settings, QObject *parent)
+                                     SettingsService *settings, QObject *parent)
     : QObject(parent), m_repos(products), m_cats(categories), m_settings(settings)
 {
     search({});
@@ -161,7 +161,7 @@ void CatalogController::reloadCategories(const QString &businessType)
 }
 
 QVariantMap CatalogController::addCategory(const QString &name, int parentId,
-                                          const QString &businessType)
+                                           const QString &businessType)
 {
     if (!m_cats)
         return {{"ok", false}, {"error", QStringLiteral("Sin repositorio de categorías")}};

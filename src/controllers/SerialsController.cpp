@@ -9,14 +9,10 @@ SerialsController::SerialsController(SerialRepository *serials, ProductRepositor
 
 QVariantMap SerialsController::toMap(const SerialInfo &s, const QString &productName)
 {
-    return {{"id", s.id},
-            {"productId", s.productId},
-            {"sku", s.sku},
-            {"product", productName},
-            {"serial", s.serial},
-            {"status", s.status},
-            {"saleId", s.saleId},
-            {"imei2", s.imei2},
+    return {{"id", s.id},         {"productId", s.productId},
+            {"sku", s.sku},       {"product", productName},
+            {"serial", s.serial}, {"status", s.status},
+            {"saleId", s.saleId}, {"imei2", s.imei2},
             {"notes", s.notes}};
 }
 
@@ -28,7 +24,8 @@ QString productNameFor(const ProductRepository *repos, const QString &sku)
     return p ? p->name : QString();
 }
 
-void SerialsController::search(const QString &text, const QString &status){
+void SerialsController::search(const QString &text, const QString &status)
+{
     m_serials.clear();
     if (!m_repos || !m_products) {
         emit serialsChanged();
@@ -46,8 +43,7 @@ void SerialsController::search(const QString &text, const QString &status){
     if (!st.isEmpty() && st != QLatin1String("in_stock")) {
         // Barrido global por estado (vendidos, RMA...).
         for (const SerialInfo &s : m_repos->byStatus(st)) {
-            if (!t.isEmpty() && !s.serial.toLower().contains(t)
-                && !s.sku.toLower().contains(t))
+            if (!t.isEmpty() && !s.serial.toLower().contains(t) && !s.sku.toLower().contains(t))
                 continue;
             // Evitar duplicar el exacto ya agregado.
             bool dup = false;
@@ -68,8 +64,7 @@ void SerialsController::search(const QString &text, const QString &status){
         if (!Attrs::boolean(p.attrsJson, Attrs::KTrackSerial) && !m_repos->hasSerials(p.sku))
             continue;
         for (const SerialInfo &s : m_repos->inStock(p.sku)) {
-            if (!t.isEmpty() && !s.serial.toLower().contains(t)
-                && !s.sku.toLower().contains(t))
+            if (!t.isEmpty() && !s.serial.toLower().contains(t) && !s.sku.toLower().contains(t))
                 continue;
             m_serials << toMap(s, p.name);
         }
@@ -78,7 +73,7 @@ void SerialsController::search(const QString &text, const QString &status){
 }
 
 QVariantMap SerialsController::addSerial(const QString &sku, const QString &serial,
-                                        const QString &imei2)
+                                         const QString &imei2)
 {
     if (!m_repos || !m_products)
         return {{"ok", false}, {"error", QStringLiteral("Sin repositorios")}};
@@ -93,7 +88,7 @@ QVariantMap SerialsController::addSerial(const QString &sku, const QString &seri
 }
 
 QVariantMap SerialsController::setStatus(const QString &serial, const QString &status,
-                                        const QString &notes, const QString &user)
+                                         const QString &notes, const QString &user)
 {
     Q_UNUSED(user);
     if (!m_repos)

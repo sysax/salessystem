@@ -16,7 +16,7 @@ class TstCatalog : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void initTestCase()
     {
         QVERIFY(m_tmp.isValid());
@@ -129,8 +129,10 @@ private slots:
     {
         m_ctl->reloadCategories(QStringLiteral("farmacia"));
         QVERIFY(!m_ctl->categories().isEmpty());
-        QVERIFY(m_ctl->addCategory(QStringLiteral("Dermocosmética"), 0,
-                                   QStringLiteral("farmacia"))["ok"].toBool());
+        QVERIFY(
+            m_ctl
+                ->addCategory(QStringLiteral("Dermocosmética"), 0, QStringLiteral("farmacia"))["ok"]
+                .toBool());
         QVERIFY(!m_ctl->addCategory(QStringLiteral("X"))["ok"].toBool());
         QVERIFY(!m_ctl->removeCategory(99999)["ok"].toBool());
     }
@@ -152,8 +154,7 @@ private slots:
         QVERIFY(!m_products->add(p).ok()); // alta exige unidad válida
         p.unit = QStringLiteral("");
         QVERIFY(m_products->add(p).ok()); // vacío → "unidad"
-        QCOMPARE(m_products->findBySku(QStringLiteral("UNIT1"))->unit,
-                 QStringLiteral("unidad"));
+        QCOMPARE(m_products->findBySku(QStringLiteral("UNIT1"))->unit, QStringLiteral("unidad"));
         // Decimal stock round-trip
         Product g;
         g.sku = QStringLiteral("UNIT2");
@@ -165,22 +166,21 @@ private slots:
         QCOMPARE(m_products->findBySku(QStringLiteral("UNIT2"))->stock, 4.75);
         // Unidad legacy preservada al editar otros campos
         QSqlQuery q(m_dbm->database());
-        QVERIFY(q.exec(QStringLiteral(
-            "INSERT INTO products (sku, name, price, stock, unit, status) VALUES "
-            "('LEGACY1','Viejo',500,3,'pieza','activo')")));
+        QVERIFY(q.exec(
+            QStringLiteral("INSERT INTO products (sku, name, price, stock, unit, status) VALUES "
+                           "('LEGACY1','Viejo',500,3,'pieza','activo')")));
         auto upd = m_products->findBySku(QStringLiteral("LEGACY1"));
         QVERIFY(upd.has_value());
         Product u = *upd;
         u.price = 600.0;
         u.priceBuy = 400.0; // el INSERT crudo dejó price_buy en 0 (update exige >0)
         QVERIFY(m_products->update(QStringLiteral("LEGACY1"), u).ok());
-        QCOMPARE(m_products->findBySku(QStringLiteral("LEGACY1"))->unit,
-                 QStringLiteral("pieza"));
+        QCOMPARE(m_products->findBySku(QStringLiteral("LEGACY1"))->unit, QStringLiteral("pieza"));
         u.unit = QStringLiteral("tonelada");
         QVERIFY(!m_products->update(QStringLiteral("LEGACY1"), u).ok());
     }
 
-private:
+  private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_dbm = nullptr;
     ProductRepository *m_products = nullptr;

@@ -11,8 +11,7 @@ AuditRepository::AuditRepository(QSqlDatabase db, QObject *parent)
 void AuditRepository::log(const QString &user, const QString &action, const QString &detail)
 {
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "INSERT INTO audit_log (ts, user, action, detail) VALUES (?,?,?,?)"));
+    q.prepare(QStringLiteral("INSERT INTO audit_log (ts, user, action, detail) VALUES (?,?,?,?)"));
     q.addBindValue(QDateTime::currentDateTime().toString(Qt::ISODateWithMs).left(19));
     q.addBindValue(user);
     q.addBindValue(action);

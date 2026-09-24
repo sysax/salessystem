@@ -5,9 +5,7 @@ SettingsController::SettingsController(SettingsService *settings, AuthService *a
     : QObject(parent), m_settings(settings), m_auth(auth)
 {
     if (m_settings) {
-        connect(m_settings, &SettingsService::settingsChanged, this, [this] {
-            load();
-        });
+        connect(m_settings, &SettingsService::settingsChanged, this, [this] { load(); });
     }
     load();
 }
@@ -23,7 +21,8 @@ void SettingsController::load()
 QVariantMap SettingsController::save(const QVariantMap &m)
 {
     if (!canEdit())
-        return {{"ok", false}, {"error", QStringLiteral("Solo el administrador puede cambiar la configuración")}};
+        return {{"ok", false},
+                {"error", QStringLiteral("Solo el administrador puede cambiar la configuración")}};
     const auto r = m_settings->save(m);
     if (!r.value(QStringLiteral("ok"), false).toBool())
         return r;

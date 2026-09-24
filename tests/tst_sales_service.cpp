@@ -22,7 +22,7 @@ class TstSalesService : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void initTestCase()
     {
         QVERIFY(m_tmp.isValid());
@@ -39,8 +39,8 @@ private slots:
         m_inventory = new InventoryRepository(db, m_audit, this);
         m_promos = new PromoRepository(db, m_products, m_audit, this);
         m_bus = new EventBus(this);
-        m_svc = new SalesService(db, m_products, m_sales, m_inventory, m_clients, m_caja,
-                                 m_promos, m_bus, nullptr, nullptr, nullptr, this);
+        m_svc = new SalesService(db, m_products, m_sales, m_inventory, m_clients, m_caja, m_promos,
+                                 m_bus, nullptr, nullptr, nullptr, this);
     }
 
     void taxParsing()
@@ -55,13 +55,13 @@ private slots:
     void createCash()
     {
         int salesEvents = 0, invEvents = 0;
-        const int sub1 =
-            m_bus->subscribe(EventBus::SaleCreated, [&](const QVariantMap &) { ++salesEvents; });
+        const int sub1
+            = m_bus->subscribe(EventBus::SaleCreated, [&](const QVariantMap &) { ++salesEvents; });
         const int sub2 = m_bus->subscribe(EventBus::InventoryUpdated,
                                           [&](const QVariantMap &) { ++invEvents; });
 
         // Mouse 45000 ×2, IVA 19 % → subtotal 90000, tax 17100, total 107100
-        auto r = m_svc->create({SI{2, 2}}, QStringLiteral("Juan Pérez"), {},
+        auto r = m_svc->create({SI{.productId = 2, .qty = 2}}, QStringLiteral("Juan Pérez"), {},
                                QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(r.value().status, QStringLiteral("Pagada"));
@@ -83,7 +83,7 @@ private slots:
     void createWithPromo()
     {
         // Laptop 1850000 + IVA 351500 − ELEC10 185000 = 2016500
-        auto r = m_svc->create({SI{1, 1}}, QStringLiteral("Ana Martínez"), {},
+        auto r = m_svc->create({SI{.productId = 1, .qty = 1}}, QStringLiteral("Ana Martínez"), {},
                                QStringLiteral("Efectivo"), QStringLiteral("ELEC10"),
                                QStringLiteral("tester"));
         QVERIFY(r.ok());
@@ -97,7 +97,7 @@ private slots:
         // + IVA 104500... recalculado: 480000 + 91200 = 571200;
         // 50000 efectivo + resto crédito.
         QMap<QString, double> pay{{"efectivo", 50000.0}, {"credito", 521200.0}};
-        auto r = m_svc->create({SI{4, 1}}, QStringLiteral("María López"), pay,
+        auto r = m_svc->create({SI{.productId = 4, .qty = 1}}, QStringLiteral("María López"), pay,
                                QStringLiteral("Mixto"), QString(), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(r.value().status, QStringLiteral("Pendiente"));
@@ -113,48 +113,55 @@ private slots:
 
     void validationErrors()
     {
-        QVERIFY(!m_svc->create({}, QStringLiteral("X"), {}, QStringLiteral("Efectivo"),
-                               QString(), QStringLiteral("tester")).ok()); // vacía
-        QVERIFY(!m_svc->create({SI{1, 999}}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"))
+        QVERIFY(!m_svc
+                     ->create({}, QStringLiteral("X"), {}, QStringLiteral("Efectivo"), QString(),
+                              QStringLiteral("tester"))
+                     .ok()); // vacía
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = 1, .qty = 999}}, QStringLiteral("X"), {},
+                              QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"))
                      .ok()); // sin stock
-        QVERIFY(!m_svc->create({SI{999, 1}}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"))
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = 999, .qty = 1}}, QStringLiteral("X"), {},
+                              QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"))
                      .ok()); // inexistente
-        QVERIFY(!m_svc->create({SI{2, 1}}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QStringLiteral("NOPE"),
-                               QStringLiteral("tester")).ok()); // promo mala
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = 2, .qty = 1}}, QStringLiteral("X"), {},
+                              QStringLiteral("Efectivo"), QStringLiteral("NOPE"),
+                              QStringLiteral("tester"))
+                     .ok()); // promo mala
         // El stock no se movió tras los fallos
         QCOMPARE(m_products->findById(1)->stock, 12 - 1);
     }
 
     void cancelRevertsStock()
     {
-        auto r = m_svc->create({SI{6, 3}}, QStringLiteral("Juan Pérez"), {},
+        auto r = m_svc->create({SI{.productId = 6, .qty = 3}}, QStringLiteral("Juan Pérez"), {},
                                QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(m_products->findById(6)->stock, 30 - 3);
-        auto c = m_svc->cancel(r.value().id, QStringLiteral("arrepentido"),
-                               QStringLiteral("tester"));
+        auto c
+            = m_svc->cancel(r.value().id, QStringLiteral("arrepentido"), QStringLiteral("tester"));
         QVERIFY(c.ok());
         QCOMPARE(c.value().status, QStringLiteral("Cancelada"));
         QCOMPARE(m_products->findById(6)->stock, 30);
-        QVERIFY(!m_svc->cancel(r.value().id, QStringLiteral("otra vez"),
-                               QStringLiteral("tester")).ok());
-        QVERIFY(!m_svc->cancel(QStringLiteral("NOPE"), QStringLiteral("x"),
-                               QStringLiteral("tester")).ok());
+        QVERIFY(!m_svc->cancel(r.value().id, QStringLiteral("otra vez"), QStringLiteral("tester"))
+                     .ok());
+        QVERIFY(
+            !m_svc->cancel(QStringLiteral("NOPE"), QStringLiteral("x"), QStringLiteral("tester"))
+                 .ok());
     }
 
     void totalsDryRun()
     {
-        const auto t = m_svc->calculateTotals({SI{3, 2}});
+        const auto t = m_svc->calculateTotals({SI{.productId = 3, .qty = 2}});
         // Teclado 145000×2=290000, IVA 19 % = 55100 → 345100
         QCOMPARE(t.itemsCount, 1);
         QVERIFY(qFuzzyCompare(t.total, 345100.0));
         QCOMPARE(m_products->findById(3)->stock, 20); // sin efecto
     }
 
-private:
+  private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_dbm = nullptr;
     AuditRepository *m_audit = nullptr;

@@ -11,8 +11,8 @@ InventoryRepository::InventoryRepository(QSqlDatabase db, AuditRepository *audit
 }
 
 bool InventoryRepository::record(const QString &sku, const QString &productName,
-                                 const QString &type, double qty, double before,
-                                 double after, const QString &reason, const QString &user)
+                                 const QString &type, double qty, double before, double after,
+                                 const QString &reason, const QString &user)
 {
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
@@ -77,9 +77,9 @@ InventoryValue InventoryRepository::value() const
 {
     InventoryValue v;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral(
-            "SELECT COALESCE(SUM(price_buy*stock),0), COALESCE(SUM(price*stock),0), "
-            "COALESCE(SUM(stock),0) FROM products")))
+    if (!q.exec(
+            QStringLiteral("SELECT COALESCE(SUM(price_buy*stock),0), COALESCE(SUM(price*stock),0), "
+                           "COALESCE(SUM(stock),0) FROM products")))
         return v;
     if (q.next()) {
         v.costValue = q.value(0).toDouble();

@@ -95,8 +95,8 @@ QVariantList ClientsController::statement(const QString &name) const
     return m_cxc->statement(name);
 }
 
-QVariantMap ClientsController::pay(const QString &saleId, double amount,
-                                   const QString &method, const QString &user)
+QVariantMap ClientsController::pay(const QString &saleId, double amount, const QString &method,
+                                   const QString &user)
 {
     const auto r = m_cxc->pay(saleId, amount, method, user);
     if (!r.ok())
@@ -114,14 +114,8 @@ SuppliersController::SuppliersController(SupplierRepository *suppliers, QObject 
 
 QVariantMap SuppliersController::toMap(const Supplier &s)
 {
-    return {{"id", s.id},
-            {"name", s.name},
-            {"nit", s.nit},
-            {"contact", s.contact},
-            {"phone", s.phone},
-            {"email", s.email},
-            {"city", s.city},
-            {"balance", s.balance}};
+    return {{"id", s.id},       {"name", s.name},   {"nit", s.nit},   {"contact", s.contact},
+            {"phone", s.phone}, {"email", s.email}, {"city", s.city}, {"balance", s.balance}};
 }
 
 Supplier SuppliersController::fromMap(const QVariantMap &m, const Supplier &base)

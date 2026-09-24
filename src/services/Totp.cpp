@@ -24,8 +24,8 @@ QString codeFor(const QByteArray &key, qint64 unixTime)
 {
     if (key.isEmpty())
         return {};
-    const QByteArray digest = QMessageAuthenticationCode::hash(
-        counterMessage(unixTime), key, QCryptographicHash::Sha1);
+    const QByteArray digest
+        = QMessageAuthenticationCode::hash(counterMessage(unixTime), key, QCryptographicHash::Sha1);
     const int offset = digest.back() & 0x0F;
     quint32 num = 0;
     for (int i = 0; i < 4; ++i)
@@ -98,10 +98,9 @@ QStringList generateRecoveryCodes(int n)
 
 QString hashCode(const QString &code)
 {
-    const QByteArray data =
-        QStringLiteral("sistema-ventas:").toUtf8() + code.trimmed().toUpper().toUtf8();
-    return QString::fromLatin1(
-        QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
+    const QByteArray data
+        = QStringLiteral("sistema-ventas:").toUtf8() + code.trimmed().toUpper().toUtf8();
+    return QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
 }
 
 QByteArray decodeBase32(const QString &secret)

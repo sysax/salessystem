@@ -15,8 +15,8 @@
 #include <vector>
 
 const QStringList AuthService::Roles = {
-    QStringLiteral("Administrador"), QStringLiteral("Vendedor"),
-    QStringLiteral("Cajero"), QStringLiteral("Almacén"), QStringLiteral("Contador"),
+    QStringLiteral("Administrador"), QStringLiteral("Vendedor"), QStringLiteral("Cajero"),
+    QStringLiteral("Almacén"),       QStringLiteral("Contador"),
 };
 int AuthService::MaxFailedAttempts = 3;
 int AuthService::LockoutMinutes = 5;
@@ -38,8 +38,8 @@ QByteArray pbkdf2Sha256(const QByteArray &password, const QByteArray &salt, int 
         input.append(static_cast<char>((block >> 16) & 0xFF));
         input.append(static_cast<char>((block >> 8) & 0xFF));
         input.append(static_cast<char>(block & 0xFF));
-        QByteArray u = QMessageAuthenticationCode::hash(input, password,
-                                                        QCryptographicHash::Sha256);
+        QByteArray u
+            = QMessageAuthenticationCode::hash(input, password, QCryptographicHash::Sha256);
         QByteArray t = u;
         for (int i = 1; i < iterations; ++i) {
             u = QMessageAuthenticationCode::hash(u, password, QCryptographicHash::Sha256);
@@ -133,8 +133,7 @@ bool AuthService::verifyPassword(const QString &stored, const QString &password)
 void AuthService::audit(const QString &user, const QString &action, const QString &detail) const
 {
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "INSERT INTO audit_log (ts, user, action, detail) VALUES (?,?,?,?)"));
+    q.prepare(QStringLiteral("INSERT INTO audit_log (ts, user, action, detail) VALUES (?,?,?,?)"));
     q.addBindValue(nowIso());
     q.addBindValue(user);
     q.addBindValue(action);
@@ -161,7 +160,8 @@ Result<AuthService::LoginResult> AuthService::login(const QString &username,
     if (isLocked(q.value(QStringLiteral("locked_until")).toString(), expired)) {
         if (m_bus)
             m_bus->publish(EventBus::UserLoginFailed, {{"username", username}});
-        return Result<LoginResult>::failure(QStringLiteral("Bloqueado por intentos — espere 5 min"));
+        return Result<LoginResult>::failure(
+            QStringLiteral("Bloqueado por intentos — espere 5 min"));
     }
     if (expired) {
         QSqlQuery reset(m_db);
@@ -175,9 +175,9 @@ Result<AuthService::LoginResult> AuthService::login(const QString &username,
         QSqlQuery up(m_db);
         if (stored.indexOf(u'$') <= 0) {
             // Migración: re-hashear contraseñas en texto plano al entrar
-            up.prepare(QStringLiteral(
-                "UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
-                "last_login=? WHERE username=?"));
+            up.prepare(
+                QStringLiteral("UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
+                               "last_login=? WHERE username=?"));
             up.addBindValue(hashPassword(password));
         } else {
             up.prepare(QStringLiteral(
@@ -209,8 +209,8 @@ Result<AuthService::LoginResult> AuthService::login(const QString &username,
                           .left(19);
     }
     QSqlQuery fail(m_db);
-    fail.prepare(QStringLiteral(
-        "UPDATE users SET failed_attempts=?, locked_until=? WHERE username=?"));
+    fail.prepare(
+        QStringLiteral("UPDATE users SET failed_attempts=?, locked_until=? WHERE username=?"));
     fail.addBindValue(attempts);
     fail.addBindValue(lockedUntil.isEmpty() ? QVariant() : QVariant(lockedUntil));
     fail.addBindValue(username);
@@ -239,9 +239,9 @@ QList<AuthService::UserInfo> AuthService::listUsers() const
 {
     QList<UserInfo> out;
     QSqlQuery q(m_db);
-    q.exec(QStringLiteral(
-        "SELECT username, role, active, failed_attempts, locked_until, created_at, "
-        "last_login, totp_enabled FROM users ORDER BY username"));
+    q.exec(
+        QStringLiteral("SELECT username, role, active, failed_attempts, locked_until, created_at, "
+                       "last_login, totp_enabled FROM users ORDER BY username"));
     while (q.next()) {
         UserInfo u;
         u.username = q.value(0).toString();
@@ -260,9 +260,9 @@ QList<AuthService::UserInfo> AuthService::listUsers() const
 std::optional<AuthService::UserInfo> AuthService::findUser(const QString &username) const
 {
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "SELECT username, role, active, failed_attempts, locked_until, created_at, "
-        "last_login, totp_enabled FROM users WHERE username=?"));
+    q.prepare(
+        QStringLiteral("SELECT username, role, active, failed_attempts, locked_until, created_at, "
+                       "last_login, totp_enabled FROM users WHERE username=?"));
     q.addBindValue(username);
     if (!q.exec() || !q.next())
         return std::nullopt;
@@ -313,8 +313,8 @@ StatusResult AuthService::updateUser(const QString &username, const QString &new
         if (newPassword.size() < MinPasswordLength)
             return StatusResult::failure(QStringLiteral("Contraseña mínimo 4"));
         // Clave puesta por un admin: el usuario debe personalizarla al entrar.
-        q.prepare(QStringLiteral(
-            "UPDATE users SET password=?, must_change_password=1 WHERE username=?"));
+        q.prepare(
+            QStringLiteral("UPDATE users SET password=?, must_change_password=1 WHERE username=?"));
         q.addBindValue(hashPassword(newPassword));
         q.addBindValue(username);
         if (!q.exec())
@@ -355,9 +355,8 @@ StatusResult AuthService::resetPassword(const QString &username, const QString &
         return StatusResult::failure(QStringLiteral("Contraseña mínimo 4"));
     QSqlQuery q(m_db);
     // Reset de admin: el usuario debe personalizar la clave al próximo ingreso.
-    q.prepare(QStringLiteral(
-        "UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
-        "must_change_password=1 WHERE username=?"));
+    q.prepare(QStringLiteral("UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
+                             "must_change_password=1 WHERE username=?"));
     q.addBindValue(hashPassword(newPassword));
     q.addBindValue(username);
     if (!q.exec() || q.numRowsAffected() == 0)
@@ -366,8 +365,7 @@ StatusResult AuthService::resetPassword(const QString &username, const QString &
     return StatusResult::success({});
 }
 
-StatusResult AuthService::changePassword(const QString &username,
-                                         const QString &currentPassword,
+StatusResult AuthService::changePassword(const QString &username, const QString &currentPassword,
                                          const QString &newPassword)
 {
     if (newPassword.size() < MinPasswordLength)
@@ -382,9 +380,8 @@ StatusResult AuthService::changePassword(const QString &username,
     if (!verifyPassword(q.value(0).toString(), currentPassword))
         return StatusResult::failure(QStringLiteral("La clave actual no coincide"));
     QSqlQuery up(m_db);
-    up.prepare(QStringLiteral(
-        "UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
-        "must_change_password=0 WHERE username=?"));
+    up.prepare(QStringLiteral("UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
+                              "must_change_password=0 WHERE username=?"));
     up.addBindValue(hashPassword(newPassword));
     up.addBindValue(username);
     if (!up.exec() || up.numRowsAffected() == 0)
@@ -432,8 +429,7 @@ Result<QStringList> AuthService::confirm2fa(const QString &username, const QStri
     q.prepare(QStringLiteral("SELECT totp_secret FROM users WHERE username=?"));
     q.addBindValue(username);
     if (!q.exec() || !q.next() || q.value(0).toString().isEmpty())
-        return Result<QStringList>::failure(
-            QStringLiteral("Sin secreto 2FA — genere primero"));
+        return Result<QStringList>::failure(QStringLiteral("Sin secreto 2FA — genere primero"));
     if (!Totp::verify(q.value(0).toString(), code))
         return Result<QStringList>::failure(QStringLiteral("Código 2FA inválido"));
     const QStringList codes = Totp::generateRecoveryCodes(8);
@@ -468,8 +464,7 @@ bool AuthService::verify2fa(const QString &username, const QString &code)
             arr.removeAt(i);
             QSqlQuery up(m_db);
             up.prepare(QStringLiteral("UPDATE users SET recovery_json=? WHERE username=?"));
-            up.addBindValue(
-                QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
+            up.addBindValue(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
             up.addBindValue(username);
             up.exec();
             audit(username, QStringLiteral("2fa_recovery_usado"),
@@ -529,8 +524,8 @@ Result<QString> AuthService::requestRecovery(const QString &username)
         raw[i] = static_cast<char>(QRandomGenerator::system()->bounded(256));
     const QString token = QString::fromLatin1(raw.toHex()).toUpper();
     const QString now = nowIso();
-    const QString exp =
-        QDateTime::currentDateTime().addSecs(30 * 60).toString(Qt::ISODateWithMs).left(19);
+    const QString exp
+        = QDateTime::currentDateTime().addSecs(30 * 60).toString(Qt::ISODateWithMs).left(19);
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
         "INSERT OR REPLACE INTO recovery_tokens (token, username, created_ts, expires_ts, used) "
@@ -541,8 +536,7 @@ Result<QString> AuthService::requestRecovery(const QString &username)
     q.addBindValue(exp);
     if (!q.exec())
         return Result<QString>::failure(q.lastError().text());
-    audit(username, QStringLiteral("recovery_solicitado"),
-          QStringLiteral("expira %1").arg(exp));
+    audit(username, QStringLiteral("recovery_solicitado"), QStringLiteral("expira %1").arg(exp));
     return Result<QString>::success(token);
 }
 
@@ -553,7 +547,8 @@ StatusResult AuthService::redeemRecovery(const QString &username, const QString 
         return StatusResult::failure(QStringLiteral("Contraseña mínimo 4"));
     const QString clean = token.trimmed().toUpper();
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("SELECT username, expires_ts, used FROM recovery_tokens WHERE token=?"));
+    q.prepare(
+        QStringLiteral("SELECT username, expires_ts, used FROM recovery_tokens WHERE token=?"));
     q.addBindValue(clean);
     if (!q.exec() || !q.next())
         return StatusResult::failure(QStringLiteral("Token inválido"));
@@ -566,9 +561,8 @@ StatusResult AuthService::redeemRecovery(const QString &username, const QString 
         return StatusResult::failure(QStringLiteral("Token expirado (30 min)"));
     QSqlQuery up(m_db);
     // El usuario eligió su propia clave vía token: ya no hay cambio pendiente.
-    up.prepare(QStringLiteral(
-        "UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
-        "must_change_password=0 WHERE username=?"));
+    up.prepare(QStringLiteral("UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
+                              "must_change_password=0 WHERE username=?"));
     up.addBindValue(hashPassword(newPassword));
     up.addBindValue(username);
     up.exec();

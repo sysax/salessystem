@@ -14,10 +14,9 @@ bool lineTracked(const Product &p, const SerialRepository *serials)
 } // namespace
 
 PosController::PosController(SalesService *sales, ProductRepository *products,
-                             PromoRepository *promos, CajaRepository *caja,
-                             TicketPrinter *printer, SyncService *sync,
-                             SettingsService *settings, SerialRepository *serials,
-                             QObject *parent)
+                             PromoRepository *promos, CajaRepository *caja, TicketPrinter *printer,
+                             SyncService *sync, SettingsService *settings,
+                             SerialRepository *serials, QObject *parent)
     : QObject(parent), m_sales(sales), m_products(products), m_promos(promos), m_caja(caja),
       m_printer(printer), m_sync(sync), m_settings(settings), m_serials(serials)
 {
@@ -44,15 +43,9 @@ QVariantMap PosController::addToCart(int productId, double qty)
         if (p->stock < cartQtyFor(productId) + 1.0 - 1e-9)
             return {{"ok", false},
                     {"error", QStringLiteral("Stock insuficiente: %1").arg(p->stock)}};
-        m_cart << QVariantMap{{"productId", p->id},
-                              {"sku", p->sku},
-                              {"name", p->name},
-                              {"price", p->price},
-                              {"unit", p->unit},
-                              {"qty", 1.0},
-                              {"subtotal", p->price},
-                              {"serial", QString()},
-                              {"receta", QString()}};
+        m_cart << QVariantMap{{"productId", p->id},   {"sku", p->sku},       {"name", p->name},
+                              {"price", p->price},    {"unit", p->unit},     {"qty", 1.0},
+                              {"subtotal", p->price}, {"serial", QString()}, {"receta", QString()}};
         recompute();
         QVariantMap ok{{"ok", true}};
         ok["needsSerial"] = true;
@@ -74,17 +67,11 @@ QVariantMap PosController::addToCart(int productId, double qty)
         }
     }
     if (p->stock < qty - 1e-9)
-        return {{"ok", false},
-                {"error", QStringLiteral("Stock insuficiente: %1").arg(p->stock)}};
-    m_cart << QVariantMap{{"productId", p->id},
-                          {"sku", p->sku},
-                          {"name", p->name},
-                          {"price", p->price},
-                          {"unit", p->unit},
-                          {"qty", qty},
-                          {"subtotal", p->price * qty},
-                          {"serial", QString()},
-                          {"receta", QString()}};
+        return {{"ok", false}, {"error", QStringLiteral("Stock insuficiente: %1").arg(p->stock)}};
+    m_cart << QVariantMap{
+        {"productId", p->id},         {"sku", p->sku},       {"name", p->name},
+        {"price", p->price},          {"unit", p->unit},     {"qty", qty},
+        {"subtotal", p->price * qty}, {"serial", QString()}, {"receta", QString()}};
     recompute();
     return {{"ok", true}};
 }
@@ -152,15 +139,13 @@ QVariantMap PosController::setLineSerial(int index, const QString &serial)
     if (!s.isEmpty() && m_serials) {
         const auto found = m_serials->find(s);
         if (!found)
-            return {{"ok", false},
-                    {"error", QStringLiteral("Serial %1 no registrado").arg(s)}};
+            return {{"ok", false}, {"error", QStringLiteral("Serial %1 no registrado").arg(s)}};
         if (found->status != QLatin1String("in_stock"))
-            return {{"ok", false},
-                    {"error", QStringLiteral("Serial %1 no disponible (%2)")
-                                 .arg(s, found->status)}};
+            return {
+                {"ok", false},
+                {"error", QStringLiteral("Serial %1 no disponible (%2)").arg(s, found->status)}};
         for (int i = 0; i < m_cart.size(); ++i) {
-            if (i != index
-                && m_cart[i].toMap().value(QStringLiteral("serial")).toString() == s)
+            if (i != index && m_cart[i].toMap().value(QStringLiteral("serial")).toString() == s)
                 return {{"ok", false},
                         {"error", QStringLiteral("Serial %1 repetido en la venta").arg(s)}};
         }
@@ -201,7 +186,8 @@ void PosController::recompute()
     QList<SalesService::ServiceItem> items;
     for (const QVariant &v : m_cart) {
         const QVariantMap line = v.toMap();
-        SalesService::ServiceItem si{line["productId"].toInt(), line["qty"].toDouble()};
+        SalesService::ServiceItem si{.productId = line["productId"].toInt(),
+                                     .qty = line["qty"].toDouble()};
         si.serial = line.value(QStringLiteral("serial")).toString();
         si.receta = line.value(QStringLiteral("receta")).toString();
         items << si;
@@ -211,17 +197,19 @@ void PosController::recompute()
     if (!m_promoCode.isEmpty()) {
         QList<CartLine> cart;
         for (const auto &l : t.lines)
-            cart << CartLine{l.productId, l.sku, {}, l.unitPrice, l.qty, l.subtotal};
+            cart << CartLine{.productId = l.productId,
+                             .sku = l.sku,
+                             .price = l.unitPrice,
+                             .qty = l.qty,
+                             .subtotal = l.subtotal};
         const auto pr = m_promos->evaluate(cart, m_promoCode);
         if (pr.ok())
             promoDiscount = pr.value().discount;
     }
     QVariantList buckets;
     for (const auto &b : t.buckets) {
-        buckets << QVariantMap{{"name", b.name},
-                               {"rate", b.rate},
-                               {"base", b.base},
-                               {"tax", b.tax}};
+        buckets << QVariantMap{
+            {"name", b.name}, {"rate", b.rate}, {"base", b.base}, {"tax", b.tax}};
     }
     m_totals = {{"subtotal", t.subtotal},
                 {"discount", t.discount + promoDiscount},
@@ -241,7 +229,8 @@ QVariantMap PosController::applyPromo(const QString &code)
     QList<SalesService::ServiceItem> items;
     for (const QVariant &v : m_cart) {
         const QVariantMap line = v.toMap();
-        SalesService::ServiceItem si{line["productId"].toInt(), line["qty"].toDouble()};
+        SalesService::ServiceItem si{.productId = line["productId"].toInt(),
+                                     .qty = line["qty"].toDouble()};
         si.serial = line.value(QStringLiteral("serial")).toString();
         si.receta = line.value(QStringLiteral("receta")).toString();
         items << si;
@@ -249,7 +238,11 @@ QVariantMap PosController::applyPromo(const QString &code)
     const SalesService::Totals t = m_sales->calculateTotals(items);
     QList<CartLine> cart;
     for (const auto &l : t.lines)
-        cart << CartLine{l.productId, l.sku, {}, l.unitPrice, l.qty, l.subtotal};
+        cart << CartLine{.productId = l.productId,
+                         .sku = l.sku,
+                         .price = l.unitPrice,
+                         .qty = l.qty,
+                         .subtotal = l.subtotal};
     const auto pr = m_promos->evaluate(cart, code);
     if (!pr.ok())
         return {{"ok", false}, {"error", pr.error()}};
@@ -259,8 +252,7 @@ QVariantMap PosController::applyPromo(const QString &code)
 }
 
 QVariantMap PosController::checkout(const QString &client, const QVariantMap &payments,
-                                    const QString &method, const QString &user,
-                                    const QString &role)
+                                    const QString &method, const QString &user, const QString &role)
 {
     if (m_cart.isEmpty())
         return {{"ok", false}, {"error", QStringLiteral("Carrito vacío")}};
@@ -268,7 +260,8 @@ QVariantMap PosController::checkout(const QString &client, const QVariantMap &pa
     QList<SalesService::ServiceItem> items;
     for (const QVariant &v : m_cart) {
         const QVariantMap line = v.toMap();
-        SalesService::ServiceItem si{line["productId"].toInt(), line["qty"].toDouble()};
+        SalesService::ServiceItem si{.productId = line["productId"].toInt(),
+                                     .qty = line["qty"].toDouble()};
         si.serial = line.value(QStringLiteral("serial")).toString();
         si.receta = line.value(QStringLiteral("receta")).toString();
         items << si;

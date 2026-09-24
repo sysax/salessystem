@@ -2,8 +2,7 @@
 
 // ── Inventory ─────────────────────────────────────────────────────────────
 
-InventoryController::InventoryController(InventoryService *service,
-                                         InventoryRepository *inventory,
+InventoryController::InventoryController(InventoryService *service, InventoryRepository *inventory,
                                          ProductRepository *products, QObject *parent)
     : QObject(parent), m_service(service), m_inventory(inventory), m_products(products)
 {
@@ -14,12 +13,8 @@ void InventoryController::refresh()
 {
     m_movements.clear();
     for (const InventoryMovement &m : m_inventory->movements(50)) {
-        m_movements << QVariantMap{{"ts", m.ts},
-                                   {"sku", m.sku},
-                                   {"type", m.type},
-                                   {"qty", m.qty},
-                                   {"before", m.before},
-                                   {"after", m.after},
+        m_movements << QVariantMap{{"ts", m.ts},        {"sku", m.sku},       {"type", m.type},
+                                   {"qty", m.qty},      {"before", m.before}, {"after", m.after},
                                    {"reason", m.reason}};
     }
     QVariantList low, excess, out;
@@ -80,12 +75,8 @@ PurchasesController::PurchasesController(PurchaseService *service, PurchaseRepos
 
 QVariantMap PurchasesController::toMap(const Purchase &p)
 {
-    return {{"id", p.id},
-            {"date", p.date},
-            {"supplier", p.supplier},
-            {"total", p.total},
-            {"status", p.status},
-            {"notes", p.notes}};
+    return {{"id", p.id},       {"date", p.date},     {"supplier", p.supplier},
+            {"total", p.total}, {"status", p.status}, {"notes", p.notes}};
 }
 
 void PurchasesController::refresh()
@@ -143,8 +134,8 @@ QVariantList ReceivablesController::statement(const QString &client) const
     return m_service->statement(client);
 }
 
-QVariantMap ReceivablesController::pay(const QString &saleId, double amount,
-                                       const QString &method, const QString &user)
+QVariantMap ReceivablesController::pay(const QString &saleId, double amount, const QString &method,
+                                       const QString &user)
 {
     const auto r = m_service->pay(saleId, amount, method, user);
     if (!r.ok())
@@ -247,8 +238,7 @@ QVariantMap PromosController::remove(int id)
 
 // ── Users ─────────────────────────────────────────────────────────────────
 
-UsersController::UsersController(AuthService *auth, QObject *parent)
-    : QObject(parent), m_auth(auth)
+UsersController::UsersController(AuthService *auth, QObject *parent) : QObject(parent), m_auth(auth)
 {
     refresh();
 }

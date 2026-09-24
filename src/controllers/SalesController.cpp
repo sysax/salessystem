@@ -5,8 +5,7 @@
 SalesController::SalesController(SaleRepository *sales, SalesService *service,
                                  SerialRepository *serials, ProductRepository *products,
                                  QObject *parent)
-    : QObject(parent), m_repos(sales), m_service(service), m_serials(serials),
-      m_products(products)
+    : QObject(parent), m_repos(sales), m_service(service), m_serials(serials), m_products(products)
 {
     refresh();
 }
@@ -61,8 +60,7 @@ QVariantMap SalesController::detail(const QString &id) const
     return d;
 }
 
-QVariantMap SalesController::advance(const QString &id, const QString &status,
-                                     const QString &user)
+QVariantMap SalesController::advance(const QString &id, const QString &status, const QString &user)
 {
     const auto r = m_repos->advanceStatus(id, status, user);
     if (!r.ok())
@@ -71,8 +69,7 @@ QVariantMap SalesController::advance(const QString &id, const QString &status,
     return {{"ok", true}};
 }
 
-QVariantMap SalesController::cancel(const QString &id, const QString &reason,
-                                    const QString &user)
+QVariantMap SalesController::cancel(const QString &id, const QString &reason, const QString &user)
 {
     const auto r = m_service->cancel(id, reason, user);
     if (!r.ok())
@@ -81,8 +78,8 @@ QVariantMap SalesController::cancel(const QString &id, const QString &reason,
     return {{"ok", true}};
 }
 
-QVariantMap SalesController::createDoc(const QString &type, const QString &client,
-                                       double total, const QString &user)
+QVariantMap SalesController::createDoc(const QString &type, const QString &client, double total,
+                                       const QString &user)
 {
     const auto r = m_repos->createDocument(type, client, total, user);
     if (!r.ok())
@@ -91,8 +88,8 @@ QVariantMap SalesController::createDoc(const QString &type, const QString &clien
     return {{"ok", true}, {"id", r.value().id}};
 }
 
-QVariantMap SalesController::creditNote(const QString &id, double amount,
-                                        const QString &reason, const QString &user)
+QVariantMap SalesController::creditNote(const QString &id, double amount, const QString &reason,
+                                        const QString &user)
 {
     const auto r = m_repos->createCreditNote(id, amount, reason, user);
     if (!r.ok())
@@ -101,8 +98,8 @@ QVariantMap SalesController::creditNote(const QString &id, double amount,
     return {{"ok", true}, {"id", r.value().id}};
 }
 
-QVariantMap SalesController::debitNote(const QString &id, double amount,
-                                       const QString &reason, const QString &user)
+QVariantMap SalesController::debitNote(const QString &id, double amount, const QString &reason,
+                                       const QString &user)
 {
     const auto r = m_repos->createDebitNote(id, amount, reason, user);
     if (!r.ok())

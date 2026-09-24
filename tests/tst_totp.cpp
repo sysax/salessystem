@@ -9,17 +9,17 @@ class TstTotp : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void rfcVectors_data()
     {
         QTest::addColumn<qint64>("unixTime");
         QTest::addColumn<QString>("expected6");
         // time → TOTP8 → últimos 6
-        QTest::newRow("59") << (qint64)59 << "287082"; // 94287082
-        QTest::newRow("1111111109") << (qint64)1111111109 << "081804"; // 07081804
-        QTest::newRow("1111111111") << (qint64)1111111111 << "050471"; // 14050471
-        QTest::newRow("1234567890") << (qint64)1234567890 << "005924"; // 89005924
-        QTest::newRow("2000000000") << (qint64)2000000000 << "279037"; // 69279037
+        QTest::newRow("59") << (qint64)59 << "287082";                   // 94287082
+        QTest::newRow("1111111109") << (qint64)1111111109 << "081804";   // 07081804
+        QTest::newRow("1111111111") << (qint64)1111111111 << "050471";   // 14050471
+        QTest::newRow("1234567890") << (qint64)1234567890 << "005924";   // 89005924
+        QTest::newRow("2000000000") << (qint64)2000000000 << "279037";   // 69279037
         QTest::newRow("20000000000") << (qint64)20000000000 << "353130"; // 65353130
     }
 
@@ -28,8 +28,7 @@ private slots:
         QFETCH(qint64, unixTime);
         QFETCH(QString, expected6);
         // Base32 del secreto ASCII del RFC
-        const QString secret =
-            Totp::encodeBase32(QByteArray("12345678901234567890", 20));
+        const QString secret = Totp::encodeBase32(QByteArray("12345678901234567890", 20));
         QCOMPARE(Totp::currentCode(secret, unixTime), expected6);
         QVERIFY(Totp::verify(secret, expected6, 0, unixTime));
         // Ventana ±1 acepta pasos vecinos, no lejanos
@@ -42,9 +41,9 @@ private slots:
         const QString secret = Totp::generateSecret();
         const QString good = Totp::currentCode(secret);
         QVERIFY(!Totp::verify(secret, QString()));
-        QVERIFY(!Totp::verify(secret, QStringLiteral("12345"))); // 5 dígitos
+        QVERIFY(!Totp::verify(secret, QStringLiteral("12345")));   // 5 dígitos
         QVERIFY(!Totp::verify(secret, QStringLiteral("1234567"))); // 7 dígitos
-        QVERIFY(!Totp::verify(secret, QStringLiteral("abcdef"))); // no numérico
+        QVERIFY(!Totp::verify(secret, QStringLiteral("abcdef")));  // no numérico
         QVERIFY(!Totp::verify(QStringLiteral("!!!no-base32!!!"), good));
         QVERIFY(!Totp::verify(QString(), good));
     }
@@ -78,7 +77,8 @@ private slots:
 
     void provisioningUriShape()
     {
-        const QString uri = Totp::provisioningUri(QStringLiteral("ABCDEF"), QStringLiteral("admin"));
+        const QString uri
+            = Totp::provisioningUri(QStringLiteral("ABCDEF"), QStringLiteral("admin"));
         QVERIFY(uri.startsWith(QStringLiteral("otpauth://totp/SistemaVentas:admin")));
         QVERIFY(uri.contains(QStringLiteral("secret=ABCDEF")));
     }

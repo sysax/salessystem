@@ -11,12 +11,12 @@ class AuditRepository : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit AuditRepository(QSqlDatabase db, QObject *parent = nullptr);
 
     void log(const QString &user, const QString &action, const QString &detail = {});
     QList<AuditEntry> list(int limit = 100) const;
 
-private:
+  private:
     QSqlDatabase m_db;
 };

@@ -1,0 +1,33 @@
+# Fase 0 (MAP_PRO.md): formato canónico C++. Verificado con
+# clang-format 23.1.1 (pip: `pip install clang-format==23.1.1`).
+BasedOnStyle: LLVM
+Language: Cpp
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+PointerAlignment: Right
+ReferenceAlignment: Right
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterControlStatement: false
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: false
+  BeforeElse: false
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AlwaysBreakAfterReturnType: None
+BinPackArguments: true
+BinPackParameters: true
+AllowAllParametersOfDeclarationOnNextLine: true
+SortIncludes: false
+BreakBeforeBinaryOperators: All
+...

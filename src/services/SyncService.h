@@ -19,8 +19,9 @@ class SyncService : public QObject
     Q_OBJECT
     Q_PROPERTY(int pendingCount READ pendingCount NOTIFY queueChanged)
 
-public:
-    struct Metrics {
+  public:
+    struct Metrics
+    {
         int pending = 0;
         int syncedTotal = 0;
         int failedTotal = 0;
@@ -44,10 +45,10 @@ public:
     Q_INVOKABLE bool isOnline() const;
     Q_INVOKABLE void resetCircuit();
 
-signals:
+  signals:
     void queueChanged();
 
-private:
+  private:
     bool circuitAllows() const;
     void recordSuccess();
     void recordFailure(const QString &error);

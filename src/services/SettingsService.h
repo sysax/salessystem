@@ -27,8 +27,9 @@ class SettingsService : public QObject
     Q_PROPERTY(bool requireExpiry READ requireExpiry NOTIFY settingsChanged)
     Q_PROPERTY(bool requireSerial READ requireSerial NOTIFY settingsChanged)
 
-public:
-    struct TaxRate {
+  public:
+    struct TaxRate
+    {
         QString name;
         double rate = 0.0;
     };
@@ -77,10 +78,10 @@ public:
     // settingsChanged y publica en el bus.
     Q_INVOKABLE QVariantMap save(const QVariantMap &m);
 
-signals:
+  signals:
     void settingsChanged();
 
-private:
+  private:
     QString validate(const QVariantMap &m, QVariantMap &cleaned) const;
 
     SettingsRepository *m_repo = nullptr;

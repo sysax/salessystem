@@ -109,7 +109,7 @@ QList<SalesService::TaxBucket> SalesService::bucketsFromJson(const QString &json
 }
 
 double SalesService::priceFor(const Product &p, double priceOverride,
-                               const QString &clientName) const
+                              const QString &clientName) const
 {
     if (priceOverride > 0)
         return priceOverride;
@@ -130,8 +130,8 @@ double SalesService::priceFor(const Product &p, double priceOverride,
 namespace
 {
 // Agrega una línea al bucket de su tasa (agregación, sin recalcular).
-void accumulateBucket(QList<SalesService::TaxBucket> &buckets, const QString &name,
-                      double rate, double lineBase, double lineTax)
+void accumulateBucket(QList<SalesService::TaxBucket> &buckets, const QString &name, double rate,
+                      double lineBase, double lineTax)
 {
     for (SalesService::TaxBucket &b : buckets) {
         if (qFuzzyCompare(b.rate + 1.0, rate + 1.0)) {
@@ -145,8 +145,8 @@ void accumulateBucket(QList<SalesService::TaxBucket> &buckets, const QString &na
 } // namespace
 
 Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> &items,
-                                                         QString &error,
-                                                         const QString &clientName) const
+                                                       QString &error,
+                                                       const QString &clientName) const
 {
     Totals t;
     t.itemsCount = items.size();
@@ -230,8 +230,7 @@ Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> 
                     return Result<Totals>::failure(error);
                 }
                 if (s->status != QLatin1String("in_stock")) {
-                    error = QStringLiteral("Serial %1 no disponible (%2)")
-                                .arg(serial, s->status);
+                    error = QStringLiteral("Serial %1 no disponible (%2)").arg(serial, s->status);
                     return Result<Totals>::failure(error);
                 }
             }
@@ -296,14 +295,14 @@ SalesService::Totals SalesService::calculateTotals(const QList<ServiceItem> &ite
     return t;
 }
 
-Result<SalesService::CreatedSale> SalesService::create(
-    const QList<ServiceItem> &items, const QString &clientName,
-    const QMap<QString, double> &payments, const QString &paymentMethod,
-    const QString &promoCode, const QString &vendedor, bool offline, const QString &role)
+Result<SalesService::CreatedSale>
+SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
+                     const QMap<QString, double> &payments, const QString &paymentMethod,
+                     const QString &promoCode, const QString &vendedor, bool offline,
+                     const QString &role)
 {
     if (items.isEmpty())
-        return Result<CreatedSale>::failure(
-            QStringLiteral("La venta debe tener al menos un item"));
+        return Result<CreatedSale>::failure(QStringLiteral("La venta debe tener al menos un item"));
 
     QString error;
     auto totals = buildTotals(items, error, clientName);
@@ -377,11 +376,9 @@ Result<SalesService::CreatedSale> SalesService::create(
             if (l.serial.isEmpty())
                 continue;
             if (!m_serials->sell(l.serial, s.id).ok()) {
-                cancel(s.id, QStringLiteral("reserva de serial fallida"),
-                       ns.vendedor);
+                cancel(s.id, QStringLiteral("reserva de serial fallida"), ns.vendedor);
                 return Result<CreatedSale>::failure(
-                    QStringLiteral("Serial %1 ya no disponible; venta cancelada")
-                        .arg(l.serial));
+                    QStringLiteral("Serial %1 ya no disponible; venta cancelada").arg(l.serial));
             }
         }
     }
@@ -403,8 +400,8 @@ Result<SalesService::CreatedSale> SalesService::create(
             continue;
         const double after = p->stock;
         const double before = after + l.qty;
-        m_inventory->record(p->sku, p->name, QStringLiteral("Salida"), -l.qty, before,
-                            after, QStringLiteral("Venta %1").arg(s.id), ns.vendedor);
+        m_inventory->record(p->sku, p->name, QStringLiteral("Salida"), -l.qty, before, after,
+                            QStringLiteral("Venta %1").arg(s.id), ns.vendedor);
         if (m_bus)
             m_bus->publish(EventBus::InventoryUpdated,
                            {{"product_id", l.productId}, {"quantity_change", -l.qty}});
@@ -423,15 +420,13 @@ Result<SalesService::CreatedSale> SalesService::create(
     return Result<CreatedSale>::success(out);
 }
 
-Result<SalesService::CreatedSale> SalesService::cancel(const QString &saleId,
-                                                       const QString &reason,
+Result<SalesService::CreatedSale> SalesService::cancel(const QString &saleId, const QString &reason,
                                                        const QString &user)
 {
     Q_UNUSED(reason);
     const auto s = m_sales->find(saleId);
     if (!s)
-        return Result<CreatedSale>::failure(
-            QStringLiteral("Venta %1 no existe").arg(saleId));
+        return Result<CreatedSale>::failure(QStringLiteral("Venta %1 no existe").arg(saleId));
     if (s->estado == QLatin1String("Cancelada") || s->status == QLatin1String("Cancelada"))
         return Result<CreatedSale>::failure(
             QStringLiteral("Venta %1 ya está cancelada").arg(saleId));
@@ -444,8 +439,8 @@ Result<SalesService::CreatedSale> SalesService::cancel(const QString &saleId,
         const double before = p->stock;
         m_products->setStockById(it.productId, before + it.qty);
         m_inventory->record(p->sku, p->name, QStringLiteral("Devolución"), it.qty, before,
-                            before + it.qty,
-                            QStringLiteral("Cancelación venta %1").arg(saleId), user);
+                            before + it.qty, QStringLiteral("Cancelación venta %1").arg(saleId),
+                            user);
     }
     // Fase 3: devolver seriales a in_stock.
     if (m_serials)

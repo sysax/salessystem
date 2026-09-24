@@ -13,11 +13,14 @@ class SettingsController : public QObject
     Q_OBJECT
     Q_PROPERTY(QVariantMap settings READ settings NOTIFY settingsChanged)
 
-public:
+  public:
     explicit SettingsController(SettingsService *settings, AuthService *auth,
                                 QObject *parent = nullptr);
 
-    QVariantMap settings() const { return m_cache; }
+    QVariantMap settings() const
+    {
+        return m_cache;
+    }
 
     Q_INVOKABLE void load();
     Q_INVOKABLE QVariantMap save(const QVariantMap &m);
@@ -25,10 +28,10 @@ public:
     // Main.qml lo llama en onSessionChanged con auth.currentRole.
     Q_INVOKABLE void setRole(const QString &role);
 
-signals:
+  signals:
     void settingsChanged();
 
-private:
+  private:
     SettingsService *m_settings = nullptr;
     AuthService *m_auth = nullptr;
     QString m_role; // rol capturado en load() para canEdit() sin sesión QML

@@ -18,7 +18,7 @@ class PurchaseService : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit PurchaseService(QSqlDatabase db, PurchaseRepository *purchases,
                              ProductRepository *products, SupplierRepository *suppliers,
                              InventoryRepository *inventory, PayablesRepository *payables,
@@ -29,7 +29,7 @@ public:
     Result<Purchase> receive(const QString &folio, const QString &user);
     Result<Purchase> cancel(const QString &folio, const QString &user);
 
-private:
+  private:
     QSqlDatabase m_db;
     PurchaseRepository *m_purchases = nullptr;
     ProductRepository *m_products = nullptr;

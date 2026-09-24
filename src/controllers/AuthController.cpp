@@ -1,7 +1,6 @@
 #include "AuthController.h"
 
-AuthController::AuthController(AuthService *auth, QObject *parent)
-    : QObject(parent), m_auth(auth)
+AuthController::AuthController(AuthService *auth, QObject *parent) : QObject(parent), m_auth(auth)
 {
 }
 
@@ -44,8 +43,7 @@ QVariantMap AuthController::verifyTotp(const QString &code)
     return {{"ok", true}, {"user", m_user}, {"role", m_role}, {"mustChangePassword", mustChange}};
 }
 
-QVariantMap AuthController::changePassword(const QString &username,
-                                           const QString &currentPassword,
+QVariantMap AuthController::changePassword(const QString &username, const QString &currentPassword,
                                            const QString &newPassword)
 {
     const auto r = m_auth->changePassword(username, currentPassword, newPassword);

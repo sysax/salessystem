@@ -16,14 +16,19 @@ class CatalogController : public QObject
     Q_PROPERTY(QVariantList products READ products NOTIFY productsChanged)
     Q_PROPERTY(QVariantList categories READ categories NOTIFY categoriesChanged)
 
-public:
+  public:
     explicit CatalogController(ProductRepository *products,
                                CategoryRepository *categories = nullptr,
-                               SettingsService *settings = nullptr,
-                               QObject *parent = nullptr);
+                               SettingsService *settings = nullptr, QObject *parent = nullptr);
 
-    QVariantList products() const { return m_products; }
-    QVariantList categories() const { return m_categories; }
+    QVariantList products() const
+    {
+        return m_products;
+    }
+    QVariantList categories() const
+    {
+        return m_categories;
+    }
 
     Q_INVOKABLE void search(const QString &text);
     Q_INVOKABLE QVariantMap add(const QVariantMap &fields);
@@ -40,11 +45,11 @@ public:
     static Product fromMap(const QVariantMap &m, const Product &base = {});
     static QVariantMap categoryToMap(const Category &c);
 
-signals:
+  signals:
     void productsChanged();
     void categoriesChanged();
 
-private:
+  private:
     ProductRepository *m_repos = nullptr;
     CategoryRepository *m_cats = nullptr;
     SettingsService *m_settings = nullptr;

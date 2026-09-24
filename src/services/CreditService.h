@@ -15,7 +15,7 @@ class ReceivablesService : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit ReceivablesService(ReceivablesRepository *repos, EventBus *bus = nullptr,
                                 QObject *parent = nullptr);
 
@@ -25,7 +25,7 @@ public:
                      const QString &user);
     static double mora(const Sale &s);
 
-private:
+  private:
     ReceivablesRepository *m_repos = nullptr;
     EventBus *m_bus = nullptr;
 };
@@ -34,7 +34,7 @@ class PayablesService : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit PayablesService(PayablesRepository *repos, EventBus *bus = nullptr,
                              QObject *parent = nullptr);
 
@@ -42,7 +42,7 @@ public:
     Result<PayablesRepository::PaymentResult> pay(const QString &payableId, double amount,
                                                   const QString &method, const QString &user);
 
-private:
+  private:
     PayablesRepository *m_repos = nullptr;
     EventBus *m_bus = nullptr;
 };

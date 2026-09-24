@@ -24,12 +24,10 @@ QList<Category> CategoryRepository::list(const QString &businessType) const
     QList<Category> out;
     QSqlQuery q(m_db);
     if (businessType.trimmed().isEmpty()) {
-        q.exec(QStringLiteral(
-            "SELECT * FROM categories ORDER BY parent_id, sort_order, name"));
+        q.exec(QStringLiteral("SELECT * FROM categories ORDER BY parent_id, sort_order, name"));
     } else {
-        q.prepare(QStringLiteral(
-            "SELECT * FROM categories WHERE business_type IN ('',?) "
-            "ORDER BY parent_id, sort_order, name"));
+        q.prepare(QStringLiteral("SELECT * FROM categories WHERE business_type IN ('',?) "
+                                 "ORDER BY parent_id, sort_order, name"));
         q.addBindValue(businessType.trimmed());
         q.exec();
     }
@@ -38,8 +36,7 @@ QList<Category> CategoryRepository::list(const QString &businessType) const
     return out;
 }
 
-QList<Category> CategoryRepository::childrenOf(int parentId,
-                                               const QString &businessType) const
+QList<Category> CategoryRepository::childrenOf(int parentId, const QString &businessType) const
 {
     QList<Category> out;
     for (const Category &c : list(businessType)) {
@@ -114,12 +111,10 @@ StatusResult CategoryRepository::remove(int id)
     kids.prepare(QStringLiteral("SELECT COUNT(*) FROM categories WHERE parent_id=?"));
     kids.addBindValue(id);
     if (kids.exec() && kids.next() && kids.value(0).toInt() > 0)
-        return StatusResult::failure(
-            QStringLiteral("Tiene subcategorías: elimínelas primero"));
+        return StatusResult::failure(QStringLiteral("Tiene subcategorías: elimínelas primero"));
     // Productos que usan ese nombre como cat o subcat (texto plano legacy).
     QSqlQuery used(m_db);
-    used.prepare(QStringLiteral(
-        "SELECT COUNT(*) FROM products WHERE cat=? OR subcat=?"));
+    used.prepare(QStringLiteral("SELECT COUNT(*) FROM products WHERE cat=? OR subcat=?"));
     used.addBindValue(cur->name);
     used.addBindValue(cur->name);
     if (used.exec() && used.next() && used.value(0).toInt() > 0)

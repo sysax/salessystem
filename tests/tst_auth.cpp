@@ -15,7 +15,7 @@ class TstAuth : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void initTestCase()
     {
         QVERIFY(m_tmp.isValid());
@@ -46,7 +46,8 @@ private slots:
             QVERIFY(q.exec() && q.next());
             QVERIFY2(AuthService::verifyPassword(q.value(0).toString(), pass),
                      qPrintable(QStringLiteral("hash Python de %1 no verifica").arg(user)));
-            QVERIFY(!AuthService::verifyPassword(q.value(0).toString(), pass + QStringLiteral("X")));
+            QVERIFY(
+                !AuthService::verifyPassword(q.value(0).toString(), pass + QStringLiteral("X")));
             q.finish();
         }
     }
@@ -65,17 +66,27 @@ private slots:
     void forcedPasswordChange()
     {
         // Validaciones del cambio propio
-        QVERIFY(!m_auth->changePassword(QStringLiteral("admin"), QStringLiteral("mala"),
-                                        QStringLiteral("nueva1234")).ok()); // actual errónea
-        QVERIFY(!m_auth->changePassword(QStringLiteral("admin"), QStringLiteral("admin123"),
-                                        QStringLiteral("ab")).ok()); // corta
-        QVERIFY(!m_auth->changePassword(QStringLiteral("admin"), QStringLiteral("admin123"),
-                                        QStringLiteral("admin123")).ok()); // igual
-        QVERIFY(!m_auth->changePassword(QStringLiteral("nadie"), QStringLiteral("x"),
-                                        QStringLiteral("nueva1234")).ok()); // inexistente
+        QVERIFY(!m_auth
+                     ->changePassword(QStringLiteral("admin"), QStringLiteral("mala"),
+                                      QStringLiteral("nueva1234"))
+                     .ok()); // actual errónea
+        QVERIFY(!m_auth
+                     ->changePassword(QStringLiteral("admin"), QStringLiteral("admin123"),
+                                      QStringLiteral("ab"))
+                     .ok()); // corta
+        QVERIFY(!m_auth
+                     ->changePassword(QStringLiteral("admin"), QStringLiteral("admin123"),
+                                      QStringLiteral("admin123"))
+                     .ok()); // igual
+        QVERIFY(!m_auth
+                     ->changePassword(QStringLiteral("nadie"), QStringLiteral("x"),
+                                      QStringLiteral("nueva1234"))
+                     .ok()); // inexistente
         // Cambio válido limpia el flag
-        QVERIFY(m_auth->changePassword(QStringLiteral("admin"), QStringLiteral("admin123"),
-                                       QStringLiteral("nueva1234")).ok());
+        QVERIFY(m_auth
+                    ->changePassword(QStringLiteral("admin"), QStringLiteral("admin123"),
+                                     QStringLiteral("nueva1234"))
+                    .ok());
         const auto r = m_auth->login(QStringLiteral("admin"), QStringLiteral("nueva1234"));
         QVERIFY(r.ok());
         QVERIFY(!r.value().mustChangePassword);
@@ -86,15 +97,19 @@ private slots:
 
     void resetForcesChange()
     {
-        QVERIFY(m_auth->addUser(QStringLiteral("tmpchg"), QStringLiteral("tmpc1234"),
-                                QStringLiteral("Cajero")).ok());
+        QVERIFY(m_auth
+                    ->addUser(QStringLiteral("tmpchg"), QStringLiteral("tmpc1234"),
+                              QStringLiteral("Cajero"))
+                    .ok());
         // Clave puesta por admin → cambio obligatorio
         QVERIFY(m_auth->login(QStringLiteral("tmpchg"), QStringLiteral("tmpc1234"))
                     .value()
                     .mustChangePassword);
         // El usuario personaliza su clave → flag limpio
-        QVERIFY(m_auth->changePassword(QStringLiteral("tmpchg"), QStringLiteral("tmpc1234"),
-                                       QStringLiteral("mia1234")).ok());
+        QVERIFY(m_auth
+                    ->changePassword(QStringLiteral("tmpchg"), QStringLiteral("tmpc1234"),
+                                     QStringLiteral("mia1234"))
+                    .ok());
         QVERIFY(!m_auth->login(QStringLiteral("tmpchg"), QStringLiteral("mia1234"))
                      .value()
                      .mustChangePassword);
@@ -114,8 +129,10 @@ private slots:
 
     void lockoutAfter3()
     {
-        QVERIFY(m_auth->addUser(QStringLiteral("locktest"), QStringLiteral("lock1234"),
-                                QStringLiteral("Vendedor")).ok());
+        QVERIFY(m_auth
+                    ->addUser(QStringLiteral("locktest"), QStringLiteral("lock1234"),
+                              QStringLiteral("Vendedor"))
+                    .ok());
         QVERIFY(!m_auth->login(QStringLiteral("locktest"), QStringLiteral("mala")).ok());
         QVERIFY(!m_auth->login(QStringLiteral("locktest"), QStringLiteral("mala")).ok());
         QVERIFY(!m_auth->login(QStringLiteral("locktest"), QStringLiteral("mala")).ok());
@@ -131,8 +148,10 @@ private slots:
 
     void inactiveBlocked()
     {
-        QVERIFY(m_auth->addUser(QStringLiteral("inact"), QStringLiteral("inact1234"),
-                                QStringLiteral("Cajero")).ok());
+        QVERIFY(m_auth
+                    ->addUser(QStringLiteral("inact"), QStringLiteral("inact1234"),
+                              QStringLiteral("Cajero"))
+                    .ok());
         QVERIFY(m_auth->setUserActive(QStringLiteral("inact"), false).ok());
         QVERIFY(!m_auth->login(QStringLiteral("inact"), QStringLiteral("inact1234")).ok());
         QVERIFY(m_auth->deleteUser(QStringLiteral("inact")).ok());
@@ -140,18 +159,26 @@ private slots:
 
     void userAdminRules()
     {
-        QVERIFY(!m_auth->addUser(QStringLiteral("admin"), QStringLiteral("otra1234"),
-                                 QStringLiteral("Cajero")).ok()); // duplicado
-        QVERIFY(!m_auth->addUser(QStringLiteral("nuevo"), QStringLiteral("abc"),
-                                 QStringLiteral("Cajero")).ok()); // corta
-        QVERIFY(!m_auth->addUser(QStringLiteral("nuevo"), QStringLiteral("abcd1234"),
-                                 QStringLiteral("Super")).ok()); // rol inválido
+        QVERIFY(!m_auth
+                     ->addUser(QStringLiteral("admin"), QStringLiteral("otra1234"),
+                               QStringLiteral("Cajero"))
+                     .ok()); // duplicado
+        QVERIFY(!m_auth
+                     ->addUser(QStringLiteral("nuevo"), QStringLiteral("abc"),
+                               QStringLiteral("Cajero"))
+                     .ok()); // corta
+        QVERIFY(!m_auth
+                     ->addUser(QStringLiteral("nuevo"), QStringLiteral("abcd1234"),
+                               QStringLiteral("Super"))
+                     .ok());                                                  // rol inválido
         QVERIFY(!m_auth->setUserActive(QStringLiteral("admin"), false).ok()); // protege admin
         QVERIFY(!m_auth->deleteUser(QStringLiteral("admin")).ok());
         QVERIFY(!m_auth->resetPassword(QStringLiteral("admin"), QStringLiteral("ab")).ok());
         // reset válido + login con nueva clave
-        QVERIFY(m_auth->addUser(QStringLiteral("tmp1"), QStringLiteral("tmp11234"),
-                                QStringLiteral("Cajero")).ok());
+        QVERIFY(m_auth
+                    ->addUser(QStringLiteral("tmp1"), QStringLiteral("tmp11234"),
+                              QStringLiteral("Cajero"))
+                    .ok());
         QVERIFY(m_auth->resetPassword(QStringLiteral("tmp1"), QStringLiteral("nueva1234")).ok());
         QVERIFY(m_auth->login(QStringLiteral("tmp1"), QStringLiteral("nueva1234")).ok());
         QVERIFY(!m_auth->login(QStringLiteral("tmp1"), QStringLiteral("tmp11234")).ok());
@@ -183,8 +210,10 @@ private slots:
 
     void twoFactorFlow()
     {
-        QVERIFY(m_auth->addUser(QStringLiteral("fa2"), QStringLiteral("fa21234"),
-                                QStringLiteral("Vendedor")).ok());
+        QVERIFY(m_auth
+                    ->addUser(QStringLiteral("fa2"), QStringLiteral("fa21234"),
+                              QStringLiteral("Vendedor"))
+                    .ok());
         QVERIFY(!m_auth->is2faEnabled(QStringLiteral("fa2")));
         const auto sec = m_auth->enable2fa(QStringLiteral("fa2"));
         QVERIFY(sec.ok());
@@ -215,20 +244,27 @@ private slots:
 
     void recoveryFlow()
     {
-        QVERIFY(m_auth->addUser(QStringLiteral("rec1"), QStringLiteral("rec11234"),
-                                QStringLiteral("Cajero")).ok());
+        QVERIFY(m_auth
+                    ->addUser(QStringLiteral("rec1"), QStringLiteral("rec11234"),
+                              QStringLiteral("Cajero"))
+                    .ok());
         const auto tok = m_auth->requestRecovery(QStringLiteral("rec1"));
         QVERIFY(tok.ok());
         QCOMPARE(tok.value().size(), 6);
-        QVERIFY(!m_auth->redeemRecovery(QStringLiteral("rec1"), QStringLiteral("FFFFFF"),
-                                        QStringLiteral("nueva1234")).ok());
+        QVERIFY(!m_auth
+                     ->redeemRecovery(QStringLiteral("rec1"), QStringLiteral("FFFFFF"),
+                                      QStringLiteral("nueva1234"))
+                     .ok());
         QVERIFY(!m_auth->redeemRecovery(QStringLiteral("rec1"), tok.value(),
-                                        QStringLiteral("ab")).ok()); // corta
-        QVERIFY(m_auth->redeemRecovery(QStringLiteral("rec1"), tok.value(),
-                                       QStringLiteral("nueva1234")).ok());
+                                        QStringLiteral("ab"))
+                     .ok()); // corta
+        QVERIFY(
+            m_auth->redeemRecovery(QStringLiteral("rec1"), tok.value(), QStringLiteral("nueva1234"))
+                .ok());
         // Un solo uso
-        QVERIFY(!m_auth->redeemRecovery(QStringLiteral("rec1"), tok.value(),
-                                        QStringLiteral("otra1234")).ok());
+        QVERIFY(
+            !m_auth->redeemRecovery(QStringLiteral("rec1"), tok.value(), QStringLiteral("otra1234"))
+                 .ok());
         QVERIFY(m_auth->login(QStringLiteral("rec1"), QStringLiteral("nueva1234")).ok());
         QVERIFY(!m_auth->requestRecovery(QStringLiteral("nadie")).ok());
         QVERIFY(m_auth->deleteUser(QStringLiteral("rec1")).ok());
@@ -259,7 +295,7 @@ private slots:
         QCOMPARE(failCount, 1);
     }
 
-private:
+  private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_db = nullptr;
     EventBus *m_bus = nullptr;

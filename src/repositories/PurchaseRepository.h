@@ -13,7 +13,7 @@ class PurchaseRepository : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit PurchaseRepository(QSqlDatabase db, AuditRepository *audit = nullptr,
                                 QObject *parent = nullptr);
 
@@ -27,7 +27,7 @@ public:
     static QList<PurchaseItem> parseItems(const QString &json);
     static QString itemsToJson(const QList<PurchaseItem> &items);
 
-private:
+  private:
     QSqlDatabase m_db;
     AuditRepository *m_audit = nullptr;
 };

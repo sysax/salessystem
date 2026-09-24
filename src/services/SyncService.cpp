@@ -13,15 +13,6 @@ namespace
 constexpr int MaxAttempts = 5;
 constexpr int CircuitThreshold = 5;
 constexpr qint64 CircuitCooldownMs = 60000;
-
-// Backoff exponencial con jitter: 1s → 300s (igual que offline.py)
-qint64 backoffMs(int attempts)
-{
-    qint64 base = 1000LL << std::min(attempts, 8); // 1s,2s,4s...
-    if (base > 300000)
-        base = 300000;
-    return base;
-}
 } // namespace
 
 SyncService::SyncService(QSqlDatabase db, EventBus *bus, QObject *parent)
@@ -38,9 +29,8 @@ int SyncService::queueOperation(const QString &opType, const QVariantMap &data,
         if (!folio.isEmpty())
             key = opType + u'-' + folio;
         else
-            key = opType + u'-'
-                + QDateTime::currentDateTime().toString(Qt::ISODateWithMs)
-                + u'-' + QString::number((quint64)this);
+            key = opType + u'-' + QDateTime::currentDateTime().toString(Qt::ISODateWithMs) + u'-'
+                  + QString::number((quint64)this);
     }
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
@@ -73,12 +63,9 @@ QVariantList SyncService::pendingList(int limit) const
     if (!q.exec())
         return out;
     while (q.next()) {
-        out << QVariantMap{{"id", q.value(0).toInt()},
-                           {"created", q.value(1).toString()},
-                           {"op", q.value(2).toString()},
-                           {"key", q.value(3).toString()},
-                           {"attempts", q.value(4).toInt()},
-                           {"error", q.value(5).toString()}};
+        out << QVariantMap{{"id", q.value(0).toInt()},       {"created", q.value(1).toString()},
+                           {"op", q.value(2).toString()},    {"key", q.value(3).toString()},
+                           {"attempts", q.value(4).toInt()}, {"error", q.value(5).toString()}};
     }
     return out;
 }
@@ -129,12 +116,13 @@ QVariantMap SyncService::syncNow(bool force)
     }
 
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "SELECT id, op_type, idempotency_key, payload_json, attempts FROM outbox "
-        "WHERE status='pending' ORDER BY id LIMIT 10"));
+    q.prepare(
+        QStringLiteral("SELECT id, op_type, idempotency_key, payload_json, attempts FROM outbox "
+                       "WHERE status='pending' ORDER BY id LIMIT 10"));
     if (!q.exec())
         return {{"synced", 0}, {"failed", 1}};
-    struct Item {
+    struct Item
+    {
         int id;
         int attempts;
     };
@@ -142,13 +130,11 @@ QVariantMap SyncService::syncNow(bool force)
     while (q.next())
         batch << Item{q.value(0).toInt(), q.value(4).toInt()};
 
-    const QString now =
-        QDateTime::currentDateTime().toString(Qt::ISODateWithMs).left(19);
+    const QString now = QDateTime::currentDateTime().toString(Qt::ISODateWithMs).left(19);
     for (const Item &it : batch) {
         if (it.attempts >= MaxAttempts) {
             QSqlQuery f(m_db);
-            f.prepare(QStringLiteral(
-                "UPDATE outbox SET status='failed', last_error=? WHERE id=?"));
+            f.prepare(QStringLiteral("UPDATE outbox SET status='failed', last_error=? WHERE id=?"));
             f.addBindValue(QStringLiteral("max intentos"));
             f.addBindValue(it.id);
             f.exec();
@@ -192,9 +178,8 @@ QVariantMap SyncService::metrics() const
     QMutexLocker lock(&m_mutex);
     QString state = QStringLiteral("closed");
     if (m_failures >= CircuitThreshold) {
-        state = QDateTime::currentMSecsSinceEpoch() >= m_cooldownUntil
-            ? QStringLiteral("half-open")
-            : QStringLiteral("open");
+        state = QDateTime::currentMSecsSinceEpoch() >= m_cooldownUntil ? QStringLiteral("half-open")
+                                                                       : QStringLiteral("open");
     }
     return {{"pending", pendingCount()},
             {"syncedTotal", m_syncedTotal},

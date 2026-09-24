@@ -16,7 +16,7 @@ class TstInventoryService : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void initTestCase()
     {
         QVERIFY(m_tmp.isValid());
@@ -42,31 +42,40 @@ private slots:
         QVERIFY(qFuzzyCompare(r.value().newCost, 1560000.0 / 55.0));
         QCOMPARE(m_products->findById(2)->stock, 55);
 
-        QVERIFY(!m_svc->registerPurchase(2, 0, 1, QStringLiteral("X"), QString(),
-                                         QStringLiteral("t")).ok());
-        QVERIFY(!m_svc->registerPurchase(2, -3, 1, QStringLiteral("X"), QString(),
-                                         QStringLiteral("t")).ok());
-        QVERIFY(!m_svc->registerPurchase(999, 1, 1, QStringLiteral("X"), QString(),
-                                         QStringLiteral("t")).ok());
+        QVERIFY(
+            !m_svc->registerPurchase(2, 0, 1, QStringLiteral("X"), QString(), QStringLiteral("t"))
+                 .ok());
+        QVERIFY(
+            !m_svc->registerPurchase(2, -3, 1, QStringLiteral("X"), QString(), QStringLiteral("t"))
+                 .ok());
+        QVERIFY(
+            !m_svc->registerPurchase(999, 1, 1, QStringLiteral("X"), QString(), QStringLiteral("t"))
+                 .ok());
     }
 
     void adjustmentRules()
     {
-        auto ok = m_svc->registerAdjustment(QStringLiteral("P003"), 5,
-                                            QStringLiteral("conteo físico"),
-                                            QStringLiteral("tester"));
+        auto ok = m_svc->registerAdjustment(
+            QStringLiteral("P003"), 5, QStringLiteral("conteo físico"), QStringLiteral("tester"));
         QVERIFY(ok.ok());
         QCOMPARE(ok.value().newStock, 25);
 
-        QVERIFY(!m_svc->registerAdjustment(QStringLiteral("P003"), -100,
-                                           QStringLiteral("baja"), QStringLiteral("tester"))
+        QVERIFY(!m_svc
+                     ->registerAdjustment(QStringLiteral("P003"), -100, QStringLiteral("baja"),
+                                          QStringLiteral("tester"))
                      .ok()); // negativo
-        QVERIFY(!m_svc->registerAdjustment(QStringLiteral("P003"), 0, QStringLiteral("x"),
-                                           QStringLiteral("tester")).ok()); // cero
-        QVERIFY(!m_svc->registerAdjustment(QStringLiteral("P003"), 1, QStringLiteral("  "),
-                                           QStringLiteral("tester")).ok()); // sin motivo
-        QVERIFY(!m_svc->registerAdjustment(QStringLiteral("NOPE"), 1, QStringLiteral("x"),
-                                           QStringLiteral("tester")).ok());
+        QVERIFY(!m_svc
+                     ->registerAdjustment(QStringLiteral("P003"), 0, QStringLiteral("x"),
+                                          QStringLiteral("tester"))
+                     .ok()); // cero
+        QVERIFY(!m_svc
+                     ->registerAdjustment(QStringLiteral("P003"), 1, QStringLiteral("  "),
+                                          QStringLiteral("tester"))
+                     .ok()); // sin motivo
+        QVERIFY(!m_svc
+                     ->registerAdjustment(QStringLiteral("NOPE"), 1, QStringLiteral("x"),
+                                          QStringLiteral("tester"))
+                     .ok());
         QCOMPARE(m_products->findBySku(QStringLiteral("P003"))->stock, 25);
 
         const auto movs = m_svc->movementsBySku(QStringLiteral("P003"));
@@ -76,20 +85,28 @@ private slots:
 
     void transferRules()
     {
-        QVERIFY(m_svc->transfer(QStringLiteral("P006"), 5, QStringLiteral("B2-C1"),
-                                QStringLiteral("reubicación"),
-                                QStringLiteral("tester")).ok());
-        QCOMPARE(m_products->findBySku(QStringLiteral("P006"))->location,
-                 QStringLiteral("B2-C1"));
+        QVERIFY(m_svc
+                    ->transfer(QStringLiteral("P006"), 5, QStringLiteral("B2-C1"),
+                               QStringLiteral("reubicación"), QStringLiteral("tester"))
+                    .ok());
+        QCOMPARE(m_products->findBySku(QStringLiteral("P006"))->location, QStringLiteral("B2-C1"));
 
-        QVERIFY(!m_svc->transfer(QStringLiteral("P006"), 9999, QStringLiteral("B9"),
-                                 QStringLiteral("x"), QStringLiteral("tester")).ok());
-        QVERIFY(!m_svc->transfer(QStringLiteral("P006"), 1, QStringLiteral("  "),
-                                 QStringLiteral("x"), QStringLiteral("tester")).ok());
-        QVERIFY(!m_svc->transfer(QStringLiteral("P006"), 1, QStringLiteral("B9"),
-                                 QStringLiteral(""), QStringLiteral("tester")).ok());
-        QVERIFY(!m_svc->transfer(QStringLiteral("NOPE"), 1, QStringLiteral("B9"),
-                                 QStringLiteral("x"), QStringLiteral("tester")).ok());
+        QVERIFY(!m_svc
+                     ->transfer(QStringLiteral("P006"), 9999, QStringLiteral("B9"),
+                                QStringLiteral("x"), QStringLiteral("tester"))
+                     .ok());
+        QVERIFY(!m_svc
+                     ->transfer(QStringLiteral("P006"), 1, QStringLiteral("  "),
+                                QStringLiteral("x"), QStringLiteral("tester"))
+                     .ok());
+        QVERIFY(!m_svc
+                     ->transfer(QStringLiteral("P006"), 1, QStringLiteral("B9"), QStringLiteral(""),
+                                QStringLiteral("tester"))
+                     .ok());
+        QVERIFY(!m_svc
+                     ->transfer(QStringLiteral("NOPE"), 1, QStringLiteral("B9"),
+                                QStringLiteral("x"), QStringLiteral("tester"))
+                     .ok());
     }
 
     void alertsAndValuation()
@@ -118,7 +135,7 @@ private slots:
         QVERIFY(!m_inventory->belowMin().isEmpty());
     }
 
-private:
+  private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_dbm = nullptr;
     AuditRepository *m_audit = nullptr;

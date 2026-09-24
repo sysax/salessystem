@@ -72,11 +72,10 @@ int main(int argc, char *argv[])
 
     AuthService auth(conn, &bus);
     SettingsService settingsSvc(&settingsRepo, &bus);
-    SalesService salesSvc(conn, &products, &sales, &inventory, &clients, &caja, &promos,
-                          &bus, &settingsSvc, &audit, &serials);
+    SalesService salesSvc(conn, &products, &sales, &inventory, &clients, &caja, &promos, &bus,
+                          &settingsSvc, &audit, &serials);
     InventoryService invSvc(conn, &products, &inventory, &bus);
-    PurchaseService purSvc(conn, &purchases, &products, &suppliers, &inventory, &cxp,
-                           &audit);
+    PurchaseService purSvc(conn, &purchases, &products, &suppliers, &inventory, &cxp, &audit);
     ReportService reports(conn);
     SyncService sync(conn, &bus);
     ReceivablesService cxcSvc(&cxc, &bus);

@@ -17,8 +17,8 @@ ProductRepository::ProductRepository(QSqlDatabase db, AuditRepository *audit, QO
 }
 
 const QStringList ProductRepository::Units = {
-    QStringLiteral("unidad"), QStringLiteral("g"),  QStringLiteral("kg"),
-    QStringLiteral("ml"),     QStringLiteral("l"),  QStringLiteral("caja"),
+    QStringLiteral("unidad"),  QStringLiteral("g"),     QStringLiteral("kg"),
+    QStringLiteral("ml"),      QStringLiteral("l"),     QStringLiteral("caja"),
     QStringLiteral("paquete"), QStringLiteral("metro"),
 };
 
@@ -26,7 +26,7 @@ bool ProductRepository::isWeighable(const QString &unit)
 {
     const QString u = unit.trimmed().toLower();
     return u == QLatin1String("g") || u == QLatin1String("kg") || u == QLatin1String("ml")
-        || u == QLatin1String("l");
+           || u == QLatin1String("l");
 }
 
 QString ProductRepository::normalizeUnit(const QString &unit)
@@ -93,8 +93,8 @@ QString ProductRepository::generateBarcode(const QString &sku)
     // Fase 3: el 13.er dígito es el verificador calculado (antes era azar).
     const quint64 h = qHash(sku);
     // QString::number evita la sobrecarga ambigua de QString::arg numérico (GCC + Qt 6.4)
-    QString base = QStringLiteral("770")
-        + QString::number(h % 1000000000ULL).rightJustified(9, u'0');
+    QString base
+        = QStringLiteral("770") + QString::number(h % 1000000000ULL).rightJustified(9, u'0');
     int sum = 0;
     for (int i = 0; i < 12; ++i) {
         const int d = base[i].digitValue();
@@ -155,9 +155,8 @@ QList<Product> ProductRepository::search(const QString &text) const
                 out << rowToProduct(q);
         return out;
     }
-    q.prepare(QStringLiteral(
-        "SELECT * FROM products WHERE lower(name) LIKE ? OR lower(sku) LIKE ? "
-        "OR lower(barcode) LIKE ? OR lower(cat) LIKE ? ORDER BY id"));
+    q.prepare(QStringLiteral("SELECT * FROM products WHERE lower(name) LIKE ? OR lower(sku) LIKE ? "
+                             "OR lower(barcode) LIKE ? OR lower(cat) LIKE ? ORDER BY id"));
     const QString like = u'%' + t + u'%';
     q.addBindValue(like);
     q.addBindValue(like);
@@ -186,15 +185,13 @@ Result<Product> ProductRepository::add(const Product &pin)
     // Fase 3: vencimiento con formato válido si se informa; attrs JSON objeto.
     if (!p.vencimiento.trimmed().isEmpty()
         && !QDate::fromString(p.vencimiento.trimmed(), Qt::ISODate).isValid())
-        return Result<Product>::failure(
-            QStringLiteral("Vencimiento inválido (use AAAA-MM-DD)"));
+        return Result<Product>::failure(QStringLiteral("Vencimiento inválido (use AAAA-MM-DD)"));
     if (!Attrs::isObject(p.attrsJson))
         return Result<Product>::failure(QStringLiteral("Atributos inválidos (JSON objeto)"));
     // Fase 3: barcode de 13 dígitos debe ser EAN-13 válido (UPC-12 e
     // internos de otra longitud se aceptan para no romper legacy).
     if (p.barcode.trimmed().size() == 13 && !isValidEan13(p.barcode))
-        return Result<Product>::failure(
-            QStringLiteral("EAN-13 inválido (dígito verificador)"));
+        return Result<Product>::failure(QStringLiteral("EAN-13 inválido (dígito verificador)"));
     // Fase 2: unidad canónica. En alta se exige; en edición se preservan
     // valores legacy (p. ej. "pieza") salvo que se cambien a otro inválido.
     if (!normalizeUnit(p.unit).isEmpty()) {
@@ -266,14 +263,12 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p)
 {
     const auto cur = findBySku(sku);
     if (!cur)
-        return Result<Product>::failure(
-            QStringLiteral("Producto SKU %1 no encontrado").arg(sku));
+        return Result<Product>::failure(QStringLiteral("Producto SKU %1 no encontrado").arg(sku));
     if (p.price <= 0 || p.priceBuy <= 0 || p.stock < 0 || p.stockMin < 0 || p.stockMax < 0)
         return Result<Product>::failure(QStringLiteral("Precio >0 y stocks >=0"));
     if (!p.vencimiento.trimmed().isEmpty()
         && !QDate::fromString(p.vencimiento.trimmed(), Qt::ISODate).isValid())
-        return Result<Product>::failure(
-            QStringLiteral("Vencimiento inválido (use AAAA-MM-DD)"));
+        return Result<Product>::failure(QStringLiteral("Vencimiento inválido (use AAAA-MM-DD)"));
     if (!Attrs::isObject(p.attrsJson))
         return Result<Product>::failure(QStringLiteral("Atributos inválidos (JSON objeto)"));
     // Unidad legacy preservada salvo cambio explícito a valor inválido.
@@ -288,7 +283,8 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p)
     q.prepare(QStringLiteral(
         "UPDATE products SET name=?, cat=?, subcat=?, brand=?, supplier=?, description=?, price=?, "
         "price_buy=?, price_wholesale=?, tax=?, unit=?, stock=?, stock_min=?, stock_max=?, "
-        "location=?, status=?, image=?, lote=?, vencimiento=?, barcode=?, attrs_json=? WHERE sku=?"));
+        "location=?, status=?, image=?, lote=?, vencimiento=?, barcode=?, attrs_json=? WHERE "
+        "sku=?"));
     q.addBindValue(p.name);
     q.addBindValue(p.cat);
     q.addBindValue(p.subcat);
@@ -322,8 +318,7 @@ StatusResult ProductRepository::remove(const QString &sku)
     q.prepare(QStringLiteral("DELETE FROM products WHERE sku=?"));
     q.addBindValue(sku);
     if (!q.exec() || q.numRowsAffected() == 0)
-        return StatusResult::failure(
-            QStringLiteral("Producto SKU %1 no encontrado").arg(sku));
+        return StatusResult::failure(QStringLiteral("Producto SKU %1 no encontrado").arg(sku));
     return StatusResult::success({});
 }
 
@@ -396,8 +391,7 @@ Result<Product> ProductRepository::createKit(const QString &sku, const QString &
     for (const KitComponent &c : components) {
         const auto prod = findBySku(c.sku);
         if (!prod)
-            return Result<Product>::failure(
-                QStringLiteral("Componente %1 no existe").arg(c.sku));
+            return Result<Product>::failure(QStringLiteral("Componente %1 no existe").arg(c.sku));
         if (c.qty <= 0)
             return Result<Product>::failure(QStringLiteral("Qty >0"));
         totalCost += (prod->priceBuy > 0 ? prod->priceBuy : prod->price * 0.7) * c.qty;
@@ -432,9 +426,9 @@ QList<Product> ProductRepository::expiringWithin(int days) const
     QList<Product> out;
     const QString limit = QDate::currentDate().addDays(days).toString(Qt::ISODate);
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "SELECT * FROM products WHERE vencimiento IS NOT NULL AND vencimiento != '' "
-        "AND vencimiento <= ? ORDER BY vencimiento"));
+    q.prepare(
+        QStringLiteral("SELECT * FROM products WHERE vencimiento IS NOT NULL AND vencimiento != '' "
+                       "AND vencimiento <= ? ORDER BY vencimiento"));
     q.addBindValue(limit);
     if (!q.exec())
         return out;

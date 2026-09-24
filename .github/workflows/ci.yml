@@ -1,3 +1,5 @@
+# Fase 0 (MAP_PRO.md): red de seguridad — formato, lint, matriz de SO,
+# sanitizers y cobertura. Todo job falla en rojo si su gate no pasa.
 name: CI Qt6
 
 on:
@@ -6,19 +8,20 @@ on:
   pull_request:
     branches: [main, develop]
 
+env:
+  QT_VERSION: '6.11.2'
+
 jobs:
-  build-test:
+  # Formato C++/CMake + qmllint vía los targets del build.
+  hygiene:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Qt 6.11.2 oficial (igual que desarrollo local).
-      # El Qt del apt (6.4) se quedó atrás: le faltan APIs usadas
-      # (loadFromModule, QtTypes, etc.) y rompe build/tests.
       - name: Install Qt 6.11 (aqt)
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.11.2'
+          version: ${{ env.QT_VERSION }}
           host: linux
           target: desktop
           # En el repo 6.11 el arch se llama linux_gcc_64 (no gcc_64)
@@ -29,15 +32,165 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build g++ \
+            libgl1-mesa-dev libxkbcommon-dev \
+            python3-pip
+          pip install --break-system-packages \
+            clang-format==23.1.1 cmake-format==0.6.13
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH=$Qt6_DIR
+
+      - name: format-check (clang-format 23.1.1, .clang-format)
+        run: cmake --build build --target format-check
+
+      - name: cmake-format-check (.cmake-format.py)
+        run: cmake --build build --target cmake-format-check
+
+      - name: qml-lint (solo errores de sintaxis)
+        run: cmake --build build --target qml-lint
+
+  # Build + tests en las 3 plataformas (criterio de salida Fase 0).
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            host: linux
+            arch: linux_gcc_64
+          - os: windows-latest
+            host: windows
+            arch: win64_msvc2022_64
+          - os: macos-latest
+            host: mac
+            arch: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Qt 6.11.2 oficial (igual que desarrollo local).
+      # El Qt del apt (6.4) se quedó atrás: le faltan APIs usadas
+      # (loadFromModule, QtTypes, etc.) y rompe build/tests.
+      - name: Install Qt 6.11 (aqt)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: ${{ matrix.host }}
+          target: desktop
+          arch: ${{ matrix.arch }}
+          cache: true
+
+      - name: Install build tools (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ \
             libgl1-mesa-dev libxkbcommon-dev
 
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$Qt6_DIR
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}"
 
-      - name: Build
-        run: cmake --build build -j$(nproc)
+      - name: Build (-Wall -Wextra -Werror en GCC/Clang)
+        run: cmake --build build
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
         env:
           QT_QPA_PLATFORM: offscreen
+
+  # ASan/UBSan sobre la suite (fugas de Qt ignoradas: son benignas y
+  # conocidas; lo que importa es heap-buffer-overflow y UB propio).
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6.11 (aqt)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          cache: true
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ \
+            libgl1-mesa-dev libxkbcommon-dev
+
+      - name: Configure (Debug + ASan/UBSan)
+        run: >
+          cmake -S . -B build-asan -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_PREFIX_PATH=$Qt6_DIR
+          -DENABLE_SANITIZERS=ON
+
+      - name: Build
+        run: cmake --build build-asan
+
+      - name: Test
+        run: ctest --test-dir build-asan --output-on-failure
+        env:
+          QT_QPA_PLATFORM: offscreen
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+
+  # Cobertura de src/services con umbral 60% (criterio Fase 0).
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6.11 (aqt)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          cache: true
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ \
+            libgl1-mesa-dev libxkbcommon-dev \
+            python3-pip
+          pip install --break-system-packages gcovr
+
+      - name: Configure (Debug + coverage)
+        run: >
+          cmake -S . -B build-cov -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_PREFIX_PATH=$Qt6_DIR
+          -DCMAKE_CXX_FLAGS="--coverage"
+          -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+
+      - name: Build
+        run: cmake --build build-cov
+
+      - name: Test
+        run: ctest --test-dir build-cov --output-on-failure
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+      - name: Reporte (umbral 60% en src/services)
+        working-directory: build-cov
+        run: >
+          gcovr -r .. --filter '.*/src/services/.*'
+          --fail-under-line 60 --print-summary
+          --html-details coverage.html
+
+      - name: Subir reporte HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: build-cov/coverage.html

@@ -21,16 +21,20 @@ class MockSettings : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantMap settings READ settings NOTIFY settingsChanged)
-public:
-    QVariantMap settings() const { return m_settings; }
+  public:
+    QVariantMap settings() const
+    {
+        return m_settings;
+    }
     void setBusinessType(const QString &bt)
     {
         m_settings["business_type"] = bt;
         emit settingsChanged();
     }
-signals:
+  signals:
     void settingsChanged();
-private:
+
+  private:
     QVariantMap m_settings;
 };
 
@@ -38,7 +42,7 @@ class TstSidebar : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void menuPopulatesOnLogin()
     {
         QTemporaryDir tmp;
@@ -51,12 +55,11 @@ private slots:
 
         QQmlApplicationEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("auth"), &auth);
-        engine.load(QUrl::fromLocalFile(QString::fromLatin1(QML_DIR)
-                                        + QStringLiteral("/AppSidebar.qml")));
+        engine.load(
+            QUrl::fromLocalFile(QString::fromLatin1(QML_DIR) + QStringLiteral("/AppSidebar.qml")));
         QVERIFY(!engine.rootObjects().isEmpty());
         QObject *root = engine.rootObjects().first();
-        QQuickItem *menu =
-            root->findChild<QQuickItem *>(QStringLiteral("menuList"));
+        QQuickItem *menu = root->findChild<QQuickItem *>(QStringLiteral("menuList"));
         QVERIFY(menu != nullptr);
 
         // Sin sesión: vacío
@@ -64,8 +67,7 @@ private slots:
 
         // Login como admin → 16 entradas (acceso total, incluye Configuración,
         // Lotes y Seriales de Fase 4; sin settingsCtl se muestra todo)
-        const QVariantMap r =
-            auth.login(QStringLiteral("admin"), QStringLiteral("admin123"));
+        const QVariantMap r = auth.login(QStringLiteral("admin"), QStringLiteral("admin123"));
         QVERIFY(r["ok"].toBool());
         QTRY_COMPARE(menu->property("count").toInt(), 16);
 
@@ -89,12 +91,11 @@ private slots:
         QQmlApplicationEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("auth"), &auth);
         engine.rootContext()->setContextProperty(QStringLiteral("settingsCtl"), &settings);
-        engine.load(QUrl::fromLocalFile(QString::fromLatin1(QML_DIR)
-                                        + QStringLiteral("/AppSidebar.qml")));
+        engine.load(
+            QUrl::fromLocalFile(QString::fromLatin1(QML_DIR) + QStringLiteral("/AppSidebar.qml")));
         QVERIFY(!engine.rootObjects().isEmpty());
         QObject *root = engine.rootObjects().first();
-        QQuickItem *menu =
-            root->findChild<QQuickItem *>(QStringLiteral("menuList"));
+        QQuickItem *menu = root->findChild<QQuickItem *>(QStringLiteral("menuList"));
         QVERIFY(menu != nullptr);
 
         QVERIFY(auth.login(QStringLiteral("admin"), QStringLiteral("admin123"))["ok"].toBool());

@@ -15,11 +15,14 @@ class SerialsController : public QObject
     Q_OBJECT
     Q_PROPERTY(QVariantList serials READ serials NOTIFY serialsChanged)
 
-public:
+  public:
     explicit SerialsController(SerialRepository *serials, ProductRepository *products,
                                QObject *parent = nullptr);
 
-    QVariantList serials() const { return m_serials; }
+    QVariantList serials() const
+    {
+        return m_serials;
+    }
 
     Q_INVOKABLE void search(const QString &text, const QString &status = {});
     Q_INVOKABLE QVariantMap addSerial(const QString &sku, const QString &serial,
@@ -32,10 +35,10 @@ public:
 
     static QVariantMap toMap(const SerialInfo &s, const QString &productName = {});
 
-signals:
+  signals:
     void serialsChanged();
 
-private:
+  private:
     SerialRepository *m_repos = nullptr;
     ProductRepository *m_products = nullptr;
     QVariantList m_serials;

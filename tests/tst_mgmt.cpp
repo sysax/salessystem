@@ -30,7 +30,7 @@ class TstMgmt : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void initTestCase()
     {
         QVERIFY(m_tmp.isValid());
@@ -53,8 +53,8 @@ private slots:
         auto *cxp = new PayablesRepository(db, audit, this);
         auto *auth = new AuthService(db, bus, this);
         auto *invSvc = new InventoryService(db, products, inventory, bus, this);
-        auto *purSvc = new PurchaseService(db, purchases, products, suppliers, inventory,
-                                           cxp, audit, this);
+        auto *purSvc
+            = new PurchaseService(db, purchases, products, suppliers, inventory, cxp, audit, this);
         auto *cxcSvc = new ReceivablesService(cxc, bus, this);
         auto *cxpSvc = new PayablesService(cxp, bus, this);
         m_clients = new ClientsController(clients, cxcSvc, this);
@@ -69,9 +69,10 @@ private slots:
 
     void clientsFlow()
     {
-        QVERIFY(m_clients->add({{"name", "Cliente QML"},
-                                {"nit", "900999111-2"},
-                                {"city", "Bogotá"}})["ok"].toBool());
+        QVERIFY(
+            m_clients
+                ->add({{"name", "Cliente QML"}, {"nit", "900999111-2"}, {"city", "Bogotá"}})["ok"]
+                .toBool());
         QVERIFY(!m_clients->add({{"name", "X"}})["ok"].toBool()); // corto
         m_clients->search(QStringLiteral("qml"));
         QCOMPARE(m_clients->clients().size(), 1);
@@ -100,11 +101,14 @@ private slots:
                                      QStringLiteral("tester"));
         QVERIFY(a["ok"].toBool());
         QCOMPARE(a["newStock"].toInt(), 10);
-        QVERIFY(!m_inventory->adjust(QStringLiteral("P001"), 0, QStringLiteral("x"),
-                                     QStringLiteral("t"))["ok"].toBool());
-        QVERIFY(m_inventory->transfer(QStringLiteral("P001"), 1, QStringLiteral("Z9"),
-                                      QStringLiteral("prueba"),
-                                      QStringLiteral("tester"))["ok"].toBool());
+        QVERIFY(
+            !m_inventory
+                 ->adjust(QStringLiteral("P001"), 0, QStringLiteral("x"), QStringLiteral("t"))["ok"]
+                 .toBool());
+        QVERIFY(m_inventory
+                    ->transfer(QStringLiteral("P001"), 1, QStringLiteral("Z9"),
+                               QStringLiteral("prueba"), QStringLiteral("tester"))["ok"]
+                    .toBool());
         QVERIFY(m_inventory->valuation()["totalValue"].toDouble() > 0);
         QVERIFY(!m_inventory->alerts().isEmpty());
     }
@@ -115,10 +119,8 @@ private slots:
                                      QStringLiteral("tester"));
         QVERIFY(c["ok"].toBool());
         QVERIFY(!m_purchases->orders().isEmpty());
-        QVERIFY(m_purchases->receive(c["id"].toString(), QStringLiteral("tester"))["ok"]
-                    .toBool());
-        QVERIFY(!m_purchases->cancel(c["id"].toString(), QStringLiteral("tester"))["ok"]
-                     .toBool());
+        QVERIFY(m_purchases->receive(c["id"].toString(), QStringLiteral("tester"))["ok"].toBool());
+        QVERIFY(!m_purchases->cancel(c["id"].toString(), QStringLiteral("tester"))["ok"].toBool());
     }
 
     void receivablesFlow()
@@ -136,8 +138,7 @@ private slots:
         QVERIFY(!m_cxp->pending().isEmpty()); // seed trae CxP
         const QString id = m_cxp->pending().first().toMap()["id"].toString();
         const double bal = m_cxp->pending().first().toMap()["balance"].toDouble();
-        auto p = m_cxp->pay(id, bal / 2, QStringLiteral("Transferencia"),
-                            QStringLiteral("tester"));
+        auto p = m_cxp->pay(id, bal / 2, QStringLiteral("Transferencia"), QStringLiteral("tester"));
         QVERIFY(p["ok"].toBool());
         QVERIFY(p["balance"].toDouble() > 0);
         auto p2 = m_cxp->pay(id, p["balance"].toDouble(), QStringLiteral("Transferencia"),
@@ -149,10 +150,12 @@ private slots:
     void promosFlow()
     {
         const int before = m_promos->promos().size();
-        QVERIFY(m_promos->add({{"code", "QML20"},
-                               {"name", "QML 20%"},
-                               {"type", "porcentaje"},
-                               {"value", 20.0}})["ok"].toBool());
+        QVERIFY(m_promos
+                    ->add({{"code", "QML20"},
+                           {"name", "QML 20%"},
+                           {"type", "porcentaje"},
+                           {"value", 20.0}})["ok"]
+                    .toBool());
         QCOMPARE(m_promos->promos().size(), before + 1);
         int newId = 0;
         for (const QVariant &v : m_promos->promos()) {
@@ -167,18 +170,22 @@ private slots:
     void usersFlow()
     {
         QCOMPARE(m_users->users().size(), 5);
-        QVERIFY(m_users->add(QStringLiteral("qmluser"), QStringLiteral("qml1234"),
-                             QStringLiteral("Vendedor"))["ok"].toBool());
-        QVERIFY(!m_users->add(QStringLiteral("qmluser"), QStringLiteral("otra1234"),
-                              QStringLiteral("Vendedor"))["ok"].toBool());
+        QVERIFY(m_users
+                    ->add(QStringLiteral("qmluser"), QStringLiteral("qml1234"),
+                          QStringLiteral("Vendedor"))["ok"]
+                    .toBool());
+        QVERIFY(!m_users
+                     ->add(QStringLiteral("qmluser"), QStringLiteral("otra1234"),
+                           QStringLiteral("Vendedor"))["ok"]
+                     .toBool());
         QVERIFY(m_users->setActive(QStringLiteral("qmluser"), false)["ok"].toBool());
-        QVERIFY(m_users->resetPassword(QStringLiteral("qmluser"),
-                                       QStringLiteral("nueva1234"))["ok"].toBool());
+        QVERIFY(m_users->resetPassword(QStringLiteral("qmluser"), QStringLiteral("nueva1234"))["ok"]
+                    .toBool());
         QVERIFY(m_users->remove(QStringLiteral("qmluser"))["ok"].toBool());
         QVERIFY(!m_users->remove(QStringLiteral("admin"))["ok"].toBool());
     }
 
-private:
+  private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_dbm = nullptr;
     ClientsController *m_clients = nullptr;

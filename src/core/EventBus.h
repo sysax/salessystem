@@ -14,7 +14,7 @@ class EventBus : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     using Payload = QVariantMap;
     using Handler = std::function<void(const Payload &)>;
 
@@ -36,10 +36,10 @@ public:
     void unsubscribe(int id);
     void publish(const QString &event, const Payload &payload = {});
 
-signals:
+  signals:
     void published(const QString &event, const QVariantMap &payload);
 
-private:
+  private:
     mutable QMutex m_mutex;
     int m_nextId = 1;
     std::unordered_map<int, std::pair<QString, Handler>> m_handlers;

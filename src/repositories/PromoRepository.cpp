@@ -62,9 +62,9 @@ Result<Promo> PromoRepository::add(const Promo &pin)
     if (p.code.trimmed().isEmpty())
         return Result<Promo>::failure(QStringLiteral("Código requerido"));
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "INSERT INTO promos (name, type, value, condition, code, active, desc) "
-        "VALUES (?,?,?,?,?,?,?)"));
+    q.prepare(
+        QStringLiteral("INSERT INTO promos (name, type, value, condition, code, active, desc) "
+                       "VALUES (?,?,?,?,?,?,?)"));
     q.addBindValue(p.name);
     q.addBindValue(p.type);
     q.addBindValue(p.value);
@@ -158,7 +158,11 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart,
         const QString lower = cond.toLower();
         if (lower.contains(QLatin1String("min"))) {
             bool ok = false;
-            minVal = lower.split(QLatin1String("min")).last().trimmed().split(u' ').first()
+            minVal = lower.split(QLatin1String("min"))
+                         .last()
+                         .trimmed()
+                         .split(u' ')
+                         .first()
                          .toDouble(&ok);
             if (!ok)
                 minVal = 0.0;

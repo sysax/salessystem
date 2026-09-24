@@ -51,9 +51,9 @@ Result<CajaStatus> CajaRepository::open(double amount, const QString &user)
     if (q.next() && q.value(0).toInt() != 0)
         return Result<CajaStatus>::failure(QStringLiteral("Caja ya abierta"));
     QSqlQuery up(m_db);
-    up.prepare(QStringLiteral(
-        "UPDATE caja SET open=1, opening_amount=?, opening_ts=?, opening_user=?, "
-        "sales_today_json='[]', expected=? WHERE id=1"));
+    up.prepare(
+        QStringLiteral("UPDATE caja SET open=1, opening_amount=?, opening_ts=?, opening_user=?, "
+                       "sales_today_json='[]', expected=? WHERE id=1"));
     up.addBindValue(amount);
     up.addBindValue(QDateTime::currentDateTime().toString(Qt::ISODateWithMs).left(19));
     up.addBindValue(user);
@@ -110,8 +110,7 @@ bool CajaRepository::recordSale(const QString &saleId, double total)
     arr << o;
     const double expected = st.openingAmount + st.totalSales + total;
     QSqlQuery up(m_db);
-    up.prepare(QStringLiteral(
-        "UPDATE caja SET sales_today_json=?, expected=? WHERE id=1"));
+    up.prepare(QStringLiteral("UPDATE caja SET sales_today_json=?, expected=? WHERE id=1"));
     up.addBindValue(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
     up.addBindValue(expected);
     return up.exec();

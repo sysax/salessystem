@@ -32,7 +32,7 @@ class TstVertical : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void initTestCase()
     {
         QVERIFY(m_tmp.isValid());
@@ -52,8 +52,8 @@ private slots:
         auto *settingsRepo = new SettingsRepository(db, this);
         m_settings = new SettingsService(settingsRepo, bus, this);
         m_serials = new SerialRepository(db, this);
-        m_svc = new SalesService(db, m_products, sales, inventory, clients, caja,
-                                 promos, bus, m_settings, audit, m_serials, this);
+        m_svc = new SalesService(db, m_products, sales, inventory, clients, caja, promos, bus,
+                                 m_settings, audit, m_serials, this);
         m_ctl = new CatalogController(m_products, nullptr, m_settings, this);
         m_db = db;
     }
@@ -66,9 +66,9 @@ private slots:
         QVERIFY(!Attrs::isObject(QStringLiteral("roto")));
         const QString a = Attrs::set(QStringLiteral("{}"), Attrs::KTrackSerial, true);
         QVERIFY(Attrs::boolean(a, Attrs::KTrackSerial));
-        QCOMPARE(Attrs::integer(Attrs::set(a, Attrs::KWarrantyMonths, 24),
-                                Attrs::KWarrantyMonths, 12),
-                 24);
+        QCOMPARE(
+            Attrs::integer(Attrs::set(a, Attrs::KWarrantyMonths, 24), Attrs::KWarrantyMonths, 12),
+            24);
         Product p;
         p.sku = QStringLiteral("AT1");
         p.name = QStringLiteral("Con attrs");
@@ -92,40 +92,43 @@ private slots:
 
     void expiryRequired()
     {
-        QVERIFY(m_settings->save({{QStringLiteral("require_expiry"), QStringLiteral("1")}})
-                    [QStringLiteral("ok")]
-                        .toBool());
+        QVERIFY(m_settings
+                    ->save({{QStringLiteral("require_expiry"),
+                             QStringLiteral("1")}})[QStringLiteral("ok")]
+                    .toBool());
         // Sin lote/vencimiento falla vía controller...
-        QVERIFY(!m_ctl->add({{"sku", "FAR-X"},
-                             {"name", "Sin lote"},
-                             {"price", 1000.0},
-                             {"stock", 5.0}})["ok"]
+        QVERIFY(!m_ctl
+                     ->add({{"sku", "FAR-X"},
+                            {"name", "Sin lote"},
+                            {"price", 1000.0},
+                            {"stock", 5.0}})["ok"]
                      .toBool());
         // ...y con ambos pasa.
-        QVERIFY(m_ctl->add({{"sku", "FAR-OK"},
-                            {"name", "Con lote"},
-                            {"price", 1000.0},
-                            {"stock", 5.0},
-                            {"lote", "L1"},
-                            {"vencimiento", "2027-01-01"}})["ok"]
+        QVERIFY(m_ctl
+                    ->add({{"sku", "FAR-OK"},
+                           {"name", "Con lote"},
+                           {"price", 1000.0},
+                           {"stock", 5.0},
+                           {"lote", "L1"},
+                           {"vencimiento", "2027-01-01"}})["ok"]
                     .toBool());
         // Flag apagado: pasa sin lote.
-        QVERIFY(m_settings->save({{QStringLiteral("require_expiry"), QStringLiteral("0")}})
-                    [QStringLiteral("ok")]
-                        .toBool());
-        QVERIFY(m_ctl->add({{"sku", "GEN-OK"},
-                            {"name", "Sin lote ok"},
-                            {"price", 500.0},
-                            {"stock", 3.0}})["ok"]
+        QVERIFY(m_settings
+                    ->save({{QStringLiteral("require_expiry"),
+                             QStringLiteral("0")}})[QStringLiteral("ok")]
+                    .toBool());
+        QVERIFY(m_ctl
+                    ->add({{"sku", "GEN-OK"},
+                           {"name", "Sin lote ok"},
+                           {"price", 500.0},
+                           {"stock", 3.0}})["ok"]
                     .toBool());
     }
 
     void expiredBlocked()
     {
-        const QString past =
-            QDate::currentDate().addDays(-10).toString(Qt::ISODate);
-        const QString future =
-            QDate::currentDate().addDays(100).toString(Qt::ISODate);
+        const QString past = QDate::currentDate().addDays(-10).toString(Qt::ISODate);
+        const QString future = QDate::currentDate().addDays(100).toString(Qt::ISODate);
         Product v;
         v.sku = QStringLiteral("VENC");
         v.name = QStringLiteral("Vencido");
@@ -144,12 +147,14 @@ private slots:
         QVERIFY(m_products->add(f).ok());
         const int vid = m_products->findBySku(QStringLiteral("VENC"))->id;
         const int fid = m_products->findBySku(QStringLiteral("VIG"))->id;
-        auto bad = m_svc->create({SI{vid, 1.0}}, QStringLiteral("Mostrador"), {},
-                                 QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"));
+        auto bad
+            = m_svc->create({SI{.productId = vid, .qty = 1.0}}, QStringLiteral("Mostrador"), {},
+                            QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"));
         QVERIFY(!bad.ok());
         QVERIFY(bad.error().contains(QStringLiteral("LV")));
-        auto good = m_svc->create({SI{fid, 1.0}}, QStringLiteral("Mostrador"), {},
-                                  QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"));
+        auto good
+            = m_svc->create({SI{.productId = fid, .qty = 1.0}}, QStringLiteral("Mostrador"), {},
+                            QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"));
         QVERIFY(good.ok());
     }
 
@@ -172,13 +177,14 @@ private slots:
         const int rxid = m_products->findBySku(QStringLiteral("RX1"))->id;
         const int ctid = m_products->findBySku(QStringLiteral("CT1"))->id;
         // Sin receta falla; con receta pasa (rol cualquiera).
-        QVERIFY(!m_svc->create({SI{rxid, 1.0}}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("vendedor"))
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = rxid, .qty = 1.0}}, QStringLiteral("X"), {},
+                              QStringLiteral("Efectivo"), QString(), QStringLiteral("vendedor"))
                      .ok());
-        SI withRx{rxid, 1.0};
+        SI withRx{.productId = rxid, .qty = 1.0};
         withRx.receta = QStringLiteral("RX-2026-001");
-        auto ok = m_svc->create({withRx}, QStringLiteral("X"), {},
-                                QStringLiteral("Efectivo"), QString(), QStringLiteral("vendedor"));
+        auto ok = m_svc->create({withRx}, QStringLiteral("X"), {}, QStringLiteral("Efectivo"),
+                                QString(), QStringLiteral("vendedor"));
         QVERIFY(ok.ok());
         // Receta en línea + auditoría.
         QSqlQuery q(m_db);
@@ -186,17 +192,19 @@ private slots:
                        + ok.value().id + QStringLiteral("'")));
         QVERIFY(q.next());
         QVERIFY(q.value(0).toString().contains(QStringLiteral("RX-2026-001")));
-        QVERIFY(q.exec(QStringLiteral(
-            "SELECT COUNT(*) FROM audit_log WHERE action='venta_receta'")));
+        QVERIFY(
+            q.exec(QStringLiteral("SELECT COUNT(*) FROM audit_log WHERE action='venta_receta'")));
         QVERIFY(q.next() && q.value(0).toInt() >= 1);
         // Controlado: vendedor falla, admin pasa.
-        QVERIFY(!m_svc->create({SI{ctid, 1.0}}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("vendedor"),
-                               false, QStringLiteral("Vendedor"))
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = ctid, .qty = 1.0}}, QStringLiteral("X"), {},
+                              QStringLiteral("Efectivo"), QString(), QStringLiteral("vendedor"),
+                              false, QStringLiteral("Vendedor"))
                      .ok());
-        QVERIFY(m_svc->create({SI{ctid, 1.0}}, QStringLiteral("X"), {},
-                              QStringLiteral("Efectivo"), QString(), QStringLiteral("admin"),
-                              false, QStringLiteral("Administrador"))
+        QVERIFY(m_svc
+                    ->create({SI{.productId = ctid, .qty = 1.0}}, QStringLiteral("X"), {},
+                             QStringLiteral("Efectivo"), QString(), QStringLiteral("admin"), false,
+                             QStringLiteral("Administrador"))
                     .ok());
     }
 
@@ -216,35 +224,42 @@ private slots:
         // Duplicado rechazado.
         QVERIFY(!m_serials->add(eqid, QStringLiteral("EQ1"), QStringLiteral("IMEI001")).ok());
         // Sin serial falla; serial inexistente falla.
-        QVERIFY(!m_svc->create({SI{eqid, 1.0}}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t")).ok());
-        SI bad{eqid, 1.0};
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = eqid, .qty = 1.0}}, QStringLiteral("X"), {},
+                              QStringLiteral("Efectivo"), QString(), QStringLiteral("t"))
+                     .ok());
+        SI bad{.productId = eqid, .qty = 1.0};
         bad.serial = QStringLiteral("NOPE");
-        QVERIFY(!m_svc->create({bad}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t")).ok());
+        QVERIFY(!m_svc
+                     ->create({bad}, QStringLiteral("X"), {}, QStringLiteral("Efectivo"), QString(),
+                              QStringLiteral("t"))
+                     .ok());
         // Venta con serial válido.
-        SI good{eqid, 1.0};
+        SI good{.productId = eqid, .qty = 1.0};
         good.serial = QStringLiteral("IMEI001");
-        auto r = m_svc->create({good}, QStringLiteral("Juan"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
+        auto r = m_svc->create({good}, QStringLiteral("Juan"), {}, QStringLiteral("Efectivo"),
+                               QString(), QStringLiteral("t"));
         QVERIFY(r.ok());
         QCOMPARE(m_serials->find(QStringLiteral("IMEI001"))->status, QStringLiteral("sold"));
         QCOMPARE(m_products->findBySku(QStringLiteral("EQ1"))->stock, 1.0);
         // Vender el mismo serial de nuevo falla.
-        SI again{eqid, 1.0};
+        SI again{.productId = eqid, .qty = 1.0};
         again.serial = QStringLiteral("IMEI001");
-        QVERIFY(!m_svc->create({again}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t")).ok());
+        QVERIFY(!m_svc
+                     ->create({again}, QStringLiteral("X"), {}, QStringLiteral("Efectivo"),
+                              QString(), QStringLiteral("t"))
+                     .ok());
         // Garantía vigente (venta hoy + 12 meses).
         const auto w = m_serials->warrantyStatus(QStringLiteral("IMEI001"), 12);
         QVERIFY(w[QStringLiteral("inWarranty")].toBool());
         // Cancelar devuelve el serial.
         QVERIFY(m_svc->cancel(r.value().id, QStringLiteral("test"), QStringLiteral("t")).ok());
-        QCOMPARE(m_serials->find(QStringLiteral("IMEI001"))->status,
-                 QStringLiteral("in_stock"));
+        QCOMPARE(m_serials->find(QStringLiteral("IMEI001"))->status, QStringLiteral("in_stock"));
         // RMA.
-        QVERIFY(m_serials->setStatus(QStringLiteral("IMEI002"), QStringLiteral("rma"),
-                                     QStringLiteral("pantalla")).ok());
+        QVERIFY(m_serials
+                    ->setStatus(QStringLiteral("IMEI002"), QStringLiteral("rma"),
+                                QStringLiteral("pantalla"))
+                    .ok());
         QCOMPARE(m_serials->find(QStringLiteral("IMEI002"))->status, QStringLiteral("rma"));
         QVERIFY(!m_serials->setStatus(QStringLiteral("IMEI002"), QStringLiteral("volar")).ok());
     }
@@ -261,14 +276,16 @@ private slots:
         g.unit = QStringLiteral("kg");
         QVERIFY(m_products->add(g).ok());
         InventoryService wasteSvc(m_db, m_products, m_inventory, nullptr, this);
-        QVERIFY(!wasteSvc.registerWaste(QStringLiteral("MERMA1"), 0.0, QStringLiteral("x"),
-                                        QStringLiteral("t"))
+        QVERIFY(!wasteSvc
+                     .registerWaste(QStringLiteral("MERMA1"), 0.0, QStringLiteral("x"),
+                                    QStringLiteral("t"))
                      .ok());
-        QVERIFY(!wasteSvc.registerWaste(QStringLiteral("MERMA1"), 99.0, QStringLiteral("x"),
-                                        QStringLiteral("t"))
+        QVERIFY(!wasteSvc
+                     .registerWaste(QStringLiteral("MERMA1"), 99.0, QStringLiteral("x"),
+                                    QStringLiteral("t"))
                      .ok());
-        auto w = wasteSvc.registerWaste(QStringLiteral("MERMA1"), 2.5,
-                                        QStringLiteral("vencido"), QStringLiteral("t"));
+        auto w = wasteSvc.registerWaste(QStringLiteral("MERMA1"), 2.5, QStringLiteral("vencido"),
+                                        QStringLiteral("t"));
         QVERIFY(w.ok());
         QCOMPARE(w.value().newStock, 7.5);
         ReportService rep(m_db);
@@ -306,9 +323,11 @@ private slots:
         QVERIFY(ctl.inStockCount(QStringLiteral("EQC")) >= 1);
         QVERIFY(!ctl.inStock(QStringLiteral("EQC")).isEmpty());
         QVERIFY(ctl.setStatus(QStringLiteral("CTL-001"), QStringLiteral("rma"),
-                              QStringLiteral("test"), QStringLiteral("t"))["ok"].toBool());
+                              QStringLiteral("test"), QStringLiteral("t"))["ok"]
+                    .toBool());
         QVERIFY(!ctl.setStatus(QStringLiteral("CTL-001"), QStringLiteral("volar"),
-                               QStringLiteral("x"), QStringLiteral("t"))["ok"].toBool());
+                               QStringLiteral("x"), QStringLiteral("t"))["ok"]
+                     .toBool());
     }
 
     void serialQtyOne()
@@ -324,22 +343,25 @@ private slots:
         const int eqid = m_products->findBySku(QStringLiteral("EQ-QTY"))->id;
         QVERIFY(m_serials->add(eqid, QStringLiteral("EQ-QTY"), QStringLiteral("QTY-001")).ok());
         // qty 2 con 1 serial → rechazado.
-        SI two{eqid, 2.0};
+        SI two{.productId = eqid, .qty = 2.0};
         two.serial = QStringLiteral("QTY-001");
-        QVERIFY(!m_svc->create({two}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t"))
+        QVERIFY(!m_svc
+                     ->create({two}, QStringLiteral("X"), {}, QStringLiteral("Efectivo"), QString(),
+                              QStringLiteral("t"))
                      .ok());
         // 2 líneas con el mismo serial → rechazado (duplicado).
-        SI a{eqid, 1.0};
+        SI a{.productId = eqid, .qty = 1.0};
         a.serial = QStringLiteral("QTY-001");
-        SI b{eqid, 1.0};
+        SI b{.productId = eqid, .qty = 1.0};
         b.serial = QStringLiteral("QTY-001");
-        QVERIFY(!m_svc->create({a, b}, QStringLiteral("X"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t"))
+        QVERIFY(!m_svc
+                     ->create({a, b}, QStringLiteral("X"), {}, QStringLiteral("Efectivo"),
+                              QString(), QStringLiteral("t"))
                      .ok());
         // 1 línea qty 1 con su serial → pasa.
-        QVERIFY(m_svc->create({a}, QStringLiteral("X"), {},
-                              QStringLiteral("Efectivo"), QString(), QStringLiteral("t"))
+        QVERIFY(m_svc
+                    ->create({a}, QStringLiteral("X"), {}, QStringLiteral("Efectivo"), QString(),
+                             QStringLiteral("t"))
                     .ok());
     }
 
@@ -359,26 +381,25 @@ private slots:
         p.tax = QStringLiteral("Excluido");
         QVERIFY(m_products->add(p).ok());
         const int pid = m_products->findBySku(QStringLiteral("AB-GRANO"))->id;
-        auto w = m_svc->create({SI{pid, 2.0}}, QStringLiteral("MAYORISTA-TEST"), {},
-                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
+        auto w = m_svc->create({SI{.productId = pid, .qty = 2.0}}, QStringLiteral("MAYORISTA-TEST"),
+                               {}, QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
         QVERIFY(w.ok());
         QCOMPARE(w.value().total, 1600.0);
-        auto d = m_svc->create({SI{pid, 2.0}}, QStringLiteral("Mostrador"), {},
+        auto d = m_svc->create({SI{.productId = pid, .qty = 2.0}}, QStringLiteral("Mostrador"), {},
                                QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
         QVERIFY(d.ok());
         QCOMPARE(d.value().total, 2000.0);
     }
 
     void ean13()
-    {        // Ejemplo GS1 válido + variante con dígito malo.
+    { // Ejemplo GS1 válido + variante con dígito malo.
         QVERIFY(ProductRepository::isValidEan13(QStringLiteral("5901234123457")));
         QVERIFY(!ProductRepository::isValidEan13(QStringLiteral("5901234123458")));
         QVERIFY(!ProductRepository::isValidEan13(QStringLiteral("123")));
         QVERIFY(!ProductRepository::isValidEan13(QStringLiteral("770123456001X")));
         // El generador produce EAN válido.
         for (int i = 0; i < 20; ++i) {
-            const QString b = ProductRepository::generateBarcode(
-                QStringLiteral("EAN%1").arg(i));
+            const QString b = ProductRepository::generateBarcode(QStringLiteral("EAN%1").arg(i));
             QVERIFY2(ProductRepository::isValidEan13(b),
                      qPrintable(QStringLiteral("barcode inválido: ") + b));
         }
@@ -402,7 +423,7 @@ private slots:
         QVERIFY(m_products->add(u).ok());
     }
 
-private:
+  private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_dbm = nullptr;
     QSqlDatabase m_db;

@@ -11,7 +11,7 @@ class SettingsRepository : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit SettingsRepository(QSqlDatabase db, QObject *parent = nullptr);
 
     QString get(const QString &key, const QString &fallback = {}) const;
@@ -19,6 +19,6 @@ public:
     bool set(const QString &key, const QString &value);
     bool setAll(const QVariantMap &m);
 
-private:
+  private:
     QSqlDatabase m_db;
 };

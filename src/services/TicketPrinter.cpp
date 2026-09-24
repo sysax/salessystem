@@ -6,13 +6,12 @@
 #include <QProcess>
 #include <QStandardPaths>
 
-TicketPrinter::TicketPrinter(const QString &ticketsDir, QObject *parent)
-    : QObject(parent)
+TicketPrinter::TicketPrinter(const QString &ticketsDir, QObject *parent) : QObject(parent)
 {
     m_dir = ticketsDir;
     if (m_dir.isEmpty()) {
         m_dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-            + QStringLiteral("/tickets");
+                + QStringLiteral("/tickets");
     }
     QDir().mkpath(m_dir);
 }
@@ -43,14 +42,13 @@ QString TicketPrinter::formatQty(double qty)
 
 QString TicketPrinter::buildText(const Ticket &t)
 {
-    const QString now =
-        QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    const QString now
+        = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
     const QString sym = t.currencySymbol.isEmpty() ? QStringLiteral("$") : t.currencySymbol;
     QStringList lines;
     lines << QString(42, u'=');
-    const QString title = t.businessName.isEmpty()
-        ? QStringLiteral("SISTEMA DE VENTAS")
-        : t.businessName.left(42);
+    const QString title
+        = t.businessName.isEmpty() ? QStringLiteral("SISTEMA DE VENTAS") : t.businessName.left(42);
     lines << QStringLiteral("   %1").arg(title).leftJustified(42);
     if (!t.businessNit.isEmpty())
         lines << QStringLiteral("   NIT: %1").arg(t.businessNit).leftJustified(42);
@@ -65,10 +63,10 @@ QString TicketPrinter::buildText(const Ticket &t)
     lines << QStringLiteral("Doc: %1").arg(t.docType);
     lines << QString(42, u'-');
     lines << QStringLiteral("%1 %2 %3 %4")
-                  .arg(QStringLiteral("Producto"), -16)
-                  .arg(QStringLiteral("Cant"), 4)
-                  .arg(QStringLiteral("Precio"), 10)
-                  .arg(QStringLiteral("Subtotal"), 10);
+                 .arg(QStringLiteral("Producto"), -16)
+                 .arg(QStringLiteral("Cant"), 4)
+                 .arg(QStringLiteral("Precio"), 10)
+                 .arg(QStringLiteral("Subtotal"), 10);
     lines << QString(42, u'-');
     double subtotal = 0.0;
     for (const Ticket::Line &l : t.lines) {
@@ -94,8 +92,8 @@ QString TicketPrinter::buildText(const Ticket &t)
         }
         lines << QStringLiteral("Impuestos: %1").arg(money(t.tax, sym));
     } else {
-        lines << QStringLiteral("%1: %2").arg(t.taxLabel.isEmpty() ? QStringLiteral("Impuesto") : t.taxLabel,
-                                              money(t.tax, sym));
+        lines << QStringLiteral("%1: %2").arg(
+            t.taxLabel.isEmpty() ? QStringLiteral("Impuesto") : t.taxLabel, money(t.tax, sym));
     }
     lines << QStringLiteral("TOTAL: %1").arg(money(t.total, sym));
     lines << QString(42, u'-');
@@ -103,8 +101,8 @@ QString TicketPrinter::buildText(const Ticket &t)
     for (auto it = t.payments.begin(); it != t.payments.end(); ++it) {
         if (it.value() != 0)
             lines << QStringLiteral("  %1 %2")
-                          .arg(it.key().first(1).toUpper() + it.key().mid(1), -12)
-                          .arg(money(it.value(), sym));
+                         .arg(it.key().first(1).toUpper() + it.key().mid(1), -12)
+                         .arg(money(it.value(), sym));
     }
     lines << QStringLiteral("Cambio: %1").arg(money(t.change, sym));
     lines << QString(42, u'-');
@@ -117,8 +115,7 @@ QString TicketPrinter::buildText(const Ticket &t)
 
 Result<TicketPrinter::PrintResult> TicketPrinter::print(const Ticket &t) const
 {
-    const QString path =
-        m_dir + QStringLiteral("/ticket_%1.txt").arg(t.saleId);
+    const QString path = m_dir + QStringLiteral("/ticket_%1.txt").arg(t.saleId);
     QFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
         return Result<PrintResult>::failure(
@@ -141,13 +138,14 @@ bool TicketPrinter::openDrawer() const
     // ESC p 0 25 250 — pulso cajón (igual que printer.py)
     const QByteArray esc("\x1b\x70\x00\x19\xfa", 5);
     const QStringList candidates = {
-        QStringLiteral("/dev/usb/lp0"), QStringLiteral("/dev/usb/lp1"),
-        QStringLiteral("/dev/lp0"), m_dir + QStringLiteral("/cajon_signal"),
+        QStringLiteral("/dev/usb/lp0"),
+        QStringLiteral("/dev/usb/lp1"),
+        QStringLiteral("/dev/lp0"),
+        m_dir + QStringLiteral("/cajon_signal"),
     };
     for (const QString &dev : candidates) {
         QFile f(dev);
-        if (dev.startsWith(QLatin1String("/tmp")) || dev.startsWith(m_dir)
-            || QFile::exists(dev)) {
+        if (dev.startsWith(QLatin1String("/tmp")) || dev.startsWith(m_dir) || QFile::exists(dev)) {
             if (f.open(QIODevice::WriteOnly)) {
                 f.write(dev.endsWith(QLatin1String("cajon_signal")) ? "OPEN" : esc);
                 return true;

@@ -34,11 +34,15 @@ static double scalar(QSqlDatabase db, const QString &sql)
 QVariantMap ReportService::stats() const
 {
     return {
-        {"totalSales", scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(total),0) FROM sales WHERE status='Pagada'"))},
+        {"totalSales",
+         scalar(m_db,
+                QStringLiteral("SELECT COALESCE(SUM(total),0) FROM sales WHERE status='Pagada'"))},
         {"totalProducts", scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM products"))},
         {"totalClients", scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM clients"))},
-        {"pendingOrders", scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM sales WHERE status='Pendiente'"))},
-        {"lowStockAlerts", scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM products WHERE stock < stock_min"))},
+        {"pendingOrders",
+         scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM sales WHERE status='Pendiente'"))},
+        {"lowStockAlerts",
+         scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM products WHERE stock < stock_min"))},
     };
 }
 
@@ -70,9 +74,8 @@ QVariantList ReportService::topProducts(int n) const
         all.exec(QStringLiteral("SELECT id, name FROM products ORDER BY id"));
         while (all.next() && out.size() < n) {
             if (!seen.contains(all.value(0).toInt()))
-                out << QVariantMap{{"id", all.value(0).toInt()},
-                                   {"name", all.value(1).toString()},
-                                   {"sold", 0}};
+                out << QVariantMap{
+                    {"id", all.value(0).toInt()}, {"name", all.value(1).toString()}, {"sold", 0}};
         }
     }
     return out;
@@ -99,7 +102,8 @@ QVariantList ReportService::leastSold(int n) const
               [&](const auto &a, const auto &b) { return cnt[a.first] < cnt[b.first]; });
     QVariantList out;
     for (int i = 0; i < std::min<qsizetype>(n, prods.size()); ++i)
-        out << QVariantMap{{"id", prods[i].first}, {"name", prods[i].second}, {"sold", cnt[prods[i].first]}};
+        out << QVariantMap{
+            {"id", prods[i].first}, {"name", prods[i].second}, {"sold", cnt[prods[i].first]}};
     return out;
 }
 
@@ -107,9 +111,8 @@ QVariantList ReportService::topClients(int n) const
 {
     QVariantList out;
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "SELECT client, COUNT(*), SUM(total) FROM sales WHERE status='Pagada' "
-        "GROUP BY client ORDER BY COUNT(*) DESC LIMIT ?"));
+    q.prepare(QStringLiteral("SELECT client, COUNT(*), SUM(total) FROM sales WHERE status='Pagada' "
+                             "GROUP BY client ORDER BY COUNT(*) DESC LIMIT ?"));
     q.addBindValue(n);
     if (!q.exec())
         return out;
@@ -124,9 +127,9 @@ QVariantList ReportService::topSellers(int n) const
 {
     QVariantList out;
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "SELECT vendedor, COUNT(*), SUM(total) FROM sales WHERE status='Pagada' "
-        "GROUP BY vendedor ORDER BY COUNT(*) DESC LIMIT ?"));
+    q.prepare(
+        QStringLiteral("SELECT vendedor, COUNT(*), SUM(total) FROM sales WHERE status='Pagada' "
+                       "GROUP BY vendedor ORDER BY COUNT(*) DESC LIMIT ?"));
     q.addBindValue(n);
     if (!q.exec())
         return out;
@@ -181,8 +184,10 @@ double ReportService::averageTicket() const
 QVariantMap ReportService::salesForPeriod(const QString &range) const
 {
     static const QMap<QString, int> days = {
-        {QStringLiteral("dia"), 1}, {QStringLiteral("semana"), 7},
-        {QStringLiteral("mes"), 30}, {QStringLiteral("año"), 365},
+        {QStringLiteral("dia"), 1},
+        {QStringLiteral("semana"), 7},
+        {QStringLiteral("mes"), 30},
+        {QStringLiteral("año"), 365},
     };
     const int d = days.value(range, 1);
     QSqlQuery q(m_db);
@@ -231,23 +236,23 @@ QVariantMap ReportService::salesSummary() const
 
 QVariantMap ReportService::incomeStatement() const
 {
-    const double ingresos =
-        scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(total),0) FROM sales WHERE status='Pagada'"));
+    const double ingresos = scalar(
+        m_db, QStringLiteral("SELECT COALESCE(SUM(total),0) FROM sales WHERE status='Pagada'"));
     double costo = 0.0;
     QSqlQuery q(m_db);
-    q.exec(QStringLiteral(
-        "SELECT sale_items.qty, products.price_buy, products.price FROM sale_items "
-        "JOIN sales ON sale_items.sale_id=sales.id "
-        "JOIN products ON sale_items.product_id=products.id "
-        "WHERE sales.status='Pagada'"));
+    q.exec(
+        QStringLiteral("SELECT sale_items.qty, products.price_buy, products.price FROM sale_items "
+                       "JOIN sales ON sale_items.sale_id=sales.id "
+                       "JOIN products ON sale_items.product_id=products.id "
+                       "WHERE sales.status='Pagada'"));
     while (q.next()) {
         double c = q.value(1).toDouble();
         if (c <= 0)
             c = q.value(2).toDouble() * 0.7;
         costo += c * q.value(0).toDouble();
     }
-    const double impuestos =
-        scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(tax),0) FROM sales WHERE status='Pagada'"));
+    const double impuestos = scalar(
+        m_db, QStringLiteral("SELECT COALESCE(SUM(tax),0) FROM sales WHERE status='Pagada'"));
     const double bruto = ingresos - costo;
     return {{"ingresos", ingresos},
             {"costo", costo},
@@ -258,11 +263,11 @@ QVariantMap ReportService::incomeStatement() const
 
 QVariantMap ReportService::cashFlow() const
 {
-    const double entradas = scalar(
-        m_db, QStringLiteral("SELECT COALESCE(SUM(paid),0) FROM sales WHERE status IN "
-                             "('Pagada','Entregada','Facturada')"));
-    const double salidas =
-        scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(paid),0) FROM payables"));
+    const double entradas
+        = scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(paid),0) FROM sales WHERE status IN "
+                                      "('Pagada','Entregada','Facturada')"));
+    const double salidas
+        = scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(paid),0) FROM payables"));
     return {{"entradas", entradas}, {"salidas", salidas}, {"neto", entradas - salidas}};
 }
 
@@ -311,9 +316,10 @@ QVariantMap ReportService::taxes() const
     double total = 0.0;
     for (auto it = byRate.begin(); it != byRate.end(); ++it) {
         total += it.value();
-        breakdown << QVariantMap{{"name", names.value(it.key(), QStringLiteral("%1%").arg(it.key()))},
-                                 {"rate", it.key()},
-                                 {"tax", it.value()}};
+        breakdown << QVariantMap{
+            {"name", names.value(it.key(), QStringLiteral("%1%").arg(it.key()))},
+            {"rate", it.key()},
+            {"tax", it.value()}};
     }
     return {{"iva_19", byRate.value(19.0, 0.0)}, {"total", total}, {"breakdown", breakdown}};
 }
@@ -322,14 +328,14 @@ QVariantMap ReportService::kpis() const
 {
     const QVariantMap estado = incomeStatement();
     const double costo = estado["costo"].toDouble();
-    const double invVal =
-        scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(price_buy*stock),0) FROM products"));
+    const double invVal
+        = scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(price_buy*stock),0) FROM products"));
     const double rotacion = costo / (invVal > 0 ? invVal : 1.0);
-    const double totalDocs =
-        scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM sales WHERE status IN "
-                                    "('Pagada','Cotización','Pedido')"));
-    const double pagadas =
-        scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM sales WHERE status='Pagada'"));
+    const double totalDocs
+        = scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM sales WHERE status IN "
+                                      "('Pagada','Cotización','Pedido')"));
+    const double pagadas
+        = scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM sales WHERE status='Pagada'"));
     const double ingresos = estado["ingresos"].toDouble();
     const double brutoPct = ingresos > 0 ? estado["bruto"].toDouble() / ingresos * 100.0 : 0.0;
     const double netoPct = ingresos > 0 ? estado["neto"].toDouble() / ingresos * 100.0 : 0.0;
@@ -347,13 +353,12 @@ QVariantMap ReportService::kpis() const
 QVariantList ReportService::expiringProducts(int days) const
 {
     QVariantList out;
-    const QString limit =
-        QDate::currentDate().addDays(days > 0 ? days : 30).toString(Qt::ISODate);
+    const QString limit = QDate::currentDate().addDays(days > 0 ? days : 30).toString(Qt::ISODate);
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "SELECT sku, name, lote, vencimiento, stock FROM products "
-        "WHERE vencimiento IS NOT NULL AND vencimiento != '' AND vencimiento <= ? "
-        "ORDER BY vencimiento"));
+    q.prepare(
+        QStringLiteral("SELECT sku, name, lote, vencimiento, stock FROM products "
+                       "WHERE vencimiento IS NOT NULL AND vencimiento != '' AND vencimiento <= ? "
+                       "ORDER BY vencimiento"));
     q.addBindValue(limit);
     if (!q.exec())
         return out;
@@ -373,9 +378,9 @@ QVariantMap ReportService::serialsReport() const
     QVariantMap counts{{"in_stock", 0}, {"sold", 0}, {"rma", 0}, {"repaired", 0}};
     QVariantList items;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral(
-            "SELECT s.serial, s.sku, s.status, s.sale_id, p.name FROM serials s "
-            "LEFT JOIN products p ON p.sku = s.sku ORDER BY s.id DESC LIMIT 500")))
+    if (!q.exec(
+            QStringLiteral("SELECT s.serial, s.sku, s.status, s.sale_id, p.name FROM serials s "
+                           "LEFT JOIN products p ON p.sku = s.sku ORDER BY s.id DESC LIMIT 500")))
         return {{"counts", counts}, {"items", items}};
     int inStock = 0, sold = 0, rma = 0, repaired = 0;
     while (q.next()) {
@@ -438,14 +443,13 @@ QVariantList ReportService::rotationByCategory() const
     // Fase 5 (genérico): vendidos e ingreso por categoría vs stock (rotación).
     QMap<QString, QVariantMap> sold;
     QSqlQuery q(m_db);
-    if (q.exec(QStringLiteral(
-            "SELECT p.cat, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
-            "JOIN sales s ON si.sale_id=s.id "
-            "JOIN products p ON si.product_id=p.id "
-            "WHERE s.status!='Cancelada' GROUP BY p.cat"))) {
+    if (q.exec(QStringLiteral("SELECT p.cat, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
+                              "JOIN sales s ON si.sale_id=s.id "
+                              "JOIN products p ON si.product_id=p.id "
+                              "WHERE s.status!='Cancelada' GROUP BY p.cat"))) {
         while (q.next()) {
-            sold[normCat(q.value(0).toString())] = {{"sold", q.value(1).toDouble()},
-                                                    {"revenue", q.value(2).toDouble()}};
+            sold[normCat(q.value(0).toString())]
+                = {{"sold", q.value(1).toDouble()}, {"revenue", q.value(2).toDouble()}};
         }
     }
     QVariantList out;
@@ -457,12 +461,10 @@ QVariantList ReportService::rotationByCategory() const
         const QString cat = normCat(p.value(0).toString());
         const double units = sold.value(cat).value(QStringLiteral("sold"), 0.0).toDouble();
         const double stock = p.value(2).toDouble();
-        out << QVariantMap{{"category", cat},
-                           {"products", p.value(1).toInt()},
-                           {"sold", units},
-                           {"revenue", sold.value(cat).value(QStringLiteral("revenue"), 0.0)},
-                           {"stock", stock},
-                           {"rotation", stock > 1e-9 ? units / stock : units}};
+        out << QVariantMap{
+            {"category", cat}, {"products", p.value(1).toInt()},
+            {"sold", units},   {"revenue", sold.value(cat).value(QStringLiteral("revenue"), 0.0)},
+            {"stock", stock},  {"rotation", stock > 1e-9 ? units / stock : units}};
     }
     std::sort(out.begin(), out.end(), [](const QVariant &a, const QVariant &b) {
         return a.toMap()["revenue"].toDouble() > b.toMap()["revenue"].toDouble();
@@ -513,11 +515,10 @@ QVariantList ReportService::warrantyOpen() const
     // (fecha venta + warranty_months del producto).
     QVariantList out;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral(
-            "SELECT s.serial, s.sku, p.name, s.sale_id, sa.date, p.attrs_json "
-            "FROM serials s LEFT JOIN products p ON p.sku=s.sku "
-            "LEFT JOIN sales sa ON sa.id=s.sale_id "
-            "WHERE s.status='sold' ORDER BY sa.date DESC LIMIT 500")))
+    if (!q.exec(QStringLiteral("SELECT s.serial, s.sku, p.name, s.sale_id, sa.date, p.attrs_json "
+                               "FROM serials s LEFT JOIN products p ON p.sku=s.sku "
+                               "LEFT JOIN sales sa ON sa.id=s.sale_id "
+                               "WHERE s.status='sold' ORDER BY sa.date DESC LIMIT 500")))
         return out;
     const QDate today = QDate::currentDate();
     while (q.next()) {
@@ -528,13 +529,11 @@ QVariantList ReportService::warrantyOpen() const
         const QDate expires = sold.addMonths(months > 0 ? months : 12);
         if (today > expires)
             continue;
-        out << QVariantMap{{"serial", q.value(0).toString()},
-                           {"sku", q.value(1).toString()},
-                           {"product", q.value(2).toString()},
-                           {"saleId", q.value(3).toString()},
-                           {"saleDate", q.value(4).toString()},
-                           {"warrantyMonths", months},
-                           {"expiresAt", expires.toString(Qt::ISODate)}};
+        out << QVariantMap{
+            {"serial", q.value(0).toString()},           {"sku", q.value(1).toString()},
+            {"product", q.value(2).toString()},          {"saleId", q.value(3).toString()},
+            {"saleDate", q.value(4).toString()},         {"warrantyMonths", months},
+            {"expiresAt", expires.toString(Qt::ISODate)}};
     }
     return out;
 }
@@ -544,29 +543,29 @@ QVariantList ReportService::bulkPerformance() const
     // Fase 5 (abarrotes): cantidad e ingreso agrupados por unidad de medida.
     QVariantList out;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral(
-            "SELECT p.unit, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
-            "JOIN sales s ON si.sale_id=s.id "
-            "JOIN products p ON si.product_id=p.id "
-            "WHERE s.status!='Cancelada' GROUP BY p.unit "
-            "ORDER BY SUM(si.subtotal) DESC")))
+    if (!q.exec(QStringLiteral("SELECT p.unit, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
+                               "JOIN sales s ON si.sale_id=s.id "
+                               "JOIN products p ON si.product_id=p.id "
+                               "WHERE s.status!='Cancelada' GROUP BY p.unit "
+                               "ORDER BY SUM(si.subtotal) DESC")))
         return out;
     while (q.next()) {
         QString unit = q.value(0).toString().trimmed();
         if (unit.isEmpty())
             unit = QStringLiteral("unidad");
-        out << QVariantMap{{"unit", unit},
-                           {"qty", q.value(1).toDouble()},
-                           {"revenue", q.value(2).toDouble()}};
+        out << QVariantMap{
+            {"unit", unit}, {"qty", q.value(1).toDouble()}, {"revenue", q.value(2).toDouble()}};
     }
     return out;
 }
 
 QString ReportService::exportCsv(const QString &type, const QString &dir) const
 {
-    const QString path = dir + QStringLiteral("/reporte_%1_%2.csv")
-                             .arg(type, QDateTime::currentDateTime().toString(
-                                               QStringLiteral("yyyyMMdd_HHmmss")));
+    const QString path
+        = dir
+          + QStringLiteral("/reporte_%1_%2.csv")
+                .arg(type,
+                     QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss")));
     QFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
         return {};
@@ -594,9 +593,8 @@ QString ReportService::exportCsv(const QString &type, const QString &dir) const
         out << "SKU,Nombre,Lote,Vencimiento,Stock\n";
         for (const QVariant &v : expiringProducts(90)) {
             const QVariantMap m = v.toMap();
-            out << m["sku"].toString() << "," << m["name"].toString() << ","
-                << m["lote"].toString() << "," << m["vencimiento"].toString() << ","
-                << m["stock"].toDouble() << "\n";
+            out << m["sku"].toString() << "," << m["name"].toString() << "," << m["lote"].toString()
+                << "," << m["vencimiento"].toString() << "," << m["stock"].toDouble() << "\n";
         }
     } else if (type == QLatin1String("seriales")) {
         // Fase 4: estado de seriales.
@@ -675,9 +673,11 @@ QString ReportService::exportCsv(const QString &type, const QString &dir) const
 
 QString ReportService::exportPdf(const QString &type, const QString &dir) const
 {
-    const QString path = dir + QStringLiteral("/reporte_%1_%2.pdf")
-                             .arg(type, QDateTime::currentDateTime().toString(
-                                               QStringLiteral("yyyyMMdd_HHmmss")));
+    const QString path
+        = dir
+          + QStringLiteral("/reporte_%1_%2.pdf")
+                .arg(type,
+                     QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss")));
     QPdfWriter writer(path);
     writer.setPageSize(QPageSize(QPageSize::A4));
     writer.setTitle(QStringLiteral("Reporte %1 — Sistema de Ventas").arg(type));
@@ -689,10 +689,11 @@ QString ReportService::exportPdf(const QString &type, const QString &dir) const
     titleFont.setBold(true);
     painter.setFont(titleFont);
     int y = 400;
-    painter.drawText(400, y, QStringLiteral("%1 — Reporte %2")
-                                 .arg(setting(QStringLiteral("business_name"),
-                                              QStringLiteral("Sistema de Ventas")),
-                                      type));
+    painter.drawText(
+        400, y,
+        QStringLiteral("%1 — Reporte %2")
+            .arg(setting(QStringLiteral("business_name"), QStringLiteral("Sistema de Ventas")),
+                 type));
     y += 350;
     const QString nit = setting(QStringLiteral("business_nit"));
     if (!nit.isEmpty()) {
@@ -711,7 +712,7 @@ QString ReportService::exportPdf(const QString &type, const QString &dir) const
              << QStringLiteral("Costo: $%1").arg(e["costo"].toDouble(), 0, 'f', 0)
              << QStringLiteral("Bruto: $%1").arg(e["bruto"].toDouble(), 0, 'f', 0)
              << QStringLiteral("IVA: $%1").arg(tx["iva_19"].toDouble(), 0, 'f', 0)
-              << QStringLiteral("Flujo neto: $%1").arg(fl["neto"].toDouble(), 0, 'f', 0);
+             << QStringLiteral("Flujo neto: $%1").arg(fl["neto"].toDouble(), 0, 'f', 0);
     } else if (type == QLatin1String("vencimientos")) {
         // Fase 3/5: próximos a vencer (90 días).
         for (const QVariant &v : expiringProducts(90)) {
@@ -789,7 +790,9 @@ QString ReportService::exportPdf(const QString &type, const QString &dir) const
                     .arg(w["count"].toInt());
         for (const QVariant &v : topProducts(5)) {
             const QVariantMap m = v.toMap();
-            rows << QStringLiteral("Top: %1 (%2 uds)").arg(m["name"].toString()).arg(m["sold"].toInt());
+            rows << QStringLiteral("Top: %1 (%2 uds)")
+                        .arg(m["name"].toString())
+                        .arg(m["sold"].toInt());
         }
     }
     for (const QString &row : rows) {

@@ -9,7 +9,7 @@ class TstTicket : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void buildAndPrint()
     {
         QTemporaryDir tmp;

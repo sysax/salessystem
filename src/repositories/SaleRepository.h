@@ -20,11 +20,12 @@ class SaleRepository : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     static const QStringList EstadosVenta; // Cotización..Cerrada
     static const QStringList DocTypes;
 
-    struct NewSale {
+    struct NewSale
+    {
         QString clientName;
         QString vendedor = QStringLiteral("vendedor");
         double subtotal = 0.0;
@@ -36,7 +37,7 @@ public:
         // "Credito" ⇒ todo a crédito. Vacío + otro método ⇒ contado total.
         QMap<QString, double> payments;
         QString paymentMethod = QStringLiteral("Efectivo");
-        QString docType; // vacío ⇒ default DIAN/offline
+        QString docType;       // vacío ⇒ default DIAN/offline
         QList<SaleItem> items; // productId, qty, subtotal por línea
         bool offline = false;
         // Fase 1: desglose por tasa (JSON de SalesService::bucketsToJson).
@@ -63,7 +64,7 @@ public:
 
     static Sale rowToSale(const QSqlQuery &q);
 
-private:
+  private:
     QSqlDatabase m_db;
     ClientRepository *m_clients = nullptr;
     CajaRepository *m_caja = nullptr;

@@ -4,26 +4,22 @@
 
 InventoryService::InventoryService(QSqlDatabase db, ProductRepository *products,
                                    InventoryRepository *inventory, EventBus *bus, QObject *parent)
-    : QObject(parent), m_db(std::move(db)), m_products(products), m_inventory(inventory),
-      m_bus(bus)
+    : QObject(parent), m_db(std::move(db)), m_products(products), m_inventory(inventory), m_bus(bus)
 {
 }
 
-Result<InventoryService::StockResult> InventoryService::registerPurchase(
-    int productId, double qty, double cost, const QString &supplier, const QString &invoice,
-    const QString &user)
+Result<InventoryService::StockResult>
+InventoryService::registerPurchase(int productId, double qty, double cost, const QString &supplier,
+                                   const QString &invoice, const QString &user)
 {
     if (qty <= 0)
-        return Result<StockResult>::failure(
-            QStringLiteral("La cantidad debe ser mayor a 0"));
+        return Result<StockResult>::failure(QStringLiteral("La cantidad debe ser mayor a 0"));
     const auto p = m_products->findById(productId);
     if (!p)
-        return Result<StockResult>::failure(
-            QStringLiteral("Producto %1 no existe").arg(productId));
+        return Result<StockResult>::failure(QStringLiteral("Producto %1 no existe").arg(productId));
 
     const double newStock = p->stock + qty;
-    const double newCost =
-        (p->stock * p->priceBuy + qty * cost) / (newStock > 0 ? newStock : 1);
+    const double newCost = (p->stock * p->priceBuy + qty * cost) / (newStock > 0 ? newStock : 1);
     Product upd = *p;
     upd.stock = newStock;
     upd.priceBuy = newCost;
@@ -45,19 +41,18 @@ Result<InventoryService::StockResult> InventoryService::registerPurchase(
     return Result<StockResult>::success(r);
 }
 
-Result<InventoryService::StockResult> InventoryService::registerAdjustment(
-    const QString &sku, double delta, const QString &reason, const QString &user)
+Result<InventoryService::StockResult> InventoryService::registerAdjustment(const QString &sku,
+                                                                           double delta,
+                                                                           const QString &reason,
+                                                                           const QString &user)
 {
     if (delta == 0)
-        return Result<StockResult>::failure(
-            QStringLiteral("La cantidad debe ser diferente de 0"));
+        return Result<StockResult>::failure(QStringLiteral("La cantidad debe ser diferente de 0"));
     if (reason.trimmed().isEmpty())
-        return Result<StockResult>::failure(
-            QStringLiteral("Justificación requerida para ajuste"));
+        return Result<StockResult>::failure(QStringLiteral("Justificación requerida para ajuste"));
     const auto p = m_products->findBySku(sku);
     if (!p)
-        return Result<StockResult>::failure(
-            QStringLiteral("SKU %1 no encontrado").arg(sku));
+        return Result<StockResult>::failure(QStringLiteral("SKU %1 no encontrado").arg(sku));
     const double newStock = p->stock + delta;
     if (newStock < -1e-9)
         return Result<StockResult>::failure(
@@ -78,25 +73,25 @@ Result<InventoryService::StockResult> InventoryService::registerAdjustment(
     return Result<StockResult>::success(r);
 }
 
-Result<InventoryService::StockResult> InventoryService::registerWaste(
-    const QString &sku, double qty, const QString &reason, const QString &user)
+Result<InventoryService::StockResult> InventoryService::registerWaste(const QString &sku,
+                                                                      double qty,
+                                                                      const QString &reason,
+                                                                      const QString &user)
 {
     // Fase 4: merma (abarrotes): salida tipo "Merma", nunca stock negativo.
     if (qty <= 1e-9)
         return Result<StockResult>::failure(QStringLiteral("Cantidad >0"));
     const auto p = m_products->findBySku(sku);
     if (!p)
-        return Result<StockResult>::failure(
-            QStringLiteral("SKU %1 no encontrado").arg(sku));
+        return Result<StockResult>::failure(QStringLiteral("SKU %1 no encontrado").arg(sku));
     if (p->stock < qty - 1e-9)
         return Result<StockResult>::failure(
             QStringLiteral("Merma mayor al stock (%1)").arg(p->stock));
     const double newStock = p->stock - qty;
     m_products->setStockBySku(sku, newStock);
-    const QString detail = reason.trimmed().isEmpty() ? QStringLiteral("merma")
-                                                      : reason.trimmed();
-    m_inventory->record(sku, p->name, QStringLiteral("Merma"), -qty, p->stock, newStock,
-                        detail, user);
+    const QString detail = reason.trimmed().isEmpty() ? QStringLiteral("merma") : reason.trimmed();
+    m_inventory->record(sku, p->name, QStringLiteral("Merma"), -qty, p->stock, newStock, detail,
+                        user);
     if (m_bus)
         m_bus->publish(EventBus::InventoryUpdated,
                        {{"product_id", p->id}, {"quantity_change", -qty}});
@@ -118,8 +113,7 @@ StatusResult InventoryService::transfer(const QString &sku, double qty, const QS
     if (reason.trimmed().isEmpty())
         return StatusResult::failure(QStringLiteral("Motivo requerido"));
     if (qty <= 0 || qty > p->stock)
-        return StatusResult::failure(
-            QStringLiteral("Cantidad inválida: stock %1").arg(p->stock));
+        return StatusResult::failure(QStringLiteral("Cantidad inválida: stock %1").arg(p->stock));
     Product upd = *p;
     upd.location = toLocation.trimmed();
     auto r = m_products->update(sku, upd);

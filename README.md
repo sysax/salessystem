@@ -1,8 +1,12 @@
-# Sistema de Ventas — Qt6/QML + C++20 (Colombia, COP)
+# Sistema de Ventas — Qt6/QML + C++20 (multinegocio parametrizable)
 
 Aplicación de escritorio para punto de venta y gestión comercial: catálogo,
 inventario, POS con pagos mixtos, compras, CxC/CxP, reportes con KPIs,
 usuarios con 2FA TOTP y modo offline-first con sincronización.
+
+Negocio parametrizable por `Settings` (nombre, NIT, moneda, impuestos,
+vertical farmacia/abarrotes/celulares/…): sin supuestos Colombia/COP
+hardcodeados (ver `MULTI_NEGOCIO_SPEC.md`, Fases 1–5 implementadas).
 
 Migrado desde KivyMD/Python (ver historial git) siguiendo `arquitectura.txt`:
 
@@ -39,7 +43,7 @@ tickets siempre en `.txt`, cola `outbox` idempotente.
 ```bash
 cmake -S . -B build -DCMAKE_PREFIX_PATH=$HOME/Qt/6.11.2/gcc_64
 cmake --build build -j$(nproc)
-ctest --test-dir build   # 11 suites QtTest
+ctest --test-dir build   # 16 suites QtTest
 QT_QUICK_CONTROLS_STYLE=Material ./build/qtsales
 ```
 
@@ -73,20 +77,28 @@ Usuarios; toda clave asignada por un admin también exige cambio al entrar.
 ├── src/
 │   ├── main.cpp            # DI manual + contexto QML
 │   ├── core/               # DatabaseManager, EventBus, Money, Result
-│   ├── domain/Entities.h   # 14 structs 1:1 con SQLite
-│   ├── repositories/       # 11 repos QSql (sin SQL en UI)
+│   ├── domain/Entities.h   # 17 structs 1:1 con SQLite
+│   ├── repositories/       # 14 repos QSql (sin SQL en UI)
 │   ├── services/           # Auth, Sales, Inventory, Purchase, Report,
-│   │                       #  Sync, Credit, Dian, TicketPrinter, Totp
-│   └── controllers/        # 13 controllers Q_PROPERTY/Q_INVOKABLE
+│   │                       #  Sync, Credit (CxC/CxP), Settings, Dian,
+│   │                       #  TicketPrinter, Totp
+│   └── controllers/        # 15 controllers Q_PROPERTY/Q_INVOKABLE
 ├── qml/                    # Main + 14 páginas + sidebar, Material
 ├── sql/schema.sql + seed.sql (solo admin, embebidos en el binario vía .qrc)
-├── tests/                  # 12 suites QtTest (ctest; datos demo en tests/fixtures/)
+├── tests/                  # 16 suites QtTest (ctest; datos demo en tests/fixtures/)
 └── fases.md                # Especificación original de los 12 módulos
 ```
 
 ## Notas
 
-- Moneda COP, IVA 19 %, NIT.
+- Multinegocio (Fases 1–5 de `MULTI_NEGOCIO_SPEC.md`): moneda, impuestos,
+  vertical y datos del negocio salen de `Settings`; sin literales COP/IVA
+  fuera de `SettingsService`. Valores por defecto: COP, IVA 19 %, NIT.
+- Higiene Fase 0 (`MAP_PRO.md`): `-Wall -Wextra -Werror`,
+  `format-check` (clang-format 23.1.1), `cmake-format-check`,
+  `qml-lint` como targets del build; CI en Linux/Windows/macOS +
+  job ASan/UBSan + cobertura ≥60 % en `src/services`.
+  Sanitizers locales: `cmake -DENABLE_SANITIZERS=ON`.
 - Offline-first: las ventas siempre se guardan local; `outbox` sincroniza
   al reconectar (idempotente por clave).
 - Sin impresora, los tickets se guardan como `.txt` (y se intenta `lp`).

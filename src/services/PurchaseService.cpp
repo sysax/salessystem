@@ -50,14 +50,11 @@ Result<Purchase> PurchaseService::receive(const QString &folio, const QString &u
 {
     const auto po = m_purchases->find(folio);
     if (!po)
-        return Result<Purchase>::failure(
-            QStringLiteral("Orden %1 no encontrada").arg(folio));
+        return Result<Purchase>::failure(QStringLiteral("Orden %1 no encontrada").arg(folio));
     if (po->status == QLatin1String("Recibida"))
-        return Result<Purchase>::failure(
-            QStringLiteral("Orden %1 ya recibida").arg(folio));
+        return Result<Purchase>::failure(QStringLiteral("Orden %1 ya recibida").arg(folio));
     if (po->status == QLatin1String("Cancelada"))
-        return Result<Purchase>::failure(
-            QStringLiteral("Orden %1 cancelada").arg(folio));
+        return Result<Purchase>::failure(QStringLiteral("Orden %1 cancelada").arg(folio));
 
     for (const PurchaseItem &it : po->items) {
         const auto prod = m_products->findBySku(it.sku);
@@ -83,8 +80,9 @@ Result<Purchase> PurchaseService::receive(const QString &folio, const QString &u
     m_payables->create(cxp);
 
     if (m_audit)
-        m_audit->log(user, QStringLiteral("compra_recibida"),
-                     QStringLiteral("%1 %2 $%3").arg(folio, po->supplier).arg(po->total, 0, 'f', 0));
+        m_audit->log(
+            user, QStringLiteral("compra_recibida"),
+            QStringLiteral("%1 %2 $%3").arg(folio, po->supplier).arg(po->total, 0, 'f', 0));
     return Result<Purchase>::success(*m_purchases->find(folio));
 }
 
@@ -92,11 +90,9 @@ Result<Purchase> PurchaseService::cancel(const QString &folio, const QString &us
 {
     const auto po = m_purchases->find(folio);
     if (!po)
-        return Result<Purchase>::failure(
-            QStringLiteral("Orden %1 no encontrada").arg(folio));
+        return Result<Purchase>::failure(QStringLiteral("Orden %1 no encontrada").arg(folio));
     if (po->status == QLatin1String("Recibida"))
-        return Result<Purchase>::failure(
-            QStringLiteral("No se puede cancelar orden ya recibida"));
+        return Result<Purchase>::failure(QStringLiteral("No se puede cancelar orden ya recibida"));
     m_purchases->setStatus(folio, QStringLiteral("Cancelada"));
     if (m_audit)
         m_audit->log(user, QStringLiteral("compra_cancelada"), folio);

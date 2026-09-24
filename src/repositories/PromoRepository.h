@@ -11,7 +11,8 @@
 // Promociones — CRUD + evaluación de descuento sobre carrito.
 // Tipos: porcentaje|monto_fijo|2x1|3x2|volumen|cupon|happy_hour
 // (semántica idéntica a Repository.apply_promo).
-struct CartLine {
+struct CartLine
+{
     int productId = 0;
     QString sku;
     QString cat;
@@ -20,7 +21,8 @@ struct CartLine {
     double subtotal = 0.0;
 };
 
-struct PromoDiscount {
+struct PromoDiscount
+{
     double discount = 0.0;
     QString promoName;
     QString promoCode;
@@ -30,7 +32,7 @@ class PromoRepository : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit PromoRepository(QSqlDatabase db, ProductRepository *products = nullptr,
                              AuditRepository *audit = nullptr, QObject *parent = nullptr);
 
@@ -47,7 +49,7 @@ public:
 
     static Promo rowToPromo(const QSqlQuery &q);
 
-private:
+  private:
     QSqlDatabase m_db;
     ProductRepository *m_products = nullptr;
     AuditRepository *m_audit = nullptr;

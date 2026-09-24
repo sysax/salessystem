@@ -7,7 +7,7 @@ class TstMoney : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void roundtrip()
     {
         QCOMPARE(Money::fromCop(1850000.0).cents(), (qint64)185000000);

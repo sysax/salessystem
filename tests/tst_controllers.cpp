@@ -26,7 +26,7 @@ class TstControllers : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void initTestCase()
     {
         QVERIFY(m_tmp.isValid());
@@ -44,13 +44,13 @@ private slots:
         auto *inventory = new InventoryRepository(db, audit, this);
         auto *promos = new PromoRepository(db, products, audit, this);
         auto *authSvc = new AuthService(db, bus, this);
-        auto *salesSvc = new SalesService(db, products, sales, inventory, clients, caja,
-                                          promos, bus, nullptr, nullptr, nullptr, this);
+        auto *salesSvc = new SalesService(db, products, sales, inventory, clients, caja, promos,
+                                          bus, nullptr, nullptr, nullptr, this);
         auto *sync = new SyncService(db, bus, this);
         auto *printer = new TicketPrinter(m_tmp.path(), this);
         m_auth = new AuthController(authSvc, this);
-        m_pos = new PosController(salesSvc, products, promos, caja, printer, sync,
-                                      nullptr, nullptr, this);
+        m_pos = new PosController(salesSvc, products, promos, caja, printer, sync, nullptr, nullptr,
+                                  this);
         m_catalog = new CatalogController(products, nullptr, nullptr, this);
         m_salesCtl = new SalesController(sales, salesSvc, nullptr, nullptr, this);
     }
@@ -81,9 +81,8 @@ private slots:
         QCOMPARE(m_pos->cart().first().toMap()["qty"].toInt(), 2);
         QVERIFY(m_pos->totals()["total"].toDouble() > 0);
 
-        QVariantMap r = m_pos->checkout(QStringLiteral("Mostrador"),
-                                        {{"efectivo", 200000.0}}, QStringLiteral("Efectivo"),
-                                        QStringLiteral("cajero"));
+        QVariantMap r = m_pos->checkout(QStringLiteral("Mostrador"), {{"efectivo", 200000.0}},
+                                        QStringLiteral("Efectivo"), QStringLiteral("cajero"));
         QVERIFY(r["ok"].toBool());
         QVERIFY(!r["saleId"].toString().isEmpty());
         QVERIFY(!r["ticket"].toString().isEmpty());
@@ -97,15 +96,11 @@ private slots:
     {
         m_catalog->search(QStringLiteral("mouse"));
         QVERIFY(!m_catalog->products().isEmpty());
-        QVariantMap add = m_catalog->add({{"sku", "CTL1"},
-                                         {"name", "Control Test"},
-                                         {"price", 5000.0},
-                                         {"stock", 3}});
+        QVariantMap add = m_catalog->add(
+            {{"sku", "CTL1"}, {"name", "Control Test"}, {"price", 5000.0}, {"stock", 3}});
         QVERIFY(add["ok"].toBool());
-        QVariantMap bad = m_catalog->add({{"sku", "CTL1"},
-                                          {"name", "Dup"},
-                                          {"price", 1.0},
-                                          {"stock", 1}});
+        QVariantMap bad
+            = m_catalog->add({{"sku", "CTL1"}, {"name", "Dup"}, {"price", 1.0}, {"stock", 1}});
         QVERIFY(!bad["ok"].toBool());
         QVERIFY(m_catalog->remove(QStringLiteral("CTL1"))["ok"].toBool());
     }
@@ -119,7 +114,7 @@ private slots:
         QVERIFY(d.contains("items"));
     }
 
-private:
+  private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_dbm = nullptr;
     AuthController *m_auth = nullptr;

@@ -22,16 +22,24 @@ class PosController : public QObject
     Q_PROPERTY(QVariantMap caja READ caja NOTIFY cajaChanged)
     Q_PROPERTY(int pendingSync READ pendingSync NOTIFY syncChanged)
 
-public:
+  public:
     explicit PosController(SalesService *sales, ProductRepository *products,
-                           PromoRepository *promos, CajaRepository *caja,
-                           TicketPrinter *printer, SyncService *sync,
-                           SettingsService *settings = nullptr,
+                           PromoRepository *promos, CajaRepository *caja, TicketPrinter *printer,
+                           SyncService *sync, SettingsService *settings = nullptr,
                            SerialRepository *serials = nullptr, QObject *parent = nullptr);
 
-    QVariantList cart() const { return m_cart; }
-    QVariantMap totals() const { return m_totals; }
-    QVariantMap caja() const { return m_cajaStatus; }
+    QVariantList cart() const
+    {
+        return m_cart;
+    }
+    QVariantMap totals() const
+    {
+        return m_totals;
+    }
+    QVariantMap caja() const
+    {
+        return m_cajaStatus;
+    }
     int pendingSync() const;
 
     // Fase 2: cantidades decimales (granel).
@@ -53,12 +61,12 @@ public:
     Q_INVOKABLE QVariantMap closeCaja(double counted, const QString &user);
     Q_INVOKABLE void refreshCaja();
 
-signals:
+  signals:
     void cartChanged();
     void cajaChanged();
     void syncChanged();
 
-private:
+  private:
     void recompute();
     // Fase 3: líneas y cantidad acumulada de un producto en el carrito.
     int cartSerialLines(int productId) const;

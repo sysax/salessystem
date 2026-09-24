@@ -12,7 +12,7 @@ class TstReport : public QObject
 {
     Q_OBJECT
 
-private slots:
+  private slots:
     void initTestCase()
     {
         QVERIFY(m_tmp.isValid());
@@ -168,28 +168,31 @@ private slots:
         const int ctId = q.lastInsertId().toInt();
         QVERIFY(q.exec(QStringLiteral(
             "INSERT INTO products (sku, name, price, price_buy, stock, attrs_json) VALUES "
-            "('EQ-W','Equipo W',500000,400000,3,'{\"track_serial\":true,\"warranty_months\":12}')")));
+            "('EQ-W','Equipo "
+            "W',500000,400000,3,'{\"track_serial\":true,\"warranty_months\":12}')")));
         const int eqId = q.lastInsertId().toInt();
-        QVERIFY(q.exec(QStringLiteral(
-            "INSERT INTO sales (id, date, client, total, subtotal, tax, status) VALUES "
-            "('S-CT','%1','Mostrador',11900,10000,1900,'Pagada')")
-                           .arg(today)));
-        QVERIFY(q.exec(QStringLiteral(
-            "INSERT INTO sale_items (sale_id, product_id, qty, subtotal) VALUES "
-            "('S-CT',%1,2,20000)")
-                           .arg(ctId)));
-        QVERIFY(q.exec(QStringLiteral(
-            "INSERT INTO sales (id, date, client, total, subtotal, tax, status) VALUES "
-            "('S-W','%1','Mostrador',595000,500000,95000,'Pagada')")
-                           .arg(today)));
-        QVERIFY(q.exec(QStringLiteral(
-            "INSERT INTO sale_items (sale_id, product_id, qty, subtotal) VALUES "
-            "('S-W',%1,1,500000)")
-                           .arg(eqId)));
-        QVERIFY(q.exec(QStringLiteral(
-            "INSERT INTO serials (product_id, sku, serial, status, sale_id) VALUES "
-            "(%1,'EQ-W','W-001','sold','S-W')")
-                           .arg(eqId)));
+        QVERIFY(
+            q.exec(QStringLiteral(
+                       "INSERT INTO sales (id, date, client, total, subtotal, tax, status) VALUES "
+                       "('S-CT','%1','Mostrador',11900,10000,1900,'Pagada')")
+                       .arg(today)));
+        QVERIFY(q.exec(
+            QStringLiteral("INSERT INTO sale_items (sale_id, product_id, qty, subtotal) VALUES "
+                           "('S-CT',%1,2,20000)")
+                .arg(ctId)));
+        QVERIFY(
+            q.exec(QStringLiteral(
+                       "INSERT INTO sales (id, date, client, total, subtotal, tax, status) VALUES "
+                       "('S-W','%1','Mostrador',595000,500000,95000,'Pagada')")
+                       .arg(today)));
+        QVERIFY(q.exec(
+            QStringLiteral("INSERT INTO sale_items (sale_id, product_id, qty, subtotal) VALUES "
+                           "('S-W',%1,1,500000)")
+                .arg(eqId)));
+        QVERIFY(q.exec(
+            QStringLiteral("INSERT INTO serials (product_id, sku, serial, status, sale_id) VALUES "
+                           "(%1,'EQ-W','W-001','sold','S-W')")
+                .arg(eqId)));
 
         bool seenCt = false;
         for (const QVariant &v : m_rep->controlledSales()) {
@@ -222,7 +225,7 @@ private slots:
         QVERIFY(!pdf.isEmpty() && QFile::exists(pdf));
     }
 
-private:
+  private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_dbm = nullptr;
     ReportService *m_rep = nullptr;
