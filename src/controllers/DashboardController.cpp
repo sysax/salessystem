@@ -49,6 +49,8 @@ void DashboardController::refresh()
         d[QStringLiteral("serialsInStock")] =
             rep["counts"].toMap().value(QStringLiteral("in_stock"), 0);
     }
+    // Fase 5: garantías vigentes (celulares/taller).
+    d[QStringLiteral("warrantyOpen")] = m_reports->warrantyOpen().size();
     double wasteMonth = 0.0;
     for (const QVariant &v : m_reports->wasteReport())
         wasteMonth += v.toMap()["cost"].toDouble();

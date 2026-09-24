@@ -79,6 +79,32 @@ ScrollView {
                 text: qsTr("CSV mermas")
                 onClicked: msg.text = reports.exportCsv("mermas", exportDir())
             }
+            Button {
+                text: qsTr("CSV rotación")
+                onClicked: msg.text = reports.exportCsv("rotacion", exportDir())
+            }
+            Button {
+                text: qsTr("CSV inventario")
+                onClicked: msg.text = reports.exportCsv("inventario", exportDir())
+            }
+        }
+        RowLayout {
+            // Fase 5: reportes por vertical (según rubro activo).
+            Button {
+                text: qsTr("CSV controlados")
+                visible: verticalIn(["farmacia", "veterinaria"])
+                onClicked: msg.text = reports.exportCsv("controlados", exportDir())
+            }
+            Button {
+                text: qsTr("CSV garantías")
+                visible: verticalIn(["celulares", "taller"])
+                onClicked: msg.text = reports.exportCsv("garantias", exportDir())
+            }
+            Button {
+                text: qsTr("CSV granel")
+                visible: verticalIn(["abarrotes", "restaurante", "panaderia", "cafeteria", "miscelanea"])
+                onClicked: msg.text = reports.exportCsv("granel", exportDir())
+            }
         }
         Label {
             text: qsTr("Por vencer (30 días): %1").arg(reports.expiringProducts(30).length)
@@ -89,6 +115,20 @@ ScrollView {
             wrapMode: Text.Wrap
         }
         Label {
+            text: qsTr("Inventario: %1 uds · costo %2").arg(reports.inventoryValue().units).arg(money(reports.inventoryValue().cost))
+            wrapMode: Text.Wrap
+        }
+        Label {
+            text: qsTr("Controlados vendidos: %1").arg(reports.controlledSales().length)
+            wrapMode: Text.Wrap
+            visible: verticalIn(["farmacia", "veterinaria"])
+        }
+        Label {
+            text: qsTr("En garantía: %1").arg(reports.warrantyOpen().length)
+            wrapMode: Text.Wrap
+            visible: verticalIn(["celulares", "taller"])
+        }
+        Label {
             id: msg
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
@@ -97,6 +137,14 @@ ScrollView {
 
     function money(v) {
         return ApplicationWindow.window.money(v);
+    }
+    function verticalIn(list) {
+        try {
+            var bt = settingsCtl.settings["business_type"] || "";
+            return list.indexOf(bt) >= 0;
+        } catch (e) {
+            return true; // sin settings (tests): mostrar todo
+        }
     }
     function exportDir() {
         // Exportar junto a la BD de la app no es visible; usar temporal del sistema

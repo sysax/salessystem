@@ -34,6 +34,12 @@ public:
     // Fase 4: seriales por estado + mermas valorizadas.
     Q_INVOKABLE QVariantMap serialsReport() const;
     Q_INVOKABLE QVariantList wasteReport() const;
+    // Fase 5: reportes por vertical + genéricos (rotación, valorizado).
+    Q_INVOKABLE QVariantList rotationByCategory() const;
+    Q_INVOKABLE QVariantMap inventoryValue() const;
+    Q_INVOKABLE QVariantList controlledSales() const;
+    Q_INVOKABLE QVariantList warrantyOpen() const;
+    Q_INVOKABLE QVariantList bulkPerformance() const;
 
     // Exporta CSV operativo/financiero; retorna ruta o "" en error.
     // Cabecera con business_name/NIT de `settings` (Fase 0 multinegocio).

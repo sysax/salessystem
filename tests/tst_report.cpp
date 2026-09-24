@@ -5,6 +5,7 @@
 #include "TestDb.h"
 #include "services/ReportService.h"
 
+#include <QDate>
 #include <QTemporaryDir>
 
 class TstReport : public QObject
@@ -142,6 +143,83 @@ private slots:
         QFile f(op);
         QVERIFY(f.open(QIODevice::ReadOnly));
         QCOMPARE(f.read(5), QByteArray("%PDF-"));
+    }
+
+    void verticalReports()
+    {
+        // Fase 5: genéricos (rotación por categoría + valorizado).
+        const QVariantList rot = m_rep->rotationByCategory();
+        QVERIFY(!rot.isEmpty());
+        for (const QVariant &v : rot)
+            QVERIFY(v.toMap().contains("category") && v.toMap().contains("rotation"));
+        const QVariantMap iv = m_rep->inventoryValue();
+        QVERIFY(iv["cost"].toDouble() > 0 && iv["units"].toDouble() > 0);
+        // El seed ya vende en 'unidad' (granel rinde por unidad).
+        const QVariantList bulk = m_rep->bulkPerformance();
+        QVERIFY(!bulk.isEmpty());
+        QVERIFY(bulk.first().toMap().contains("unit"));
+
+        // Fixture propio: controlado vendido + serial en garantía.
+        const QString today = QDate::currentDate().toString(Qt::ISODate);
+        QSqlQuery q(m_dbm->database());
+        QVERIFY(q.exec(QStringLiteral(
+            "INSERT INTO products (sku, name, price, price_buy, stock, attrs_json) VALUES "
+            "('CT-W','Controlado W',10000,6000,10,'{\"controlled\":true}')")));
+        const int ctId = q.lastInsertId().toInt();
+        QVERIFY(q.exec(QStringLiteral(
+            "INSERT INTO products (sku, name, price, price_buy, stock, attrs_json) VALUES "
+            "('EQ-W','Equipo W',500000,400000,3,'{\"track_serial\":true,\"warranty_months\":12}')")));
+        const int eqId = q.lastInsertId().toInt();
+        QVERIFY(q.exec(QStringLiteral(
+            "INSERT INTO sales (id, date, client, total, subtotal, tax, status) VALUES "
+            "('S-CT','%1','Mostrador',11900,10000,1900,'Pagada')")
+                           .arg(today)));
+        QVERIFY(q.exec(QStringLiteral(
+            "INSERT INTO sale_items (sale_id, product_id, qty, subtotal) VALUES "
+            "('S-CT',%1,2,20000)")
+                           .arg(ctId)));
+        QVERIFY(q.exec(QStringLiteral(
+            "INSERT INTO sales (id, date, client, total, subtotal, tax, status) VALUES "
+            "('S-W','%1','Mostrador',595000,500000,95000,'Pagada')")
+                           .arg(today)));
+        QVERIFY(q.exec(QStringLiteral(
+            "INSERT INTO sale_items (sale_id, product_id, qty, subtotal) VALUES "
+            "('S-W',%1,1,500000)")
+                           .arg(eqId)));
+        QVERIFY(q.exec(QStringLiteral(
+            "INSERT INTO serials (product_id, sku, serial, status, sale_id) VALUES "
+            "(%1,'EQ-W','W-001','sold','S-W')")
+                           .arg(eqId)));
+
+        bool seenCt = false;
+        for (const QVariant &v : m_rep->controlledSales()) {
+            const QVariantMap m = v.toMap();
+            if (m["sku"].toString() == QStringLiteral("CT-W")
+                && m["saleId"].toString() == QStringLiteral("S-CT")) {
+                QCOMPARE(m["qty"].toDouble(), 2.0);
+                seenCt = true;
+            }
+        }
+        QVERIFY(seenCt);
+        bool seenW = false;
+        for (const QVariant &v : m_rep->warrantyOpen()) {
+            const QVariantMap m = v.toMap();
+            if (m["serial"].toString() == QStringLiteral("W-001")) {
+                QVERIFY(!m["expiresAt"].toString().isEmpty());
+                seenW = true;
+            }
+        }
+        QVERIFY(seenW);
+
+        // CSV + PDF de los 5 tipos nuevos.
+        for (const QString &t : {QStringLiteral("rotacion"), QStringLiteral("inventario"),
+                                 QStringLiteral("controlados"), QStringLiteral("garantias"),
+                                 QStringLiteral("granel")}) {
+            const QString p = m_rep->exportCsv(t, m_tmp.path());
+            QVERIFY2(!p.isEmpty() && QFile::exists(p), qPrintable(t));
+        }
+        const QString pdf = m_rep->exportPdf(QStringLiteral("garantias"), m_tmp.path());
+        QVERIFY(!pdf.isEmpty() && QFile::exists(pdf));
     }
 
 private:

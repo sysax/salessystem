@@ -271,6 +271,22 @@ ScrollView {
                 onClicked: root.go("serials")
             }
         }
+        // Fase 5: garantías vigentes (celulares/taller).
+        RowLayout {
+            spacing: Theme.spacingSmall
+            visible: (dash.data.warrantyOpen || 0) > 0 && root.verticalIn(["celulares", "taller"])
+            Label {
+                text: qsTr("🛡️ En garantía (%1)").arg(dash.data.warrantyOpen || 0)
+                font.bold: true
+                font.pixelSize: Theme.fontML
+                Layout.fillWidth: true
+                color: Theme.info
+            }
+            ToolButton {
+                text: qsTr("Ver seriales →")
+                onClicked: root.go("serials")
+            }
+        }
         RowLayout {
             spacing: Theme.spacingSmall
             visible: (dash.data.wasteCost || 0) > 0 && root.verticalIn(["abarrotes", "restaurante", "panaderia", "cafeteria"])

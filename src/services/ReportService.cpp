@@ -17,6 +17,8 @@
 
 #include <algorithm>
 
+#include "../domain/Attrs.h"
+
 ReportService::ReportService(QSqlDatabase db, QObject *parent)
     : QObject(parent), m_db(std::move(db))
 {
@@ -422,6 +424,144 @@ QVariantList ReportService::wasteReport() const
     return out;
 }
 
+namespace
+{
+QString normCat(const QString &cat)
+{
+    const QString c = cat.trimmed();
+    return c.isEmpty() ? QStringLiteral("General") : c;
+}
+} // namespace
+
+QVariantList ReportService::rotationByCategory() const
+{
+    // Fase 5 (genérico): vendidos e ingreso por categoría vs stock (rotación).
+    QMap<QString, QVariantMap> sold;
+    QSqlQuery q(m_db);
+    if (q.exec(QStringLiteral(
+            "SELECT p.cat, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
+            "JOIN sales s ON si.sale_id=s.id "
+            "JOIN products p ON si.product_id=p.id "
+            "WHERE s.status!='Cancelada' GROUP BY p.cat"))) {
+        while (q.next()) {
+            sold[normCat(q.value(0).toString())] = {{"sold", q.value(1).toDouble()},
+                                                    {"revenue", q.value(2).toDouble()}};
+        }
+    }
+    QVariantList out;
+    QSqlQuery p(m_db);
+    if (!p.exec(QStringLiteral(
+            "SELECT cat, COUNT(*), COALESCE(SUM(stock),0) FROM products GROUP BY cat")))
+        return out;
+    while (p.next()) {
+        const QString cat = normCat(p.value(0).toString());
+        const double units = sold.value(cat).value(QStringLiteral("sold"), 0.0).toDouble();
+        const double stock = p.value(2).toDouble();
+        out << QVariantMap{{"category", cat},
+                           {"products", p.value(1).toInt()},
+                           {"sold", units},
+                           {"revenue", sold.value(cat).value(QStringLiteral("revenue"), 0.0)},
+                           {"stock", stock},
+                           {"rotation", stock > 1e-9 ? units / stock : units}};
+    }
+    std::sort(out.begin(), out.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap()["revenue"].toDouble() > b.toMap()["revenue"].toDouble();
+    });
+    return out;
+}
+
+QVariantMap ReportService::inventoryValue() const
+{
+    // Fase 5 (genérico): inventario valorizado a costo y a precio de venta.
+    QSqlQuery q(m_db);
+    q.exec(QStringLiteral("SELECT COALESCE(SUM(price_buy*stock),0), "
+                          "COALESCE(SUM(price*stock),0), COALESCE(SUM(stock),0), "
+                          "COUNT(*) FROM products"));
+    if (!q.next())
+        return {{"cost", 0.0}, {"sale", 0.0}, {"units", 0.0}, {"items", 0}};
+    return {{"cost", q.value(0).toDouble()},
+            {"sale", q.value(1).toDouble()},
+            {"units", q.value(2).toDouble()},
+            {"items", q.value(3).toInt()}};
+}
+
+QVariantList ReportService::controlledSales() const
+{
+    // Fase 5 (farmacia): líneas vendidas de productos controlados.
+    QVariantList out;
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral(
+            "SELECT s.id, s.date, p.sku, p.name, si.qty FROM sale_items si "
+            "JOIN sales s ON si.sale_id=s.id "
+            "JOIN products p ON si.product_id=p.id "
+            "WHERE s.status!='Cancelada' AND p.attrs_json LIKE '%\"controlled\":true%' "
+            "ORDER BY s.date DESC LIMIT 500")))
+        return out;
+    while (q.next()) {
+        out << QVariantMap{{"saleId", q.value(0).toString()},
+                           {"date", q.value(1).toString()},
+                           {"sku", q.value(2).toString()},
+                           {"product", q.value(3).toString()},
+                           {"qty", q.value(4).toDouble()}};
+    }
+    return out;
+}
+
+QVariantList ReportService::warrantyOpen() const
+{
+    // Fase 5 (celulares): seriales vendidos con garantía vigente
+    // (fecha venta + warranty_months del producto).
+    QVariantList out;
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral(
+            "SELECT s.serial, s.sku, p.name, s.sale_id, sa.date, p.attrs_json "
+            "FROM serials s LEFT JOIN products p ON p.sku=s.sku "
+            "LEFT JOIN sales sa ON sa.id=s.sale_id "
+            "WHERE s.status='sold' ORDER BY sa.date DESC LIMIT 500")))
+        return out;
+    const QDate today = QDate::currentDate();
+    while (q.next()) {
+        const QDate sold = QDate::fromString(q.value(4).toString(), Qt::ISODate);
+        if (!sold.isValid())
+            continue;
+        const int months = Attrs::integer(q.value(5).toString(), Attrs::KWarrantyMonths, 12);
+        const QDate expires = sold.addMonths(months > 0 ? months : 12);
+        if (today > expires)
+            continue;
+        out << QVariantMap{{"serial", q.value(0).toString()},
+                           {"sku", q.value(1).toString()},
+                           {"product", q.value(2).toString()},
+                           {"saleId", q.value(3).toString()},
+                           {"saleDate", q.value(4).toString()},
+                           {"warrantyMonths", months},
+                           {"expiresAt", expires.toString(Qt::ISODate)}};
+    }
+    return out;
+}
+
+QVariantList ReportService::bulkPerformance() const
+{
+    // Fase 5 (abarrotes): cantidad e ingreso agrupados por unidad de medida.
+    QVariantList out;
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral(
+            "SELECT p.unit, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
+            "JOIN sales s ON si.sale_id=s.id "
+            "JOIN products p ON si.product_id=p.id "
+            "WHERE s.status!='Cancelada' GROUP BY p.unit "
+            "ORDER BY SUM(si.subtotal) DESC")))
+        return out;
+    while (q.next()) {
+        QString unit = q.value(0).toString().trimmed();
+        if (unit.isEmpty())
+            unit = QStringLiteral("unidad");
+        out << QVariantMap{{"unit", unit},
+                           {"qty", q.value(1).toDouble()},
+                           {"revenue", q.value(2).toDouble()}};
+    }
+    return out;
+}
+
 QString ReportService::exportCsv(const QString &type, const QString &dir) const
 {
     const QString path = dir + QStringLiteral("/reporte_%1_%2.csv")
@@ -476,6 +616,49 @@ QString ReportService::exportCsv(const QString &type, const QString &dir) const
             out << m["sku"].toString() << "," << m["product"].toString() << ","
                 << m["qty"].toDouble() << "," << m["cost"].toDouble() << "\n";
         }
+    } else if (type == QLatin1String("rotacion")) {
+        // Fase 5: rotación por categoría.
+        out << "Categoria,Productos,Vendidos,Ingreso,Stock,Rotacion\n";
+        for (const QVariant &v : rotationByCategory()) {
+            const QVariantMap m = v.toMap();
+            out << m["category"].toString() << "," << m["products"].toInt() << ","
+                << m["sold"].toDouble() << "," << m["revenue"].toDouble() << ","
+                << m["stock"].toDouble() << "," << m["rotation"].toDouble() << "\n";
+        }
+    } else if (type == QLatin1String("inventario")) {
+        // Fase 5: valorizado del inventario.
+        const QVariantMap iv = inventoryValue();
+        out << "Concepto,Valor\n";
+        out << "Costo," << iv["cost"].toDouble() << "\n";
+        out << "Venta," << iv["sale"].toDouble() << "\n";
+        out << "Unidades," << iv["units"].toDouble() << "\n";
+        out << "Items," << iv["items"].toInt() << "\n";
+    } else if (type == QLatin1String("controlados")) {
+        // Fase 5 (farmacia): controlados vendidos.
+        out << "Venta,Fecha,SKU,Producto,Cantidad\n";
+        for (const QVariant &v : controlledSales()) {
+            const QVariantMap m = v.toMap();
+            out << m["saleId"].toString() << "," << m["date"].toString() << ","
+                << m["sku"].toString() << "," << m["product"].toString() << ","
+                << m["qty"].toDouble() << "\n";
+        }
+    } else if (type == QLatin1String("garantias")) {
+        // Fase 5 (celulares): seriales con garantía vigente.
+        out << "Serial,SKU,Producto,Venta,FechaVenta,Vence\n";
+        for (const QVariant &v : warrantyOpen()) {
+            const QVariantMap m = v.toMap();
+            out << m["serial"].toString() << "," << m["sku"].toString() << ","
+                << m["product"].toString() << "," << m["saleId"].toString() << ","
+                << m["saleDate"].toString() << "," << m["expiresAt"].toString() << "\n";
+        }
+    } else if (type == QLatin1String("granel")) {
+        // Fase 5 (abarrotes): rendimiento por unidad de medida.
+        out << "Unidad,Cantidad,Ingreso\n";
+        for (const QVariant &v : bulkPerformance()) {
+            const QVariantMap m = v.toMap();
+            out << m["unit"].toString() << "," << m["qty"].toDouble() << ","
+                << m["revenue"].toDouble() << "\n";
+        }
     } else {
         const QVariantMap d = salesForPeriod(QStringLiteral("dia")),
                           w = salesForPeriod(QStringLiteral("semana"));
@@ -528,7 +711,73 @@ QString ReportService::exportPdf(const QString &type, const QString &dir) const
              << QStringLiteral("Costo: $%1").arg(e["costo"].toDouble(), 0, 'f', 0)
              << QStringLiteral("Bruto: $%1").arg(e["bruto"].toDouble(), 0, 'f', 0)
              << QStringLiteral("IVA: $%1").arg(tx["iva_19"].toDouble(), 0, 'f', 0)
-             << QStringLiteral("Flujo neto: $%1").arg(fl["neto"].toDouble(), 0, 'f', 0);
+              << QStringLiteral("Flujo neto: $%1").arg(fl["neto"].toDouble(), 0, 'f', 0);
+    } else if (type == QLatin1String("vencimientos")) {
+        // Fase 3/5: próximos a vencer (90 días).
+        for (const QVariant &v : expiringProducts(90)) {
+            const QVariantMap m = v.toMap();
+            rows << QStringLiteral("%1 · lote %2 · vence %3 · stock %4")
+                        .arg(m["name"].toString(), m["lote"].toString(),
+                             m["vencimiento"].toString())
+                        .arg(m["stock"].toDouble());
+        }
+    } else if (type == QLatin1String("seriales")) {
+        // Fase 4/5: estado de seriales.
+        for (const QVariant &v : serialsReport()["items"].toList()) {
+            const QVariantMap m = v.toMap();
+            rows << QStringLiteral("%1 · %2 · %3")
+                        .arg(m["serial"].toString(), m["product"].toString(),
+                             m["status"].toString());
+        }
+    } else if (type == QLatin1String("mermas")) {
+        // Fase 4/5: desperdicio valorizado.
+        for (const QVariant &v : wasteReport()) {
+            const QVariantMap m = v.toMap();
+            rows << QStringLiteral("%1: %2 uds · costo $%3")
+                        .arg(m["product"].toString())
+                        .arg(m["qty"].toDouble())
+                        .arg(m["cost"].toDouble(), 0, 'f', 0);
+        }
+    } else if (type == QLatin1String("rotacion")) {
+        // Fase 5: rotación por categoría.
+        for (const QVariant &v : rotationByCategory()) {
+            const QVariantMap m = v.toMap();
+            rows << QStringLiteral("%1: %2 uds · rotación %3")
+                        .arg(m["category"].toString())
+                        .arg(m["sold"].toDouble())
+                        .arg(m["rotation"].toDouble(), 0, 'f', 2);
+        }
+    } else if (type == QLatin1String("inventario")) {
+        // Fase 5: valorizado del inventario.
+        const QVariantMap iv = inventoryValue();
+        rows << QStringLiteral("Costo: $%1").arg(iv["cost"].toDouble(), 0, 'f', 0)
+             << QStringLiteral("Venta: $%1").arg(iv["sale"].toDouble(), 0, 'f', 0)
+             << QStringLiteral("Unidades: %1").arg(iv["units"].toDouble());
+    } else if (type == QLatin1String("controlados")) {
+        // Fase 5 (farmacia): controlados vendidos.
+        for (const QVariant &v : controlledSales()) {
+            const QVariantMap m = v.toMap();
+            rows << QStringLiteral("%1 · %2 x %3 (%4)")
+                        .arg(m["saleId"].toString(), m["product"].toString())
+                        .arg(m["qty"].toDouble())
+                        .arg(m["date"].toString());
+        }
+    } else if (type == QLatin1String("garantias")) {
+        // Fase 5 (celulares): garantías vigentes.
+        for (const QVariant &v : warrantyOpen()) {
+            const QVariantMap m = v.toMap();
+            rows << QStringLiteral("%1 · vence %2")
+                        .arg(m["serial"].toString(), m["expiresAt"].toString());
+        }
+    } else if (type == QLatin1String("granel")) {
+        // Fase 5 (abarrotes): rendimiento por unidad.
+        for (const QVariant &v : bulkPerformance()) {
+            const QVariantMap m = v.toMap();
+            rows << QStringLiteral("%1: %2 · $%3")
+                        .arg(m["unit"].toString())
+                        .arg(m["qty"].toDouble())
+                        .arg(m["revenue"].toDouble(), 0, 'f', 0);
+        }
     } else {
         const QVariantMap d = salesForPeriod(QStringLiteral("dia")),
                           w = salesForPeriod(QStringLiteral("semana"));
