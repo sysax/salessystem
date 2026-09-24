@@ -6,6 +6,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "components"
 
 ColumnLayout {
     id: root
@@ -28,6 +29,11 @@ ColumnLayout {
         { "key": "promos", "label": "Promociones", "icon": "🎟️", "sc": "" },
         { "key": "users", "label": "Usuarios", "icon": "👤", "sc": "" },
         { "key": "settings", "label": "Configuración", "icon": "⚙️", "sc": "" },
+        // Fase 4: módulos por vertical (verticals vacío = todas).
+        { "key": "lots", "label": "Lotes y vencimientos", "icon": "📅", "sc": "",
+          "verticals": ["farmacia", "veterinaria", "abarrotes", "panaderia", "restaurante", "cafeteria"] },
+        { "key": "serials", "label": "Seriales y garantías", "icon": "🔧", "sc": "",
+          "verticals": ["celulares", "taller"] },
     ]
 
     Label {
@@ -80,11 +86,29 @@ ColumnLayout {
         }
     }
 
+    function businessType() {
+        // settingsCtl puede no existir (tst_sidebar carga aislado).
+        try {
+            return settingsCtl.settings["business_type"] || "";
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function forVertical(entry) {
+        if (!entry.verticals || entry.verticals.length === 0)
+            return true;
+        var bt = businessType();
+        if (bt === "")
+            return true; // sin config conocida: mostrar todo (tests, arranque)
+        return entry.verticals.indexOf(bt) >= 0;
+    }
+
     function refresh() {
         // Bucle clásico: las arrow functions no cargan en Qt 6.4 (CI)
         var visible = [];
         for (var i = 0; i < root.entries.length; ++i) {
-            if (auth.canAccess(root.entries[i].key))
+            if (auth.canAccess(root.entries[i].key) && root.forVertical(root.entries[i]))
                 visible.push(root.entries[i]);
         }
         menuList.model = visible;
@@ -107,8 +131,16 @@ ColumnLayout {
 
     Component.onCompleted: refresh()
 
+    // Fase 4: rubro activo al pie (no rompe tst_sidebar: badge tolera sin settings).
+    BusinessBadge {
+        id: badge
+        Layout.fillWidth: true
+        Layout.margins: 12
+        visible: businessName !== ""
+    }
+
     Connections {
         target: auth
-        function onSessionChanged() { root.refresh(); }
+        function onSessionChanged() { root.refresh(); badge.refresh(); }
     }
 }

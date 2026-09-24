@@ -365,6 +365,63 @@ QVariantList ReportService::expiringProducts(int days) const
     return out;
 }
 
+QVariantMap ReportService::serialsReport() const
+{
+    // Fase 4: conteo por estado + detalle (para celulares/taller).
+    QVariantMap counts{{"in_stock", 0}, {"sold", 0}, {"rma", 0}, {"repaired", 0}};
+    QVariantList items;
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral(
+            "SELECT s.serial, s.sku, s.status, s.sale_id, p.name FROM serials s "
+            "LEFT JOIN products p ON p.sku = s.sku ORDER BY s.id DESC LIMIT 500")))
+        return {{"counts", counts}, {"items", items}};
+    int inStock = 0, sold = 0, rma = 0, repaired = 0;
+    while (q.next()) {
+        const QString st = q.value(2).toString();
+        if (st == QLatin1String("sold"))
+            ++sold;
+        else if (st == QLatin1String("rma"))
+            ++rma;
+        else if (st == QLatin1String("repaired"))
+            ++repaired;
+        else
+            ++inStock;
+        items << QVariantMap{{"serial", q.value(0).toString()},
+                             {"sku", q.value(1).toString()},
+                             {"status", st},
+                             {"saleId", q.value(3).toString()},
+                             {"product", q.value(4).toString()}};
+    }
+    counts["in_stock"] = inStock;
+    counts["sold"] = sold;
+    counts["rma"] = rma;
+    counts["repaired"] = repaired;
+    return {{"counts", counts}, {"items", items}};
+}
+
+QVariantList ReportService::wasteReport() const
+{
+    // Fase 4: mermas por producto (cantidad + costo).
+    QVariantList out;
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral(
+            "SELECT m.sku, m.product, SUM(-m.qty), p.price_buy FROM inventory_movements m "
+            "LEFT JOIN products p ON p.sku = m.sku WHERE m.type='Merma' "
+            "GROUP BY m.sku ORDER BY SUM(-m.qty) DESC")))
+        return out;
+    while (q.next()) {
+        const double qty = q.value(2).toDouble();
+        double cost = q.value(3).toDouble();
+        if (cost <= 0)
+            cost = 0.0;
+        out << QVariantMap{{"sku", q.value(0).toString()},
+                           {"product", q.value(1).toString()},
+                           {"qty", qty},
+                           {"cost", qty * cost}};
+    }
+    return out;
+}
+
 QString ReportService::exportCsv(const QString &type, const QString &dir) const
 {
     const QString path = dir + QStringLiteral("/reporte_%1_%2.csv")
@@ -400,6 +457,24 @@ QString ReportService::exportCsv(const QString &type, const QString &dir) const
             out << m["sku"].toString() << "," << m["name"].toString() << ","
                 << m["lote"].toString() << "," << m["vencimiento"].toString() << ","
                 << m["stock"].toDouble() << "\n";
+        }
+    } else if (type == QLatin1String("seriales")) {
+        // Fase 4: estado de seriales.
+        const QVariantMap rep = serialsReport();
+        out << "Serial,SKU,Producto,Estado,Venta\n";
+        for (const QVariant &v : rep["items"].toList()) {
+            const QVariantMap m = v.toMap();
+            out << m["serial"].toString() << "," << m["sku"].toString() << ","
+                << m["product"].toString() << "," << m["status"].toString() << ","
+                << m["saleId"].toString() << "\n";
+        }
+    } else if (type == QLatin1String("mermas")) {
+        // Fase 4: desperdicio valorizado.
+        out << "SKU,Producto,Cantidad,Costo\n";
+        for (const QVariant &v : wasteReport()) {
+            const QVariantMap m = v.toMap();
+            out << m["sku"].toString() << "," << m["product"].toString() << ","
+                << m["qty"].toDouble() << "," << m["cost"].toDouble() << "\n";
         }
     } else {
         const QVariantMap d = salesForPeriod(QStringLiteral("dia")),

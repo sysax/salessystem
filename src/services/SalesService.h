@@ -109,7 +109,11 @@ public:
     static QList<TaxBucket> bucketsFromJson(const QString &json);
 
 private:
-    Result<Totals> buildTotals(const QList<ServiceItem> &items, QString &error) const;
+    Result<Totals> buildTotals(const QList<ServiceItem> &items, QString &error,
+                               const QString &clientName = {}) const;
+    // Fase 4: precio según lista del cliente (mayorista → price_wholesale).
+    double priceFor(const Product &p, double priceOverride,
+                    const QString &clientName) const;
     // Fase 3: producto con seguimiento de serial (flag attrs o seriales registrados).
     bool isTracked(const Product &p) const;
 

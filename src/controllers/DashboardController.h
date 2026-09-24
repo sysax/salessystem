@@ -7,6 +7,7 @@
 #include "../services/ReportService.h"
 #include "../repositories/InventoryRepository.h"
 #include "../repositories/ProductRepository.h"
+#include "../repositories/SerialRepository.h"
 
 // Tablero estilo GesNet: tarjetas + comparativa 7 días (antes DashboardScreen).
 class DashboardController : public QObject
@@ -17,6 +18,7 @@ class DashboardController : public QObject
 public:
     explicit DashboardController(ReportService *reports, InventoryRepository *inventory,
                                  ProductRepository *products = nullptr,
+                                 SerialRepository *serials = nullptr,
                                  QObject *parent = nullptr);
 
     QVariantMap data() const { return m_data; }
@@ -31,5 +33,6 @@ private:
     ReportService *m_reports = nullptr;
     InventoryRepository *m_inventory = nullptr;
     ProductRepository *m_products = nullptr;
+    SerialRepository *m_serials = nullptr;
     QVariantMap m_data;
 };

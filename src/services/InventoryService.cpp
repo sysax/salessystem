@@ -78,6 +78,35 @@ Result<InventoryService::StockResult> InventoryService::registerAdjustment(
     return Result<StockResult>::success(r);
 }
 
+Result<InventoryService::StockResult> InventoryService::registerWaste(
+    const QString &sku, double qty, const QString &reason, const QString &user)
+{
+    // Fase 4: merma (abarrotes): salida tipo "Merma", nunca stock negativo.
+    if (qty <= 1e-9)
+        return Result<StockResult>::failure(QStringLiteral("Cantidad >0"));
+    const auto p = m_products->findBySku(sku);
+    if (!p)
+        return Result<StockResult>::failure(
+            QStringLiteral("SKU %1 no encontrado").arg(sku));
+    if (p->stock < qty - 1e-9)
+        return Result<StockResult>::failure(
+            QStringLiteral("Merma mayor al stock (%1)").arg(p->stock));
+    const double newStock = p->stock - qty;
+    m_products->setStockBySku(sku, newStock);
+    const QString detail = reason.trimmed().isEmpty() ? QStringLiteral("merma")
+                                                      : reason.trimmed();
+    m_inventory->record(sku, p->name, QStringLiteral("Merma"), -qty, p->stock, newStock,
+                        detail, user);
+    if (m_bus)
+        m_bus->publish(EventBus::InventoryUpdated,
+                       {{"product_id", p->id}, {"quantity_change", -qty}});
+    StockResult r;
+    r.sku = sku;
+    r.newStock = newStock;
+    r.newCost = p->priceBuy;
+    return Result<StockResult>::success(r);
+}
+
 StatusResult InventoryService::transfer(const QString &sku, double qty, const QString &toLocation,
                                         const QString &reason, const QString &user)
 {

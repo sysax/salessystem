@@ -31,6 +31,8 @@ public:
 
     QList<SerialInfo> inStock(const QString &sku) const;
     int inStockCount(const QString &sku) const;
+    // Fase 4: listado global por estado (paginado simple por límite).
+    QList<SerialInfo> byStatus(const QString &status, int limit = 200) const;
     bool hasSerials(const QString &sku) const; // ¿producto con seriales registrados?
     std::optional<SerialInfo> find(const QString &serial) const;
 

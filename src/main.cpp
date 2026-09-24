@@ -14,6 +14,7 @@
 #include "controllers/OpsControllers.h"
 #include "controllers/PosController.h"
 #include "controllers/SalesController.h"
+#include "controllers/SerialsController.h"
 #include "controllers/SettingsController.h"
 #include "core/DatabaseManager.h"
 #include "core/EventBus.h"
@@ -84,11 +85,12 @@ int main(int argc, char *argv[])
 
     AuthController authCtl(&auth);
     SettingsController settingsCtl(&settingsSvc, &auth);
-    DashboardController dashCtl(&reports, &inventory, &products);
+    DashboardController dashCtl(&reports, &inventory, &products, &serials);
     PosController posCtl(&salesSvc, &products, &promos, &caja, &printer, &sync, &settingsSvc,
                          &serials);
     CatalogController catalogCtl(&products, &categories, &settingsSvc);
     SalesController salesCtl(&sales, &salesSvc, &serials, &products);
+    SerialsController serialsCtl(&serials, &products);
     ClientsController clientsCtl(&clients, &cxcSvc);
     SuppliersController suppliersCtl(&suppliers);
     InventoryController inventoryCtl(&invSvc, &inventory, &products);
@@ -106,6 +108,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("pos"), &posCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("catalog"), &catalogCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("salesCtl"), &salesCtl);
+    engine.rootContext()->setContextProperty(QStringLiteral("serialsCtl"), &serialsCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("syncSvc"), &sync);
     engine.rootContext()->setContextProperty(QStringLiteral("reports"), &reports);
     engine.rootContext()->setContextProperty(QStringLiteral("clientsCtl"), &clientsCtl);

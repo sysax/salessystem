@@ -46,6 +46,20 @@ int SerialRepository::inStockCount(const QString &sku) const
     return (q.exec() && q.next()) ? q.value(0).toInt() : 0;
 }
 
+QList<SerialInfo> SerialRepository::byStatus(const QString &status, int limit) const
+{
+    QList<SerialInfo> out;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT * FROM serials WHERE status=? ORDER BY id DESC LIMIT ?"));
+    q.addBindValue(status);
+    q.addBindValue(limit > 0 ? limit : 200);
+    if (!q.exec())
+        return out;
+    while (q.next())
+        out << rowToSerial(q);
+    return out;
+}
+
 bool SerialRepository::hasSerials(const QString &sku) const
 {
     QSqlQuery q(m_db);

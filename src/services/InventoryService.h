@@ -39,6 +39,9 @@ public:
     // Ajuste ±: motivo obligatorio, nunca stock negativo
     Result<StockResult> registerAdjustment(const QString &sku, double delta,
                                            const QString &reason, const QString &user);
+    // Fase 4: merma (salida tipo "Merma" para el reporte de desperdicio).
+    Result<StockResult> registerWaste(const QString &sku, double qty,
+                                      const QString &reason, const QString &user);
     // Cambio de ubicación (sin mover unidades)
     StatusResult transfer(const QString &sku, double qty, const QString &toLocation,
                           const QString &reason, const QString &user);

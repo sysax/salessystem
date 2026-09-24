@@ -28,6 +28,10 @@ ColumnLayout {
             text: qsTr("Transferir")
             onClicked: transferDialog.open()
         }
+        Button {
+            text: qsTr("Merma")
+            onClicked: wasteDialog.open()
+        }
     }
     Label {
         text: qsTr("Stock bajo / agotados")
@@ -140,6 +144,44 @@ ColumnLayout {
             if (!r.ok) {
                 tErr.text = r.error;
                 open();
+            }
+        }
+    }
+    Dialog {
+        id: wasteDialog
+        onOpened: wSku.forceActiveFocus()
+        title: qsTr("Registrar merma")
+        modal: true
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        ColumnLayout {
+            TextField {
+                id: wSku
+                placeholderText: qsTr("SKU")
+            }
+            TextField {
+                id: wQty
+                placeholderText: qsTr("Cantidad (admite decimales)")
+                validator: DoubleValidator { bottom: 0.001; decimals: 3 }
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+            }
+            TextField {
+                id: wReason
+                placeholderText: qsTr("Motivo (ej. vencido, roto)")
+            }
+            Label {
+                id: wErr
+                color: Theme.error
+            }
+        }
+        onAccepted: {
+            var r = inventoryCtl.waste(wSku.text, parseFloat(wQty.text) || 0, wReason.text, auth.currentUser);
+            if (!r.ok) {
+                wErr.text = r.error;
+                open();
+            } else {
+                wSku.text = "";
+                wQty.text = "";
+                wReason.text = "";
             }
         }
     }

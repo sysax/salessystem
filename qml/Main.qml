@@ -60,7 +60,9 @@ ApplicationWindow {
             "reports": {"label": "Reportes", "icon": "📈", "section": "Finanzas"},
             "promos": {"label": "Promociones", "icon": "🎟️", "section": "Ventas"},
             "users": {"label": "Usuarios", "icon": "👤", "section": "Sistema"},
-            "settings": {"label": "Configuración", "icon": "⚙️", "section": "Sistema"}
+            "settings": {"label": "Configuración", "icon": "⚙️", "section": "Sistema"},
+            "lots": {"label": "Lotes y vencimientos", "icon": "📅", "section": "Catálogo"},
+            "serials": {"label": "Seriales y garantías", "icon": "🔧", "section": "Catálogo"}
         };
         return map[key] || {"label": key, "icon": "•", "section": ""};
     }
@@ -122,6 +124,10 @@ ApplicationWindow {
             return usersPage;
         case "settings":
             return settingsPage;
+        case "lots":
+            return lotsPage;
+        case "serials":
+            return serialsPage;
         default:
             return dashboardPage;
         }
@@ -318,6 +324,14 @@ ApplicationWindow {
         id: settingsPage
         visible: false
     }
+    LotsPage {
+        id: lotsPage
+        visible: false
+    }
+    SerialsPage {
+        id: serialsPage
+        visible: false
+    }
 
     // Atajos de teclado (mejora #10): navegación rápida entre módulos principales.
     // navigate() ya valida sesión y permiso por rol.
@@ -354,7 +368,14 @@ ApplicationWindow {
                 root.recheckOnline();
                 settingsCtl.setRole(auth.currentRole);
                 dash.refresh();
+                sidebar.refresh();
             }
         }
+    }
+
+    Connections {
+        target: settingsCtl
+        // Fase 4: el cambio de rubro re-filtra el menú por vertical.
+        function onSettingsChanged() { sidebar.refresh(); }
     }
 }

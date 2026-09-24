@@ -55,9 +55,10 @@ private slots:
     void createCash()
     {
         int salesEvents = 0, invEvents = 0;
-        m_bus->subscribe(EventBus::SaleCreated, [&](const QVariantMap &) { ++salesEvents; });
-        m_bus->subscribe(EventBus::InventoryUpdated,
-                         [&](const QVariantMap &) { ++invEvents; });
+        const int sub1 =
+            m_bus->subscribe(EventBus::SaleCreated, [&](const QVariantMap &) { ++salesEvents; });
+        const int sub2 = m_bus->subscribe(EventBus::InventoryUpdated,
+                                          [&](const QVariantMap &) { ++invEvents; });
 
         // Mouse 45000 ×2, IVA 19 % → subtotal 90000, tax 17100, total 107100
         auto r = m_svc->create({SI{2, 2}}, QStringLiteral("Juan Pérez"), {},
@@ -73,6 +74,10 @@ private slots:
         const auto movs = m_inventory->movementsBySku(QStringLiteral("P002"));
         QVERIFY(!movs.isEmpty());
         QCOMPARE(movs.last().type, QStringLiteral("Salida"));
+        // Las capturas por referencia mueren con este test: desuscribir
+        // antes de salir para no invocar UB en los tests siguientes.
+        m_bus->unsubscribe(sub1);
+        m_bus->unsubscribe(sub2);
     }
 
     void createWithPromo()
@@ -88,8 +93,10 @@ private slots:
 
     void createCredit()
     {
-        // Monitor 550000 + IVA 104500 = 654500; 50000 efectivo + resto crédito
-        QMap<QString, double> pay{{"efectivo", 50000.0}, {"credito", 604500.0}};
+        // Fase 4: María López es mayorista → price_wholesale 480000
+        // + IVA 104500... recalculado: 480000 + 91200 = 571200;
+        // 50000 efectivo + resto crédito.
+        QMap<QString, double> pay{{"efectivo", 50000.0}, {"credito", 521200.0}};
         auto r = m_svc->create({SI{4, 1}}, QStringLiteral("María López"), pay,
                                QStringLiteral("Mixto"), QString(), QStringLiteral("tester"));
         QVERIFY(r.ok());
@@ -97,11 +104,11 @@ private slots:
         const auto s = m_sales->find(r.value().id);
         QVERIFY(s.has_value());
         QCOMPARE(s->paid, 50000.0);
-        QCOMPARE(s->balance, 604500.0);
-        // Crédito cargado al cliente (500000 seed + 604500)
+        QCOMPARE(s->balance, 521200.0);
+        // Crédito cargado al cliente (500000 seed + 521200)
         const auto c = m_clients->findByName(QStringLiteral("María López"));
         QVERIFY(c.has_value());
-        QCOMPARE(c->balance, 500000.0 + 604500.0);
+        QCOMPARE(c->balance, 500000.0 + 521200.0);
     }
 
     void validationErrors()

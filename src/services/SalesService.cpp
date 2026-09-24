@@ -108,6 +108,25 @@ QList<SalesService::TaxBucket> SalesService::bucketsFromJson(const QString &json
     return out;
 }
 
+double SalesService::priceFor(const Product &p, double priceOverride,
+                               const QString &clientName) const
+{
+    if (priceOverride > 0)
+        return priceOverride;
+    // Fase 4 (abarrotes): clientes mayoristas pagan price_wholesale.
+    if (!clientName.trimmed().isEmpty() && m_clients) {
+        const auto c = m_clients->findByName(clientName.trimmed());
+        if (c) {
+            const QString pl = c->priceList.trimmed().toLower();
+            if ((pl == QLatin1String("mayorista") || pl == QLatin1String("mayoreo")
+                 || pl == QLatin1String("wholesale"))
+                && p.priceWholesale > 0)
+                return p.priceWholesale;
+        }
+    }
+    return p.price;
+}
+
 namespace
 {
 // Agrega una línea al bucket de su tasa (agregación, sin recalcular).
@@ -126,12 +145,34 @@ void accumulateBucket(QList<SalesService::TaxBucket> &buckets, const QString &na
 } // namespace
 
 Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> &items,
-                                                        QString &error) const
+                                                         QString &error,
+                                                         const QString &clientName) const
 {
     Totals t;
     t.itemsCount = items.size();
     const QDate today = QDate::currentDate();
     QSet<QString> usedSerials;
+    // Fase 4: en productos con serial, cada línea es 1 unidad con 1 serial.
+    // Contar líneas tracked por producto para no vender más que seriales in_stock.
+    QMap<int, int> trackedLines;
+    for (const ServiceItem &it : items) {
+        const auto p = m_products->findById(it.productId);
+        if (p && isTracked(*p))
+            trackedLines[it.productId] += 1;
+    }
+    if (m_serials) {
+        for (auto it = trackedLines.begin(); it != trackedLines.end(); ++it) {
+            const auto p = m_products->findById(it.key());
+            if (p && m_serials->inStockCount(p->sku) < it.value()) {
+                error = QStringLiteral(
+                            "Sin seriales suficientes para '%1'. Disponibles: %2, solicitados: %3")
+                            .arg(p->name)
+                            .arg(m_serials->inStockCount(p->sku))
+                            .arg(it.value());
+                return Result<Totals>::failure(error);
+            }
+        }
+    }
     for (const ServiceItem &it : items) {
         const auto p = m_products->findById(it.productId);
         if (!p) {
@@ -165,6 +206,14 @@ Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> 
         const bool tracked = isTracked(*p);
         const QString serial = it.serial.trimmed();
         if (tracked) {
+            // Fase 4 (criterio): 1 línea = 1 unidad = 1 serial; vender qty 2
+            // con 1 serial queda rechazado aquí.
+            if (qAbs(it.qty - 1.0) > 1e-9) {
+                error = QStringLiteral(
+                            "Producto con serial '%1': venda 1 unidad por línea con su serial")
+                            .arg(p->name);
+                return Result<Totals>::failure(error);
+            }
             if (serial.isEmpty()) {
                 error = QStringLiteral("Serial requerido para '%1'").arg(p->name);
                 return Result<Totals>::failure(error);
@@ -194,7 +243,8 @@ Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> 
         l.qty = it.qty;
         l.serial = serial;
         l.receta = it.receta.trimmed();
-        l.unitPrice = it.priceOverride > 0 ? it.priceOverride : p->price;
+        // Fase 4: precio según lista del cliente (mayorista → mayoreo).
+        l.unitPrice = priceFor(*p, it.priceOverride, clientName);
         l.subtotal = l.unitPrice * it.qty;
         l.discount = l.subtotal * it.discountPct / 100.0;
         l.taxRate = resolveTaxRate(p->tax);
@@ -256,7 +306,7 @@ Result<SalesService::CreatedSale> SalesService::create(
             QStringLiteral("La venta debe tener al menos un item"));
 
     QString error;
-    auto totals = buildTotals(items, error);
+    auto totals = buildTotals(items, error, clientName);
     if (!totals.ok())
         return Result<CreatedSale>::failure(totals.error());
 

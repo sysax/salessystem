@@ -33,6 +33,9 @@ public:
                                    const QString &user);
     Q_INVOKABLE QVariantMap transfer(const QString &sku, double qty, const QString &to,
                                      const QString &reason, const QString &user);
+    // Fase 4: registrar merma (abarrotes).
+    Q_INVOKABLE QVariantMap waste(const QString &sku, double qty, const QString &reason,
+                                  const QString &user);
     Q_INVOKABLE QVariantMap valuation() const;
 
 signals:

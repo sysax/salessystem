@@ -98,6 +98,11 @@ RowLayout {
 
     Component.onCompleted: root.refreshProducts()
 
+    // Fase 4 (abarrotes): foco listo para escáner hardware al entrar al POS.
+    function focusScanner() {
+        searchField.forceActiveFocus();
+    }
+
     Connections {
         target: catalog
         function onProductsChanged() { root.refreshProducts(); }
@@ -179,7 +184,9 @@ RowLayout {
                 placeholderText: qsTr("Buscar producto (nombre, SKU, código)")
                 Layout.fillWidth: true
                 implicitHeight: root.touchH
+                focus: true
                 onAccepted: catalog.search(text)
+                onVisibleChanged: if (visible) forceActiveFocus()
             }
             Button {
                 text: qsTr("Buscar")

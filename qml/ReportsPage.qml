@@ -69,8 +69,23 @@ ScrollView {
                 onClicked: msg.text = reports.exportCsv("vencimientos", exportDir())
             }
         }
+        RowLayout {
+            // Fase 4: reportes por vertical.
+            Button {
+                text: qsTr("CSV seriales")
+                onClicked: msg.text = reports.exportCsv("seriales", exportDir())
+            }
+            Button {
+                text: qsTr("CSV mermas")
+                onClicked: msg.text = reports.exportCsv("mermas", exportDir())
+            }
+        }
         Label {
             text: qsTr("Por vencer (30 días): %1").arg(reports.expiringProducts(30).length)
+            wrapMode: Text.Wrap
+        }
+        Label {
+            text: qsTr("Seriales en stock: %1 · en RMA: %2").arg(reports.serialsReport().counts.in_stock).arg(reports.serialsReport().counts.rma)
             wrapMode: Text.Wrap
         }
         Label {

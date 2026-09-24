@@ -31,6 +31,9 @@ public:
 
     // Fase 3: próximos a vencer (lista {sku,name,lote,vencimiento,stock}).
     Q_INVOKABLE QVariantList expiringProducts(int days = 30) const;
+    // Fase 4: seriales por estado + mermas valorizadas.
+    Q_INVOKABLE QVariantMap serialsReport() const;
+    Q_INVOKABLE QVariantList wasteReport() const;
 
     // Exporta CSV operativo/financiero; retorna ruta o "" en error.
     // Cabecera con business_name/NIT de `settings` (Fase 0 multinegocio).

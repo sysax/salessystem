@@ -53,6 +53,16 @@ QVariantMap InventoryController::transfer(const QString &sku, double qty, const 
     return {{"ok", true}};
 }
 
+QVariantMap InventoryController::waste(const QString &sku, double qty, const QString &reason,
+                                       const QString &user)
+{
+    const auto r = m_service->registerWaste(sku, qty, reason, user);
+    if (!r.ok())
+        return {{"ok", false}, {"error", r.error()}};
+    refresh();
+    return {{"ok", true}, {"newStock", r.value().newStock}};
+}
+
 QVariantMap InventoryController::valuation() const
 {
     const auto v = m_service->valuation();

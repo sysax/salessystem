@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtSalesSystem
+import "components"
 
 ScrollView {
     id: root
@@ -13,6 +14,12 @@ ScrollView {
     ColumnLayout {
         width: root.width - 24
         spacing: Theme.spacingSmall
+
+        // Fase 4: rubro activo visible.
+        BusinessBadge {
+            id: badge
+            Layout.fillWidth: true
+        }
 
         RowLayout {
             spacing: Theme.spacingSmall
@@ -32,7 +39,7 @@ ScrollView {
             Button {
                 text: qsTr("Actualizar")
                 implicitHeight: 48
-                onClicked: dash.refresh()
+                onClicked: { dash.refresh(); badge.refresh(); }
             }
         }
 
@@ -246,6 +253,47 @@ ScrollView {
                 elide: Text.ElideRight
                 opacity: 0.85
             }
+        }
+
+        // Fase 4: RMA abiertos (celulares/taller) y mermas (abarrotes).
+        RowLayout {
+            spacing: Theme.spacingSmall
+            visible: (dash.data.serialsRma || 0) > 0 && root.verticalIn(["celulares", "taller"])
+            Label {
+                text: qsTr("🔧 RMA abiertos (%1)").arg(dash.data.serialsRma || 0)
+                font.bold: true
+                font.pixelSize: Theme.fontML
+                Layout.fillWidth: true
+                color: Theme.warning
+            }
+            ToolButton {
+                text: qsTr("Ver seriales →")
+                onClicked: root.go("serials")
+            }
+        }
+        RowLayout {
+            spacing: Theme.spacingSmall
+            visible: (dash.data.wasteCost || 0) > 0 && root.verticalIn(["abarrotes", "restaurante", "panaderia", "cafeteria"])
+            Label {
+                text: qsTr("🗑️ Mermas valorizadas: %1").arg(money(dash.data.wasteCost || 0))
+                font.bold: true
+                font.pixelSize: Theme.fontML
+                Layout.fillWidth: true
+                color: Theme.warning
+            }
+            ToolButton {
+                text: qsTr("Ver reportes →")
+                onClicked: root.go("reports")
+            }
+        }
+    }
+
+    function verticalIn(list) {
+        try {
+            var bt = settingsCtl.settings["business_type"] || "";
+            return list.indexOf(bt) >= 0;
+        } catch (e) {
+            return false;
         }
     }
 

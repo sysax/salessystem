@@ -72,7 +72,7 @@ int DatabaseManager::tableRowCount(const QString &table) const
         QStringLiteral("audit_log"),    QStringLiteral("caja"),
         QStringLiteral("counters"),     QStringLiteral("outbox"),
         QStringLiteral("settings"),     QStringLiteral("recovery_tokens"),
-        QStringLiteral("categories"),
+        QStringLiteral("categories"),   QStringLiteral("serials"),
     };
     if (!kAllowed.contains(table))
         return -1;

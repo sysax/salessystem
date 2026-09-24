@@ -94,6 +94,12 @@ void PosController::setQty(int index, double qty)
     if (index < 0 || index >= m_cart.size() || qty <= 1e-9)
         return;
     QVariantMap line = m_cart[index].toMap();
+    // Fase 4: línea con serial = 1 unidad fija (un serial por equipo).
+    if (!line.value(QStringLiteral("serial")).toString().trimmed().isEmpty())
+        return;
+    if (const auto p = m_products->findById(line["productId"].toInt());
+        p && lineTracked(*p, m_serials))
+        return;
     line["qty"] = qty;
     line["subtotal"] = line["price"].toDouble() * qty;
     m_cart[index] = line;
@@ -140,6 +146,25 @@ QVariantMap PosController::setLineSerial(int index, const QString &serial)
 {
     if (index < 0 || index >= m_cart.size())
         return {{"ok", false}, {"error", QStringLiteral("Línea inválida")}};
+    const QString s = serial.trimmed();
+    // Fase 4: validar al capturar (no solo al cobrar): registrado y en stock,
+    // y sin repetir en el carrito.
+    if (!s.isEmpty() && m_serials) {
+        const auto found = m_serials->find(s);
+        if (!found)
+            return {{"ok", false},
+                    {"error", QStringLiteral("Serial %1 no registrado").arg(s)}};
+        if (found->status != QLatin1String("in_stock"))
+            return {{"ok", false},
+                    {"error", QStringLiteral("Serial %1 no disponible (%2)")
+                                 .arg(s, found->status)}};
+        for (int i = 0; i < m_cart.size(); ++i) {
+            if (i != index
+                && m_cart[i].toMap().value(QStringLiteral("serial")).toString() == s)
+                return {{"ok", false},
+                        {"error", QStringLiteral("Serial %1 repetido en la venta").arg(s)}};
+        }
+    }
     QVariantMap line = m_cart[index].toMap();
     line["serial"] = serial.trimmed();
     m_cart[index] = line;

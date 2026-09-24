@@ -2,8 +2,10 @@
 
 DashboardController::DashboardController(ReportService *reports,
                                          InventoryRepository *inventory,
-                                         ProductRepository *products, QObject *parent)
-    : QObject(parent), m_reports(reports), m_inventory(inventory), m_products(products)
+                                         ProductRepository *products,
+                                         SerialRepository *serials, QObject *parent)
+    : QObject(parent), m_reports(reports), m_inventory(inventory), m_products(products),
+      m_serials(serials)
 {
     refresh();
 }
@@ -40,6 +42,17 @@ void DashboardController::refresh()
         d[QStringLiteral("expiring60")] = toExpiring(m_products->expiringWithin(60));
         d[QStringLiteral("expiring90")] = toExpiring(m_products->expiringWithin(90));
     }
+    // Fase 4: seriales en RMA + mermas del mes (widgets por vertical).
+    if (m_serials) {
+        const QVariantMap rep = m_reports->serialsReport();
+        d[QStringLiteral("serialsRma")] = rep["counts"].toMap().value(QStringLiteral("rma"), 0);
+        d[QStringLiteral("serialsInStock")] =
+            rep["counts"].toMap().value(QStringLiteral("in_stock"), 0);
+    }
+    double wasteMonth = 0.0;
+    for (const QVariant &v : m_reports->wasteReport())
+        wasteMonth += v.toMap()["cost"].toDouble();
+    d[QStringLiteral("wasteCost")] = wasteMonth;
     m_data = d;
     emit dataChanged();
 }

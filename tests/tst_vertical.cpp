@@ -1,8 +1,10 @@
 // Fase 3: verticales — attrs, farmacia (lote/vencimiento/receta/controlado),
 // celulares (seriales/garantía/RMA), EAN-13.
+// Fase 4: mermas, reporte de seriales, SerialsController.
 #include <QtTest>
 
 #include "controllers/CatalogController.h"
+#include "controllers/SerialsController.h"
 #include "core/DatabaseManager.h"
 #include "core/EventBus.h"
 #include "domain/Attrs.h"
@@ -15,6 +17,8 @@
 #include "repositories/SaleRepository.h"
 #include "repositories/SerialRepository.h"
 #include "repositories/SettingsRepository.h"
+#include "services/InventoryService.h"
+#include "services/ReportService.h"
 #include "services/SalesService.h"
 #include "services/SettingsService.h"
 
@@ -39,9 +43,11 @@ private slots:
         auto *audit = new AuditRepository(db, this);
         m_products = new ProductRepository(db, audit, this);
         auto *clients = new ClientRepository(db, audit, this);
+        m_clients = clients;
         auto *caja = new CajaRepository(db, audit, this);
         auto *sales = new SaleRepository(db, clients, caja, audit, this);
         auto *inventory = new InventoryRepository(db, audit, this);
+        m_inventory = inventory;
         auto *promos = new PromoRepository(db, m_products, audit, this);
         auto *settingsRepo = new SettingsRepository(db, this);
         m_settings = new SettingsService(settingsRepo, bus, this);
@@ -243,9 +249,128 @@ private slots:
         QVERIFY(!m_serials->setStatus(QStringLiteral("IMEI002"), QStringLiteral("volar")).ok());
     }
 
-    void ean13()
+    void wasteAndSerialsReport()
     {
-        // Ejemplo GS1 válido + variante con dígito malo.
+        // Fase 4: merma descuenta stock, tipo Merma y reporte valorizado.
+        Product g;
+        g.sku = QStringLiteral("MERMA1");
+        g.name = QStringLiteral("Perecedero");
+        g.price = 5000.0;
+        g.priceBuy = 3000.0;
+        g.stock = 10.0;
+        g.unit = QStringLiteral("kg");
+        QVERIFY(m_products->add(g).ok());
+        InventoryService wasteSvc(m_db, m_products, m_inventory, nullptr, this);
+        QVERIFY(!wasteSvc.registerWaste(QStringLiteral("MERMA1"), 0.0, QStringLiteral("x"),
+                                        QStringLiteral("t"))
+                     .ok());
+        QVERIFY(!wasteSvc.registerWaste(QStringLiteral("MERMA1"), 99.0, QStringLiteral("x"),
+                                        QStringLiteral("t"))
+                     .ok());
+        auto w = wasteSvc.registerWaste(QStringLiteral("MERMA1"), 2.5,
+                                        QStringLiteral("vencido"), QStringLiteral("t"));
+        QVERIFY(w.ok());
+        QCOMPARE(w.value().newStock, 7.5);
+        ReportService rep(m_db);
+        const QVariantList wr = rep.wasteReport();
+        bool found = false;
+        for (const QVariant &v : wr) {
+            const QVariantMap m = v.toMap();
+            if (m["sku"].toString() == QStringLiteral("MERMA1")) {
+                QCOMPARE(m["qty"].toDouble(), 2.5);
+                QCOMPARE(m["cost"].toDouble(), 7500.0);
+                found = true;
+            }
+        }
+        QVERIFY(found);
+        QVERIFY(!rep.exportCsv(QStringLiteral("mermas"), m_tmp.path()).isEmpty());
+
+        // Fase 4: reporte de seriales + SerialsController (producto propio,
+        // sin depender del orden de ejecución de los casos).
+        Product se;
+        se.sku = QStringLiteral("EQC");
+        se.name = QStringLiteral("Equipo Ctl");
+        se.price = 300000.0;
+        se.stock = 3.0;
+        se.attrsJson = Attrs::set(QStringLiteral("{}"), Attrs::KTrackSerial, true);
+        QVERIFY(m_products->add(se).ok());
+        const QVariantMap sr = rep.serialsReport();
+        QVERIFY(sr.contains("counts") && sr.contains("items"));
+        QVERIFY(!rep.exportCsv(QStringLiteral("seriales"), m_tmp.path()).isEmpty());
+        SerialsController ctl(m_serials, m_products, this);
+        QVERIFY(ctl.addSerial(QStringLiteral("EQC"), QStringLiteral("CTL-001"))["ok"].toBool());
+        QVERIFY(!ctl.addSerial(QStringLiteral("NOPE"), QStringLiteral("CTL-002"))["ok"].toBool());
+        ctl.search(QStringLiteral("CTL-001"), QStringLiteral("in_stock"));
+        QVERIFY(!ctl.serials().isEmpty());
+        QVERIFY(ctl.warrantyFor(QStringLiteral("CTL-001"))["ok"].toBool());
+        QVERIFY(ctl.inStockCount(QStringLiteral("EQC")) >= 1);
+        QVERIFY(!ctl.inStock(QStringLiteral("EQC")).isEmpty());
+        QVERIFY(ctl.setStatus(QStringLiteral("CTL-001"), QStringLiteral("rma"),
+                              QStringLiteral("test"), QStringLiteral("t"))["ok"].toBool());
+        QVERIFY(!ctl.setStatus(QStringLiteral("CTL-001"), QStringLiteral("volar"),
+                               QStringLiteral("x"), QStringLiteral("t"))["ok"].toBool());
+    }
+
+    void serialQtyOne()
+    {
+        // Fase 4 (criterio): no se venden 2 equipos con 1 serial disponible.
+        Product eq;
+        eq.sku = QStringLiteral("EQ-QTY");
+        eq.name = QStringLiteral("Equipo Qty");
+        eq.price = 400000.0;
+        eq.stock = 5.0;
+        eq.attrsJson = Attrs::set(QStringLiteral("{}"), Attrs::KTrackSerial, true);
+        QVERIFY(m_products->add(eq).ok());
+        const int eqid = m_products->findBySku(QStringLiteral("EQ-QTY"))->id;
+        QVERIFY(m_serials->add(eqid, QStringLiteral("EQ-QTY"), QStringLiteral("QTY-001")).ok());
+        // qty 2 con 1 serial → rechazado.
+        SI two{eqid, 2.0};
+        two.serial = QStringLiteral("QTY-001");
+        QVERIFY(!m_svc->create({two}, QStringLiteral("X"), {},
+                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t"))
+                     .ok());
+        // 2 líneas con el mismo serial → rechazado (duplicado).
+        SI a{eqid, 1.0};
+        a.serial = QStringLiteral("QTY-001");
+        SI b{eqid, 1.0};
+        b.serial = QStringLiteral("QTY-001");
+        QVERIFY(!m_svc->create({a, b}, QStringLiteral("X"), {},
+                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t"))
+                     .ok());
+        // 1 línea qty 1 con su serial → pasa.
+        QVERIFY(m_svc->create({a}, QStringLiteral("X"), {},
+                              QStringLiteral("Efectivo"), QString(), QStringLiteral("t"))
+                    .ok());
+    }
+
+    void wholesalePriceList()
+    {
+        // Fase 4 (abarrotes): cliente mayorista paga price_wholesale.
+        Client mayorista;
+        mayorista.name = QStringLiteral("MAYORISTA-TEST");
+        mayorista.priceList = QStringLiteral("mayorista");
+        QVERIFY(m_clients->add(mayorista).ok());
+        Product p;
+        p.sku = QStringLiteral("AB-GRANO");
+        p.name = QStringLiteral("Grano");
+        p.price = 1000.0;
+        p.priceWholesale = 800.0;
+        p.stock = 100.0;
+        p.tax = QStringLiteral("Excluido");
+        QVERIFY(m_products->add(p).ok());
+        const int pid = m_products->findBySku(QStringLiteral("AB-GRANO"))->id;
+        auto w = m_svc->create({SI{pid, 2.0}}, QStringLiteral("MAYORISTA-TEST"), {},
+                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
+        QVERIFY(w.ok());
+        QCOMPARE(w.value().total, 1600.0);
+        auto d = m_svc->create({SI{pid, 2.0}}, QStringLiteral("Mostrador"), {},
+                               QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
+        QVERIFY(d.ok());
+        QCOMPARE(d.value().total, 2000.0);
+    }
+
+    void ean13()
+    {        // Ejemplo GS1 válido + variante con dígito malo.
         QVERIFY(ProductRepository::isValidEan13(QStringLiteral("5901234123457")));
         QVERIFY(!ProductRepository::isValidEan13(QStringLiteral("5901234123458")));
         QVERIFY(!ProductRepository::isValidEan13(QStringLiteral("123")));
@@ -282,6 +407,8 @@ private:
     DatabaseManager *m_dbm = nullptr;
     QSqlDatabase m_db;
     ProductRepository *m_products = nullptr;
+    InventoryRepository *m_inventory = nullptr;
+    ClientRepository *m_clients = nullptr;
     SettingsService *m_settings = nullptr;
     SerialRepository *m_serials = nullptr;
     SalesService *m_svc = nullptr;

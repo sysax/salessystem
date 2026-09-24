@@ -86,6 +86,8 @@ add_library(sales_core STATIC
     src/controllers/MgmtControllers.cpp
     src/controllers/OpsControllers.h
     src/controllers/OpsControllers.cpp
+    src/controllers/SerialsController.h
+    src/controllers/SerialsController.cpp
     src/controllers/SettingsController.h
     src/controllers/SettingsController.cpp
 )
@@ -158,6 +160,8 @@ qt_add_qml_module(QtSalesSystemApp
         qml/PayablesPage.qml
         qml/ReportsPage.qml
         qml/SettingsPage.qml
+        qml/LotsPage.qml
+        qml/SerialsPage.qml
         qml/PromosPage.qml
         qml/UsersPage.qml
         qml/Utils.js
@@ -167,6 +171,7 @@ qt_add_qml_module(QtSalesSystemApp
         qml/components/Pager.qml
         qml/components/EmptyState.qml
         qml/components/ConfirmDialog.qml
+        qml/components/BusinessBadge.qml
 )
 
 target_link_libraries(QtSalesSystemApp PRIVATE
