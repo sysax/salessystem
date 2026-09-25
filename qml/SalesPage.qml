@@ -46,9 +46,11 @@ ColumnLayout {
         }
     }
     // Fase 3: verificación de garantía / RMA por serial.
+    // Multitienda: solo en rubros con seriales (celulares, taller...).
     GroupBox {
         title: qsTr("Garantía / RMA")
         Layout.fillWidth: true
+        visible: root.supportsSerial()
         ColumnLayout {
             anchors.fill: parent
             spacing: Theme.spacingSmall
@@ -291,6 +293,14 @@ ColumnLayout {
 
     function money(v) {
         return ApplicationWindow.window.money(v);
+    }
+    // Multitienda: RMA/garantía solo en rubros con seriales.
+    function businessType() {
+        try { return settingsCtl.settings["business_type"] || "miscelanea"; } catch (e) { return "miscelanea"; }
+    }
+    function supportsSerial() {
+        var bt = businessType();
+        return bt === "miscelanea" || bt === "celulares" || bt === "taller" || bt === "ferreteria";
     }
 
     function checkWarranty() {

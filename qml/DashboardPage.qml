@@ -226,10 +226,10 @@ ScrollView {
             }
         }
 
-        // Fase 3: próximos a vencer.
+        // Fase 3: próximos a vencer (solo rubros con vencimiento).
         RowLayout {
             spacing: Theme.spacingSmall
-            visible: (dash.data.expiring30 || []).length > 0
+            visible: (dash.data.expiring30 || []).length > 0 && root.supportsExpiry()
             Label {
                 text: qsTr("⏳ Por vencer ≤30 días (%1)").arg((dash.data.expiring30 || []).length)
                 font.bold: true
@@ -244,7 +244,7 @@ ScrollView {
             }
         }
         Repeater {
-            model: dash.data.expiring30 || []
+            model: root.supportsExpiry() ? (dash.data.expiring30 || []) : []
             delegate: Label {
                 visible: index < 5
                 text: "• " + modelData.name + "  lote " + (modelData.lote || "—")
@@ -313,6 +313,11 @@ ScrollView {
         } catch (e) {
             return false;
         }
+    }
+    // Multitienda: vencimientos solo en rubros que los manejan.
+    function supportsExpiry() {
+        return verticalIn(["farmacia", "veterinaria", "abarrotes", "panaderia", "restaurante",
+                           "cafeteria", "miscelanea"]);
     }
 
     function money(v) {
