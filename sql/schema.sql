@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS products (
     brand TEXT, supplier TEXT, price REAL, price_buy REAL, price_wholesale REAL,
     tax TEXT, unit TEXT, stock INTEGER, stock_min INTEGER, stock_max INTEGER,
     location TEXT, status TEXT, image TEXT, lote TEXT, vencimiento TEXT,
+    business_type TEXT DEFAULT '',
     is_kit INTEGER DEFAULT 0, kit_json TEXT DEFAULT '[]',
     attrs_json TEXT DEFAULT '{}'
 );

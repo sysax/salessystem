@@ -15,6 +15,20 @@ RowLayout {
     readonly property int rowHProduct: 56
     readonly property int rowHCart: 64
 
+    // Multitienda: el rubro activo decide si se piden seriales/recetas.
+    // En abarrotes no aparecen garantías/RMA de celulares, etc.
+    function businessType() {
+        try { return settingsCtl.settings["business_type"] || "miscelanea"; } catch (e) { return "miscelanea"; }
+    }
+    function supportsSerial() {
+        var bt = businessType();
+        return bt === "miscelanea" || bt === "celulares" || bt === "taller" || bt === "ferreteria";
+    }
+    function supportsReceta() {
+        var bt = businessType();
+        return bt === "miscelanea" || bt === "farmacia" || bt === "veterinaria" || bt === "consultorio";
+    }
+
     function addProduct(productId) {
         // Fase 2: si es pesable, pedir cantidad decimal; si no, agregar 1.
         var p = null;
@@ -39,7 +53,13 @@ RowLayout {
             return;
         }
         // Fase 3: producto con serial → pedir IMEI para la línea recién creada.
+        // Multitienda: fuera de rubro con seriales se avisa en vez de pedir RMA.
         if (r.needsSerial) {
+            if (!root.supportsSerial()) {
+                pos.removeLine(pos.cart.length - 1);
+                Utils.showToast("error", qsTr("Producto con serial fuera del rubro '%1'").arg(root.businessType()), 3500);
+                return;
+            }
             serialDialog.cartIndex = pos.cart.length - 1;
             serialDialog.productId = productId;
             serialField.text = "";
@@ -49,7 +69,7 @@ RowLayout {
             Utils.showToast("success", "Agregado al carrito", 1500);
         }
         // Fase 3: producto con receta → pedir Nº (no bloquea, valida al cobrar).
-        if (p && root.needsReceta(p)) {
+        if (p && root.supportsReceta() && root.needsReceta(p)) {
             recetaDialog.cartIndex = pos.cart.length - 1;
             recetaDialog.productName = p.name;
             recetaField.text = "";
@@ -68,7 +88,10 @@ RowLayout {
     }
 
     // Fase 3: ¿alguna línea del carrito exige receta sin informar?
+    // Multitienda: solo aplica en rubros con receta.
     function missingReceta() {
+        if (!root.supportsReceta())
+            return "";
         var cart = pos.cart || [];
         var prods = catalog.products || [];
         for (var i = 0; i < cart.length; ++i) {
@@ -110,6 +133,10 @@ RowLayout {
             catFilter.model = root.catNames();
             root.refreshProducts();
         }
+    }
+    Connections {
+        target: settingsCtl
+        function onSettingsChanged() { catalog.search(""); }
     }
 
     function catNames() {

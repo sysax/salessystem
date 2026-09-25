@@ -1,5 +1,7 @@
 #include "CatalogController.h"
 
+#include <QSet>
+
 CatalogController::CatalogController(ProductRepository *products, CategoryRepository *categories,
                                      SettingsService *settings, QObject *parent)
     : QObject(parent), m_repos(products), m_cats(categories), m_settings(settings)
@@ -19,6 +21,35 @@ QString checkExpiry(const SettingsService *settings, const Product &p)
     }
     return {};
 }
+// Multitienda: la categoría debe pertenecer al rubro activo (o ser global '';
+// 'miscelanea' permite todo). Evita guardar "Equipos" en modo abarrotes.
+QString checkVertical(CategoryRepository *cats, const SettingsService *settings, Product &p)
+{
+    if (!settings)
+        return {};
+    QString bt = settings->businessType().trimmed();
+    if (bt.isEmpty() || bt == QLatin1String("miscelanea"))
+        return {};
+    // Etiqueta explícita de otro rubro → rechazo directo (filtrar sin borrar).
+    if (!p.businessType.trimmed().isEmpty() && p.businessType.trimmed() != bt)
+        return QStringLiteral("Producto de '%1': el rubro activo es '%2'")
+            .arg(p.businessType.trimmed(), bt);
+    p.businessType = bt;
+    if (!cats || p.cat.trimmed().isEmpty())
+        return {};
+    bool hasBtCats = false;
+    QSet<QString> valid;
+    for (const Category &c : cats->list(bt)) {
+        hasBtCats = true;
+        valid.insert(c.name.trimmed().toLower());
+    }
+    if (!hasBtCats)
+        return {};
+    if (!valid.contains(p.cat.trimmed().toLower()))
+        return QStringLiteral("Categoría '%1' no es del rubro '%2' (use las de la lista)")
+            .arg(p.cat.trimmed(), bt);
+    return {};
+}
 } // namespace
 
 QVariantMap CatalogController::toMap(const Product &p)
@@ -29,6 +60,7 @@ QVariantMap CatalogController::toMap(const Product &p)
             {"name", p.name},
             {"description", p.description},
             {"cat", p.cat},
+            {"businessType", p.businessType},
             {"brand", p.brand},
             {"supplier", p.supplier},
             {"price", p.price},
@@ -61,6 +93,10 @@ Product CatalogController::fromMap(const QVariantMap &m, const Product &base)
         p.description = m[QStringLiteral("description")].toString();
     if (m.contains(QStringLiteral("cat")))
         p.cat = m[QStringLiteral("cat")].toString();
+    if (m.contains(QStringLiteral("businessType")))
+        p.businessType = m[QStringLiteral("businessType")].toString().trimmed();
+    if (m.contains(QStringLiteral("business_type")))
+        p.businessType = m[QStringLiteral("business_type")].toString().trimmed();
     if (m.contains(QStringLiteral("subcat")))
         p.subcat = m[QStringLiteral("subcat")].toString();
     if (m.contains(QStringLiteral("unit")))
@@ -96,19 +132,34 @@ Product CatalogController::fromMap(const QVariantMap &m, const Product &base)
     return p;
 }
 
-void CatalogController::search(const QString &text)
+void CatalogController::search(const QString &text, const QString &businessType)
 {
+    // Multitienda: si se pasa bt explícito manda; si no, usa el rubro activo
+    // (salvo 'miscelanea'/vacío = ver todo, modo mixto intencional).
+    QString bt = businessType.trimmed();
+    if (bt.isEmpty() && m_settings)
+        bt = m_settings->businessType().trimmed();
+    if (bt == QLatin1String("miscelanea"))
+        bt.clear();
     m_products.clear();
-    for (const Product &p : m_repos->search(text))
+    for (const Product &p : m_repos->search(text, bt))
         m_products << toMap(p);
     emit productsChanged();
 }
 
 QVariantMap CatalogController::add(const QVariantMap &fields)
 {
-    const Product p = fromMap(fields);
+    Product p = fromMap(fields);
+    // Multitienda: auto-etiquetar con el rubro activo si no se indicó.
+    if (p.businessType.trimmed().isEmpty() && m_settings) {
+        const QString bt = m_settings->businessType().trimmed();
+        if (!bt.isEmpty() && bt != QLatin1String("miscelanea"))
+            p.businessType = bt;
+    }
     if (const QString err = checkExpiry(m_settings, p); !err.isEmpty())
         return {{"ok", false}, {"error", err}};
+    if (const QString verr = checkVertical(m_cats, m_settings, p); !verr.isEmpty())
+        return {{"ok", false}, {"error", verr}};
     const auto r = m_repos->add(p);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
@@ -121,9 +172,11 @@ QVariantMap CatalogController::update(const QString &sku, const QVariantMap &fie
     const auto cur = m_repos->findBySku(sku);
     if (!cur)
         return {{"ok", false}, {"error", QStringLiteral("No encontrado")}};
-    const Product p = fromMap(fields, *cur);
+    Product p = fromMap(fields, *cur);
     if (const QString err = checkExpiry(m_settings, p); !err.isEmpty())
         return {{"ok", false}, {"error", err}};
+    if (const QString verr = checkVertical(m_cats, m_settings, p); !verr.isEmpty())
+        return {{"ok", false}, {"error", verr}};
     const auto r = m_repos->update(sku, p);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};

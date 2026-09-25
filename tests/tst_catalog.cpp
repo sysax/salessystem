@@ -125,6 +125,36 @@ class TstCatalog : public QObject
         QVERIFY(!m_dbm->applySeedFile(QStringLiteral("../schema")));
     }
 
+    void multitiendaIsolation()
+    {
+        // Multitienda (filtrar sin borrar): celulares + abarrotes conviven en
+        // BD pero cada rubro solo ve lo suyo; legacy '' se ve en todos.
+        QVERIFY(m_dbm->applySeedFile(QStringLiteral("celulares")));
+        QVERIFY(m_dbm->applySeedFile(QStringLiteral("abarrotes")));
+        const auto ab = m_products->search({}, QStringLiteral("abarrotes"));
+        const auto ce = m_products->search({}, QStringLiteral("celulares"));
+        const auto all = m_products->search({});
+        QVERIFY(ab.size() >= 7 && ce.size() >= 6);
+        QVERIFY(all.size() >= ab.size() + ce.size());
+        for (const Product &p : ab)
+            QVERIFY(p.sku != QStringLiteral("CEL01"));
+        for (const Product &p : ce)
+            QVERIFY(p.sku != QStringLiteral("AB01"));
+        bool abTagged = false, ceTagged = false;
+        for (const Product &p : all) {
+            if (p.sku == QStringLiteral("AB01"))
+                abTagged = (p.businessType == QStringLiteral("abarrotes"));
+            if (p.sku == QStringLiteral("CEL01"))
+                ceTagged = (p.businessType == QStringLiteral("celulares"));
+        }
+        QVERIFY(abTagged && ceTagged);
+        // Texto + filtro combinados.
+        QVERIFY(
+            m_products->search(QStringLiteral("Xiaomi"), QStringLiteral("abarrotes")).isEmpty());
+        QVERIFY(
+            !m_products->search(QStringLiteral("Xiaomi"), QStringLiteral("celulares")).isEmpty());
+    }
+
     void controllerReload()
     {
         m_ctl->reloadCategories(QStringLiteral("farmacia"));

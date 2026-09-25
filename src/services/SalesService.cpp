@@ -179,6 +179,20 @@ Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> 
             error = QStringLiteral("Producto ID %1 no existe").arg(it.productId);
             return Result<Totals>::failure(error);
         }
+        // Multitienda (filtrar sin borrar): el rubro activo no vende productos
+        // etiquetados de otro rubro. '' = legacy/mixto (siempre permitido) y
+        // 'miscelanea' = modo mixto intencional (permite todo).
+        if (m_settings) {
+            const QString bt = m_settings->businessType().trimmed();
+            const QString pb = p->businessType.trimmed();
+            if (!bt.isEmpty() && bt != QLatin1String("miscelanea") && !pb.isEmpty()
+                && pb != QLatin1String("miscelanea") && pb != bt) {
+                error = QStringLiteral("Producto '%1' es de '%2' y el rubro activo es '%3' "
+                                       "(oculto, no se borra: cambie de rubro para venderlo)")
+                            .arg(p->name, pb, bt);
+                return Result<Totals>::failure(error);
+            }
+        }
         if (p->stock < it.qty - 1e-9) {
             error = QStringLiteral("Stock insuficiente para '%1'. Disponible: %2, Solicitado: %3")
                         .arg(p->name)

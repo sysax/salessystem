@@ -306,7 +306,9 @@ ScrollView {
 
     function verticalIn(list) {
         try {
-            var bt = settingsCtl.settings["business_type"] || "";
+            var bt = settingsCtl.settings["business_type"] || "miscelanea";
+            if (bt === "miscelanea")
+                return true; // modo mixto intencional: ve todo
             return list.indexOf(bt) >= 0;
         } catch (e) {
             return false;

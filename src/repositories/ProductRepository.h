@@ -18,10 +18,14 @@ class ProductRepository : public QObject
                                QObject *parent = nullptr);
 
     QList<Product> list() const;
+    QList<Product> list(const QString &businessType) const;
     std::optional<Product> findById(int id) const;
     std::optional<Product> findBySku(const QString &sku) const;
     std::optional<Product> findByBarcode(const QString &barcode) const;
     QList<Product> search(const QString &text) const;
+    // Multitienda (filtrar sin borrar): bt vacío o 'miscelanea' = todo;
+    // si no, (business_type='' OR business_type=bt). '' = legacy visible en todos.
+    QList<Product> search(const QString &text, const QString &businessType) const;
 
     Result<Product> add(const Product &p);
     // Reemplazo de campos editables (los vacíos/nulos no se tocan,

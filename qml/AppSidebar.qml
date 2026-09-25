@@ -89,7 +89,7 @@ ColumnLayout {
     function businessType() {
         // settingsCtl puede no existir (tst_sidebar carga aislado).
         try {
-            return settingsCtl.settings["business_type"] || "";
+            return settingsCtl.settings["business_type"] || "miscelanea";
         } catch (e) {
             return "";
         }
@@ -99,8 +99,8 @@ ColumnLayout {
         if (!entry.verticals || entry.verticals.length === 0)
             return true;
         var bt = businessType();
-        if (bt === "")
-            return true; // sin config conocida: mostrar todo (tests, arranque)
+        if (bt === "" || bt === "miscelanea")
+            return true; // modo mixto intencional: mostrar todo
         return entry.verticals.indexOf(bt) >= 0;
     }
 

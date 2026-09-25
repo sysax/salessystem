@@ -109,7 +109,8 @@ class TstSidebar : public QObject
 
         settings.setBusinessType(QStringLiteral("miscelanea"));
         QMetaObject::invokeMethod(root, "refresh", Qt::DirectConnection);
-        QTRY_COMPARE(menu->property("count").toInt(), 14); // solo genéricos
+        // Multitienda: 'miscelanea' = modo mixto intencional, ve todo (14 + lots + serials).
+        QTRY_COMPARE(menu->property("count").toInt(), 16);
     }
 };
 

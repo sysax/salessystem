@@ -70,13 +70,15 @@ ScrollView {
             }
         }
         RowLayout {
-            // Fase 4: reportes por vertical.
+            // Fase 4: reportes por vertical (solo rubro correspondiente).
             Button {
                 text: qsTr("CSV seriales")
+                visible: verticalIn(["celulares", "taller", "miscelanea"])
                 onClicked: msg.text = reports.exportCsv("seriales", exportDir())
             }
             Button {
                 text: qsTr("CSV mermas")
+                visible: verticalIn(["abarrotes", "restaurante", "panaderia", "cafeteria", "miscelanea"])
                 onClicked: msg.text = reports.exportCsv("mermas", exportDir())
             }
             Button {
@@ -109,10 +111,12 @@ ScrollView {
         Label {
             text: qsTr("Por vencer (30 días): %1").arg(reports.expiringProducts(30).length)
             wrapMode: Text.Wrap
+            visible: verticalIn(["farmacia", "veterinaria", "abarrotes", "panaderia", "restaurante", "cafeteria", "miscelanea"])
         }
         Label {
             text: qsTr("Seriales en stock: %1 · en RMA: %2").arg(reports.serialsReport().counts.in_stock).arg(reports.serialsReport().counts.rma)
             wrapMode: Text.Wrap
+            visible: verticalIn(["celulares", "taller", "miscelanea"])
         }
         Label {
             text: qsTr("Inventario: %1 uds · costo %2").arg(reports.inventoryValue().units).arg(money(reports.inventoryValue().cost))
@@ -140,7 +144,9 @@ ScrollView {
     }
     function verticalIn(list) {
         try {
-            var bt = settingsCtl.settings["business_type"] || "";
+            var bt = settingsCtl.settings["business_type"] || "miscelanea";
+            if (bt === "miscelanea")
+                return true; // modo mixto intencional: ve todo
             return list.indexOf(bt) >= 0;
         } catch (e) {
             return true; // sin settings (tests): mostrar todo

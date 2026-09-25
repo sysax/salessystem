@@ -78,6 +78,8 @@ Product ProductRepository::rowToProduct(const QSqlQuery &q)
     p.image = q.value(QStringLiteral("image")).toString();
     p.lote = q.value(QStringLiteral("lote")).toString();
     p.vencimiento = q.value(QStringLiteral("vencimiento")).toString();
+    // Multitienda: columna aditiva; en BDs legadas aún no existe → ''.
+    p.businessType = q.value(QStringLiteral("business_type")).toString().trimmed();
     p.isKit = q.value(QStringLiteral("is_kit")).toInt() != 0;
     p.kitJson = q.value(QStringLiteral("kit_json")).toString();
     // Columna aditiva Fase 3: en BDs legadas aún no existe → '{}'.
@@ -114,6 +116,11 @@ QList<Product> ProductRepository::list() const
     return out;
 }
 
+QList<Product> ProductRepository::list(const QString &businessType) const
+{
+    return search({}, businessType);
+}
+
 std::optional<Product> ProductRepository::findById(int id) const
 {
     QSqlQuery q(m_db);
@@ -146,22 +153,47 @@ std::optional<Product> ProductRepository::findByBarcode(const QString &barcode) 
 
 QList<Product> ProductRepository::search(const QString &text) const
 {
+    return search(text, {});
+}
+
+QList<Product> ProductRepository::search(const QString &text, const QString &businessType) const
+{
+    const QString bt = businessType.trimmed();
+    // 'miscelanea' = modo mixto intencional: ve todo (incluye legacy '').
+    const bool filterBt = !bt.isEmpty() && bt != QLatin1String("miscelanea");
+    const QString btClause
+        = filterBt ? QStringLiteral(
+                         " AND (business_type IS NULL OR business_type='' OR business_type=?)")
+                   : QString();
     const QString t = text.trimmed().toLower();
     QList<Product> out;
     QSqlQuery q(m_db);
     if (t.isEmpty()) {
-        if (q.exec(QStringLiteral("SELECT * FROM products ORDER BY id")))
+        if (!filterBt) {
+            if (q.exec(QStringLiteral("SELECT * FROM products ORDER BY id")))
+                while (q.next())
+                    out << rowToProduct(q);
+            return out;
+        }
+        q.prepare(QStringLiteral("SELECT * FROM products WHERE (business_type IS NULL OR "
+                                 "business_type='' OR business_type=?) ORDER BY id"));
+        q.addBindValue(bt);
+        if (q.exec())
             while (q.next())
                 out << rowToProduct(q);
         return out;
     }
-    q.prepare(QStringLiteral("SELECT * FROM products WHERE lower(name) LIKE ? OR lower(sku) LIKE ? "
-                             "OR lower(barcode) LIKE ? OR lower(cat) LIKE ? ORDER BY id"));
+    q.prepare(
+        QStringLiteral("SELECT * FROM products WHERE (lower(name) LIKE ? OR lower(sku) LIKE ? "
+                       "OR lower(barcode) LIKE ? OR lower(cat) LIKE ?)")
+        + btClause + QStringLiteral(" ORDER BY id"));
     const QString like = u'%' + t + u'%';
     q.addBindValue(like);
     q.addBindValue(like);
     q.addBindValue(like);
     q.addBindValue(like);
+    if (filterBt)
+        q.addBindValue(bt);
     if (!q.exec())
         return out;
     while (q.next())
@@ -228,8 +260,8 @@ Result<Product> ProductRepository::add(const Product &pin)
     q.prepare(QStringLiteral(
         "INSERT INTO products (sku, barcode, name, description, cat, subcat, brand, supplier, "
         "price, price_buy, price_wholesale, tax, unit, stock, stock_min, stock_max, location, "
-        "status, image, lote, vencimiento, is_kit, kit_json, attrs_json) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
+        "status, image, lote, vencimiento, business_type, is_kit, kit_json, attrs_json) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(p.sku);
     q.addBindValue(p.barcode);
     q.addBindValue(p.name);
@@ -251,6 +283,7 @@ Result<Product> ProductRepository::add(const Product &pin)
     q.addBindValue(p.image.isEmpty() ? QVariant() : p.image);
     q.addBindValue(p.lote.isEmpty() ? QVariant() : p.lote);
     q.addBindValue(p.vencimiento.isEmpty() ? QVariant() : p.vencimiento);
+    q.addBindValue(p.businessType.trimmed());
     q.addBindValue(p.isKit ? 1 : 0);
     q.addBindValue(p.kitJson);
     q.addBindValue(p.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}") : p.attrsJson);
@@ -283,7 +316,8 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p)
     q.prepare(QStringLiteral(
         "UPDATE products SET name=?, cat=?, subcat=?, brand=?, supplier=?, description=?, price=?, "
         "price_buy=?, price_wholesale=?, tax=?, unit=?, stock=?, stock_min=?, stock_max=?, "
-        "location=?, status=?, image=?, lote=?, vencimiento=?, barcode=?, attrs_json=? WHERE "
+        "location=?, status=?, image=?, lote=?, vencimiento=?, barcode=?, business_type=?, "
+        "attrs_json=? WHERE "
         "sku=?"));
     q.addBindValue(p.name);
     q.addBindValue(p.cat);
@@ -305,6 +339,7 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p)
     q.addBindValue(p.lote.isEmpty() ? QVariant() : p.lote);
     q.addBindValue(p.vencimiento.isEmpty() ? QVariant() : p.vencimiento);
     q.addBindValue(p.barcode);
+    q.addBindValue(p.businessType.trimmed());
     q.addBindValue(p.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}") : p.attrsJson);
     q.addBindValue(sku);
     if (!q.exec())

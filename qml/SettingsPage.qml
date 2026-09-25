@@ -207,7 +207,7 @@ ScrollView {
                 anchors.fill: parent
                 spacing: Theme.spacingSmall
                 Label {
-                    text: qsTr("Solo añade categorías y productos de ejemplo del rubro elegido. No borra nada existente; puede aplicarse varias veces sin duplicar.")
+                    text: qsTr("Solo añade categorías y productos de ejemplo del rubro elegido. Lo de otros rubros se oculta automáticamente (no se borra); 'miscelanea' muestra todo.")
                     font.pixelSize: Theme.fontS
                     opacity: 0.7
                     wrapMode: Text.Wrap

@@ -32,6 +32,9 @@ struct Product
     QString image;
     QString lote;
     QString vencimiento;
+    // Multitienda: rubro dueño del producto ('' = legacy/mixto, visible en todos).
+    // Filtrar sin borrar: cambiar business_type oculta, nunca elimina.
+    QString businessType;
     // Fase 3: metadatos por vertical (JSON objeto).
     QString attrsJson = QStringLiteral("{}");
     bool isKit = false;

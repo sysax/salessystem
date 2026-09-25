@@ -391,6 +391,36 @@ class TstVertical : public QObject
         QCOMPARE(d.value().total, 2000.0);
     }
 
+    void crossVerticalBlocked()
+    {
+        // Multitienda (filtrar sin borrar): en modo abarrotes no se vende un
+        // producto de celulares; en miscelanea (mixto) sí.
+        Product p;
+        p.sku = QStringLiteral("CEL-X");
+        p.name = QStringLiteral("Equipo ajeno");
+        p.price = 100000.0;
+        p.stock = 5.0;
+        p.businessType = QStringLiteral("celulares");
+        QVERIFY(m_products->add(p).ok());
+        const int pid = m_products->findBySku(QStringLiteral("CEL-X"))->id;
+        QVERIFY(m_settings
+                    ->save({{QStringLiteral("business_type"),
+                             QStringLiteral("abarrotes")}})[QStringLiteral("ok")]
+                    .toBool());
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = pid, .qty = 1.0}}, QStringLiteral("X"), {},
+                              QStringLiteral("Efectivo"), QString(), QStringLiteral("t"))
+                     .ok());
+        QVERIFY(m_settings
+                    ->save({{QStringLiteral("business_type"),
+                             QStringLiteral("miscelanea")}})[QStringLiteral("ok")]
+                    .toBool());
+        QVERIFY(m_svc
+                    ->create({SI{.productId = pid, .qty = 1.0}}, QStringLiteral("X"), {},
+                             QStringLiteral("Efectivo"), QString(), QStringLiteral("t"))
+                    .ok());
+    }
+
     void ean13()
     { // Ejemplo GS1 válido + variante con dígito malo.
         QVERIFY(ProductRepository::isValidEan13(QStringLiteral("5901234123457")));

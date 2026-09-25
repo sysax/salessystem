@@ -30,7 +30,7 @@ class CatalogController : public QObject
         return m_categories;
     }
 
-    Q_INVOKABLE void search(const QString &text);
+    Q_INVOKABLE void search(const QString &text, const QString &businessType = {});
     Q_INVOKABLE QVariantMap add(const QVariantMap &fields);
     Q_INVOKABLE QVariantMap update(const QString &sku, const QVariantMap &fields);
     Q_INVOKABLE QVariantMap remove(const QString &sku);

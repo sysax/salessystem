@@ -184,6 +184,27 @@ ColumnLayout {
         onSizeChanged: function(size) { root.pageSize = size; root.page = 0; root.refreshView(); }
     }
 
+    // Multitienda: el rubro activo decide qué campos verticales se muestran.
+    // Abarrotes no ve garantía/RMA/receta; farmacia no ve seriales, etc.
+    function businessType() {
+        try { return settingsCtl.settings["business_type"] || "miscelanea"; } catch (e) { return "miscelanea"; }
+    }
+    function supportsSerial() {
+        var bt = businessType();
+        return bt === "miscelanea" || bt === "celulares" || bt === "taller" || bt === "ferreteria";
+    }
+    function supportsExpiry() {
+        var bt = businessType();
+        if (bt === "miscelanea")
+            return true;
+        try { return settingsCtl.settings["require_expiry"] === "1"; } catch (e) {}
+        return bt === "farmacia" || bt === "veterinaria" || bt === "abarrotes"
+            || bt === "panaderia" || bt === "restaurante" || bt === "cafeteria";
+    }
+    function supportsReceta() {
+        var bt = businessType();
+        return bt === "miscelanea" || bt === "farmacia" || bt === "veterinaria" || bt === "consultorio";
+    }
     // Fase 2: categorías desde el diccionario (sin SQL en QML).
     function rootCatNames() {
         var out = [];
@@ -287,7 +308,7 @@ ColumnLayout {
     }
     Connections {
         target: settingsCtl
-        function onSettingsChanged() { root.reloadCats(); }
+        function onSettingsChanged() { root.reloadCats(); catalog.search(""); }
     }
 
     Dialog {
@@ -401,7 +422,9 @@ ColumnLayout {
                 }
             }
             // Fase 3: lote + vencimiento (obligatorios si require_expiry).
+            // Multitienda: solo visible en rubros que manejan vencimiento.
             RowLayout {
+                visible: supportsExpiry()
                 TextField {
                     id: fLote
                     text: editDialog.fields.lote || ""
@@ -425,21 +448,27 @@ ColumnLayout {
                 color: Theme.warning
             }
             // Fase 3: flags por vertical (seriales, receta, controlado, garantía).
+            // Multitienda: cada rubro solo ve los suyos (abarrotes no ve RMA...).
             GridLayout {
                 columns: 2
+                visible: supportsSerial() || supportsReceta()
                 CheckBox {
                     id: fTrackSerial
                     text: qsTr("Lleva serial/IMEI")
+                    visible: supportsSerial()
                 }
                 CheckBox {
                     id: fReceta
                     text: qsTr("Requiere receta")
+                    visible: supportsReceta()
                 }
                 CheckBox {
                     id: fControlled
                     text: qsTr("Controlado (supervisor)")
+                    visible: supportsReceta()
                 }
                 RowLayout {
+                    visible: supportsSerial()
                     Label { text: qsTr("Garantía (meses)") }
                     TextField {
                         id: fWarranty
