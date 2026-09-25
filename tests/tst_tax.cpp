@@ -19,6 +19,8 @@
 #include <QSqlQuery>
 #include <QTemporaryDir>
 
+#include <cmath>
+
 using SI = SalesService::ServiceItem;
 
 class TstTax : public QObject
@@ -179,6 +181,38 @@ class TstTax : public QObject
                      ->create({SI{.productId = tomato, .qty = 99.0}}, QStringLiteral("X"), {},
                               QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"))
                      .ok());
+    }
+
+    void centsInvariant()
+    {
+        // Fase 2: con precios fraccionarios el impuesto sale en céntimos
+        // exactos y subtotal + impuesto − descuento == total al céntimo.
+        const int p1 = mkProductFull(QStringLiteral("CENT1"), QStringLiteral("Cent 1"), 1999.99,
+                                     10.0, QStringLiteral("IVA 19%"), QStringLiteral("unidad"));
+        const int p2 = mkProductFull(QStringLiteral("CENT2"), QStringLiteral("Cent 2"), 333.33,
+                                     10.0, QStringLiteral("IVA 5%"), QStringLiteral("unidad"));
+        // Tasa 5 % disponible para este test (luego se restaura).
+        QVERIFY(m_settings
+                    ->save({{QStringLiteral("tax_rates_json"),
+                             QStringLiteral(
+                                 "[{\"name\":\"IVA 19%\",\"rate\":19},"
+                                 "{\"name\":\"IVA 5%\",\"rate\":5},"
+                                 "{\"name\":\"Excluido\",\"rate\":0}]")}})[QStringLiteral("ok")]
+                    .toBool());
+        const auto t = m_svc->calculateTotals(
+            {SI{.productId = p1, .qty = 3.0}, SI{.productId = p2, .qty = 2.0}});
+        const auto toCents = [](double v) { return qint64(std::llround(v * 100.0)); };
+        QCOMPARE(toCents(t.subtotal + t.tax - t.discount), toCents(t.total));
+        // Total exacto en céntimos: bases 599997+66666, impuestos 113999+3333.
+        QCOMPARE(toCents(t.total), (qint64)783995);
+        // 5999.97 * 19 % = 1139.9943 → 1139.99 (half-up al céntimo).
+        QCOMPARE(toCents(t.lines[0].tax), (qint64)113999);
+        QVERIFY(m_settings
+                    ->save({{QStringLiteral("tax_rates_json"),
+                             QStringLiteral(
+                                 "[{\"name\":\"IVA 19%\",\"rate\":19},"
+                                 "{\"name\":\"Excluido\",\"rate\":0}]")}})[QStringLiteral("ok")]
+                    .toBool());
     }
 
     void legacyMigrationReaddsColumn()

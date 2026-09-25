@@ -34,6 +34,17 @@ class TstMoney : public QObject
         QCOMPARE(Money::withIva(net).cents(), (qint64)1190595);
     }
 
+    void rateHalfUp()
+    {
+        // Fase 2: tasa genérica (multinegocio) con round-half-up al céntimo.
+        QCOMPARE(Money::taxCents(10000, 19.0), (qint64)1900);    // 100.00 * 19 %
+        QCOMPARE(Money::taxCents(10000, 5.0), (qint64)500);      // 100.00 * 5 %
+        QCOMPARE(Money::taxCents(599997, 19.0), (qint64)113999); // 5999.97 * 19 %
+        QCOMPARE(Money::taxCents(1, 50.0), (qint64)1);           // 0.01 * 50 % = 0.005 → 1
+        QCOMPARE(Money::taxCents(199, 19.0), (qint64)38);        // 1.99 * 19 % = 0.3781 → 38
+        QCOMPARE(Money::withRate(Money::fromCop(100000.0), 5.0).toCop(), 105000.0);
+    }
+
     void formatCop()
     {
         const QString s = Money::fromCop(1850000.0).format();

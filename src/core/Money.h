@@ -1,11 +1,12 @@
 #pragma once
 
-// Dinero exacto en COP: la BD guarda REAL pero los cálculos de negocio
-// (IVA 19%, mora 2%, pagos mixtos) se hacen en céntimos enteros para
-// evitar errores de coma flotante. Sustituye a Decimal de Python.
+// Dinero exacto: la BD guarda REAL pero los cálculos de negocio (IVA,
+// mora, pagos mixtos) se hacen en céntimos enteros para evitar errores de
+// coma flotante. Sustituye a Decimal de Python.
 #include <QLocale>
 #include <QString>
 #include <QtGlobal> // qint64, qAbs (QtTypes no existe como header top-level en Qt 6.4)
+#include <cmath>    // std::llround
 
 class Money
 {
@@ -67,10 +68,23 @@ class Money
         return format(m_cents);
     }
 
-    // IVA incluido a partir del neto, con redondeo al céntimo
+    // IVA incluido a partir del neto, con redondeo al céntimo.
+    // Tasa explícita (multinegocio: la tasa viene de SettingsService, nunca
+    // del default COP/19). Redondeo round-half-up en positivos (llround =
+    // half-away; las bases imponibles no son negativas: el descuento se
+    // resta como monto positivo).
+    static qint64 taxCents(qint64 baseCents, double ratePct)
+    {
+        return static_cast<qint64>(std::llround(static_cast<double>(baseCents) * ratePct / 100.0));
+    }
+    static Money withRate(Money net, double ratePct)
+    {
+        return Money(net.m_cents + taxCents(net.m_cents, ratePct));
+    }
+    // Compatibilidad: IVA Colombia 19 % (los tests y tickets legacy lo usan).
     static Money withIva(Money net, int percent = IvaPercent)
     {
-        return Money((net.m_cents * (100 + percent) + 50) / 100);
+        return withRate(net, static_cast<double>(percent));
     }
 
     constexpr Money operator+(Money o) const

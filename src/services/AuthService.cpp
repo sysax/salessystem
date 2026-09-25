@@ -21,6 +21,7 @@ const QStringList AuthService::Roles = {
 int AuthService::MaxFailedAttempts = 3;
 int AuthService::LockoutMinutes = 5;
 int AuthService::MinPasswordLength = 4;
+int AuthService::Pbkdf2Iterations = 600000;
 
 namespace
 {
@@ -83,6 +84,16 @@ AuthService::AuthService(QSqlDatabase db, EventBus *bus, QObject *parent)
 {
 }
 
+QString AuthService::connectionName() const
+{
+    return m_db.connectionName();
+}
+
+AuthService::DbCloneParams AuthService::cloneParams() const
+{
+    return {m_db.driverName(), m_db.databaseName(), m_db.connectOptions()};
+}
+
 QString AuthService::nowIso()
 {
     return QDateTime::currentDateTime().toString(Qt::ISODateWithMs).left(19);
@@ -107,12 +118,44 @@ QString AuthService::hashPassword(const QString &password)
     QByteArray salt(16, 0);
     for (int i = 0; i < salt.size(); ++i)
         salt[i] = static_cast<char>(QRandomGenerator::system()->bounded(256));
-    const QByteArray dk = pbkdf2Sha256(password.toUtf8(), salt, 100000, 32);
-    return QString::fromLatin1(salt.toHex()) + u'$' + QString::fromLatin1(dk.toHex());
+    const QByteArray dk = pbkdf2Sha256(password.toUtf8(), salt, Pbkdf2Iterations, 32);
+    return QStringLiteral("pbkdf2$%1$%2$%3")
+        .arg(Pbkdf2Iterations)
+        .arg(QString::fromLatin1(salt.toHex()), QString::fromLatin1(dk.toHex()));
 }
+
+namespace
+{
+// Compara en tiempo constante para no filtrar por timing.
+bool constantEqual(const QByteArray &a, const QByteArray &b)
+{
+    if (a.size() != b.size())
+        return false;
+    volatile int diff = 0;
+    for (int i = 0; i < a.size(); ++i)
+        diff |= a[i] ^ b[i];
+    return diff == 0;
+}
+} // namespace
 
 bool AuthService::verifyPassword(const QString &stored, const QString &password)
 {
+    // Formato v2: pbkdf2$<iter>$<salthex>$<dkhex> (Fase 2).
+    if (stored.startsWith(QLatin1String("pbkdf2$"))) {
+        const QStringList parts = stored.split(u'$');
+        if (parts.size() != 4)
+            return false;
+        bool ok = false;
+        const int iter = parts[1].toInt(&ok);
+        if (!ok || iter < 1 || iter > 10000000)
+            return false;
+        const QByteArray salt = QByteArray::fromHex(parts[2].toLatin1());
+        const QByteArray want = QByteArray::fromHex(parts[3].toLatin1());
+        if (salt.size() != 16 || want.size() != 32)
+            return false;
+        return constantEqual(pbkdf2Sha256(password.toUtf8(), salt, iter, 32), want);
+    }
+    // Legacy v1: salthex$dkhex con 100k (BDs anteriores a Fase 2).
     const int sep = stored.indexOf(u'$');
     if (sep <= 0)
         return stored == password; // fallback texto plano (migración)
@@ -120,14 +163,18 @@ bool AuthService::verifyPassword(const QString &stored, const QString &password)
     const QByteArray want = QByteArray::fromHex(stored.mid(sep + 1).toLatin1());
     if (salt.size() != 16 || want.size() != 32)
         return false;
-    const QByteArray dk = pbkdf2Sha256(password.toUtf8(), salt, 100000, 32);
-    if (dk.size() != want.size())
-        return false;
-    // Comparación en tiempo constante para no filtrar por timing
-    volatile int diff = 0;
-    for (int i = 0; i < dk.size(); ++i)
-        diff |= dk[i] ^ want[i];
-    return diff == 0;
+    return constantEqual(pbkdf2Sha256(password.toUtf8(), salt, 100000, 32), want);
+}
+
+bool AuthService::needsUpgrade(const QString &stored)
+{
+    if (!stored.startsWith(QLatin1String("pbkdf2$")))
+        return true; // v1 o plano → migrar
+    const QStringList parts = stored.split(u'$');
+    if (parts.size() != 4)
+        return true;
+    bool ok = false;
+    return parts[1].toInt(&ok) != Pbkdf2Iterations || !ok;
 }
 
 void AuthService::audit(const QString &user, const QString &action, const QString &detail) const
@@ -173,8 +220,8 @@ Result<AuthService::LoginResult> AuthService::login(const QString &username,
 
     if (verifyPassword(stored, password)) {
         QSqlQuery up(m_db);
-        if (stored.indexOf(u'$') <= 0) {
-            // Migración: re-hashear contraseñas en texto plano al entrar
+        if (needsUpgrade(stored)) {
+            // Migración Fase 2: texto plano o hash v1 (100k) → v2 (600k) al entrar
             up.prepare(
                 QStringLiteral("UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
                                "last_login=? WHERE username=?"));

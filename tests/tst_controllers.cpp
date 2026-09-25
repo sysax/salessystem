@@ -48,7 +48,7 @@ class TstControllers : public QObject
                                           bus, nullptr, nullptr, nullptr, this);
         auto *sync = new SyncService(db, bus, this);
         auto *printer = new TicketPrinter(m_tmp.path(), this);
-        m_auth = new AuthController(authSvc, this);
+        m_auth = new AuthController(authSvc, nullptr, this);
         m_pos = new PosController(salesSvc, products, promos, caja, printer, sync, nullptr, nullptr,
                                   this);
         m_catalog = new CatalogController(products, nullptr, nullptr, this);

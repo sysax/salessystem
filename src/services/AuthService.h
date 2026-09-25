@@ -15,7 +15,9 @@ class EventBus;
 // Port de Repository.find_user + 2FA/recovery + ROLE_PERMISSIONS
 // (data/repository.py) y data/db.py::_hash_password/_verify_password.
 //
-// Formato password: "salthex$dkhex" PBKDF2-HMAC-SHA256 100k, salt 16 B.
+// Formato password v2: "pbkdf2$<iter>$<salthex>$<dkhex>" PBKDF2-HMAC-SHA256
+// 600k, salt 16 B (Fase 2 MAP_PRO). Legacy v1 "salthex$dkhex" (100k) y texto
+// plano se verifican y se migran a v2 al primer login correcto.
 // Lockout: 3 intentos → 5 min. Recovery: token 6-hex, 30 min, 1 uso.
 // La bitácora se escribe directo a audit_log (fase 3: AuditRepository).
 class AuthService : public QObject
@@ -49,6 +51,8 @@ class AuthService : public QObject
     static int MaxFailedAttempts;
     static int LockoutMinutes;
     static int MinPasswordLength;
+    // Fase 2: iteraciones PBKDF2 para hashes nuevos (bajable en tests).
+    static int Pbkdf2Iterations;
 
     explicit AuthService(QSqlDatabase db, EventBus *bus = nullptr, QObject *parent = nullptr);
 
@@ -86,6 +90,19 @@ class AuthService : public QObject
     // Utilidades cripto (públicas para tests de compatibilidad)
     static QString hashPassword(const QString &password);
     static bool verifyPassword(const QString &stored, const QString &password);
+    // true si el hash ya es v2 con las iteraciones vigentes (si no, login lo migra).
+    static bool needsUpgrade(const QString &stored);
+    // Nombre de la conexión BD (para clonar en hilos de trabajo).
+    QString connectionName() const;
+    // Parámetros para recrear la conexión en otro hilo (las conexiones
+    // QSqlDatabase solo se usan en el hilo que las creó).
+    struct DbCloneParams
+    {
+        QString driver;
+        QString dbName;
+        QString options;
+    };
+    DbCloneParams cloneParams() const;
 
   private:
     void audit(const QString &user, const QString &action, const QString &detail) const;

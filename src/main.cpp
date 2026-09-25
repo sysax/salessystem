@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
     PayablesService cxpSvc(&cxp, &bus);
     TicketPrinter printer;
 
-    AuthController authCtl(&auth);
+    AuthController authCtl(&auth, &bus);
     SettingsController settingsCtl(&settingsSvc, &auth);
     DashboardController dashCtl(&reports, &inventory, &products, &serials, &settingsSvc);
     PosController posCtl(&salesSvc, &products, &promos, &caja, &printer, &sync, &settingsSvc,

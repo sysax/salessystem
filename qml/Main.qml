@@ -82,6 +82,7 @@ ApplicationWindow {
                 return; // rol sin permiso: no navegar (antes _snack)
         }
         currentScreen = screen;
+        auth.touch(); // Fase 2: actividad contra expiración por inactividad
         if (screen === "dashboard")
             dash.refresh();
         if (screen === "sales")
@@ -360,6 +361,17 @@ ApplicationWindow {
         repeat: true
         onTriggered: root.recheckOnline()
     }
+    // Fase 2: expiración por inactividad (30 min): cierra y regresa al login.
+    Timer {
+        id: idleTimer
+        interval: 60000
+        running: auth.loggedIn
+        repeat: true
+        onTriggered: {
+            if (auth.checkIdle())
+                root.navigate("login");
+        }
+    }
     Connections {
         target: auth
         function onSessionChanged() {
@@ -369,6 +381,8 @@ ApplicationWindow {
                 settingsCtl.setRole(auth.currentRole);
                 dash.refresh();
                 sidebar.refresh();
+            } else if (root.currentScreen !== "login") {
+                root.navigate("login");
             }
         }
     }

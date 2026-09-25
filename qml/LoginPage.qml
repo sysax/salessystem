@@ -54,9 +54,15 @@ Pane {
             highlighted: true
             Layout.fillWidth: true
             // No llamar al backend con campos vacíos (el manejo de error vía Toast se conserva)
-            enabled: root.needTotp ? totpField.text.trim() !== ""
-                                   : userField.text.trim() !== "" && passField.text !== ""
+            // Fase 2: el hash PBKDF2 corre fuera del hilo UI (sin congelar).
+            enabled: !auth.loginBusy && (root.needTotp ? totpField.text.trim() !== ""
+                                                      : userField.text.trim() !== "" && passField.text !== "")
             onClicked: root.needTotp ? doTotp() : doLogin()
+        }
+        BusyIndicator {
+            visible: auth.loginBusy
+            running: auth.loginBusy
+            Layout.alignment: Qt.AlignHCenter
         }
         Label {
             text: qsTr("Usuario inicial: admin / admin123 (se pedirá cambio de clave)")
@@ -139,19 +145,25 @@ Pane {
     }
 
     function doLogin() {
-        var r = auth.login(userField.text, passField.text);
-        if (r.ok) {
-            if (r.mustChangePassword) {
-                askForcedChange(r.user, passField.text);
+        auth.loginAsync(userField.text, passField.text);
+    }
+
+    Connections {
+        target: auth
+        function onLoginFinished(r) {
+            if (r.ok) {
+                if (r.mustChangePassword) {
+                    askForcedChange(r.user, passField.text);
+                } else {
+                    Utils.showToast("success", "¡Bienvenido!", 2000);
+                    root.loggedIn();
+                }
+            } else if (r.totpRequired) {
+                root.needTotp = true;
+                Utils.showToast("info", "Ingrese su código 2FA", 3000);
             } else {
-                Utils.showToast("success", "¡Bienvenido!", 2000);
-                root.loggedIn();
+                Utils.showToast("error", r.error, 4000);
             }
-        } else if (r.totpRequired) {
-            root.needTotp = true;
-            Utils.showToast("info", "Ingrese su código 2FA", 3000);
-        } else {
-            Utils.showToast("error", r.error, 4000);
         }
     }
 

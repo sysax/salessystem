@@ -5,9 +5,11 @@
 
 #include "core/DatabaseManager.h"
 #include "core/EventBus.h"
+#include "controllers/AuthController.h"
 #include "services/AuthService.h"
 #include "services/Totp.h"
 
+#include <QSignalSpy>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 
@@ -31,6 +33,25 @@ class TstAuth : public QObject
         QCOMPARE(m_db->tableRowCount("counters"), 0);
         m_bus = new EventBus(this);
         m_auth = new AuthService(m_db->database(), m_bus, this);
+    }
+
+    // — PBKDF2 v2 (Fase 2): costo vigente, formato y migración —
+    void hashVersioning()
+    {
+        // El default productivo cumple el mínimo del spec (≥600k).
+        QVERIFY(AuthService::Pbkdf2Iterations >= 600000);
+        const QString h = AuthService::hashPassword(QStringLiteral("clave1234"));
+        QVERIFY(h.startsWith(QStringLiteral("pbkdf2$")));
+        QVERIFY(AuthService::verifyPassword(h, QStringLiteral("clave1234")));
+        QVERIFY(!AuthService::verifyPassword(h, QStringLiteral("otra")));
+        QVERIFY(!AuthService::verifyPassword(QStringLiteral("pbkdf2$mal"), QStringLiteral("x")));
+        QVERIFY(!AuthService::needsUpgrade(h));
+        // El seed trae admin en v1 (100k): verifica pero pide migración.
+        QSqlQuery q(m_db->database());
+        q.prepare(QStringLiteral("SELECT password FROM users WHERE username='admin'"));
+        QVERIFY(q.exec() && q.next());
+        QVERIFY(!q.value(0).toString().startsWith(QStringLiteral("pbkdf2$")));
+        QVERIFY(AuthService::needsUpgrade(q.value(0).toString()));
     }
 
     // — Compatibilidad con hashes Python —
@@ -61,6 +82,12 @@ class TstAuth : public QObject
         QVERIFY(!r.value().totpRequired);
         // Admin por defecto: cambio de clave obligatorio al primer ingreso
         QVERIFY(r.value().mustChangePassword);
+        // Fase 2: el hash v1 (100k) se migró a v2 al entrar.
+        QSqlQuery q(m_db->database());
+        q.prepare(QStringLiteral("SELECT password FROM users WHERE username='admin'"));
+        QVERIFY(q.exec() && q.next());
+        QVERIFY(q.value(0).toString().startsWith(QStringLiteral("pbkdf2$")));
+        QVERIFY(!AuthService::needsUpgrade(q.value(0).toString()));
     }
 
     void forcedPasswordChange()
@@ -293,6 +320,30 @@ class TstAuth : public QObject
         m_auth->login(QStringLiteral("admin"), QStringLiteral("mala"));
         QCOMPARE(okCount, 1);
         QCOMPARE(failCount, 1);
+    }
+
+    void asyncLoginAndIdle()
+    {
+        // Fase 2: el login async resuelve fuera del hilo UI con la misma forma.
+        AuthController ctl(m_auth, m_bus, this);
+        QSignalSpy finished(&ctl, &AuthController::loginFinished);
+        QVERIFY(!ctl.loginBusy());
+        ctl.loginAsync(QStringLiteral("admin"), QStringLiteral("admin123"));
+        QVERIFY(ctl.loginBusy());
+        QVERIFY(finished.wait(15000));
+        QVERIFY(!ctl.loginBusy());
+        const QVariantMap r = finished.first().first().toMap();
+        QVERIFY2(r["ok"].toBool(), qPrintable(r["error"].toString()));
+        QVERIFY(ctl.loggedIn());
+        // Expiración por inactividad: sin timeout no expira; con 0 min tampoco.
+        QCOMPARE(AuthController::SessionTimeoutMinutes, 30);
+        QVERIFY(!ctl.checkIdle());
+        AuthController::SessionTimeoutMinutes = 0;
+        QVERIFY(!ctl.checkIdle());
+        AuthController::SessionTimeoutMinutes = 30;
+        QVERIFY(ctl.loggedIn());
+        ctl.logout();
+        QVERIFY(!ctl.loggedIn());
     }
 
   private:

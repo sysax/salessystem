@@ -1,6 +1,7 @@
 #include "SalesService.h"
 
 #include "../core/EventBus.h"
+#include "../core/Money.h"
 #include "../domain/Attrs.h"
 
 #include <QDate>
@@ -129,6 +130,12 @@ double SalesService::priceFor(const Product &p, double priceOverride,
 
 namespace
 {
+// Fase 2: impuesto de línea en céntimos exactos (round-half-up).
+double lineTax(double base, double ratePct)
+{
+    return Money::taxCents(Money::fromCop(base).cents(), ratePct)
+           / static_cast<double>(Money::CentsPerCop);
+}
 // Agrega una línea al bucket de su tasa (agregación, sin recalcular).
 void accumulateBucket(QList<SalesService::TaxBucket> &buckets, const QString &name, double rate,
                       double lineBase, double lineTax)
@@ -262,7 +269,7 @@ Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> 
         l.discount = l.subtotal * it.discountPct / 100.0;
         l.taxRate = resolveTaxRate(p->tax);
         l.taxName = resolveTaxName(p->tax);
-        l.tax = (l.subtotal - l.discount) * l.taxRate / 100.0;
+        l.tax = lineTax(l.subtotal - l.discount, l.taxRate);
         l.total = l.subtotal - l.discount + l.tax;
         t.lines << l;
         t.subtotal += l.subtotal;
@@ -296,7 +303,7 @@ SalesService::Totals SalesService::calculateTotals(const QList<ServiceItem> &ite
         l.discount = l.subtotal * it.discountPct / 100.0;
         l.taxRate = resolveTaxRate(p->tax);
         l.taxName = resolveTaxName(p->tax);
-        l.tax = (l.subtotal - l.discount) * l.taxRate / 100.0;
+        l.tax = lineTax(l.subtotal - l.discount, l.taxRate);
         l.total = l.subtotal - l.discount + l.tax;
         t.lines << l;
         t.subtotal += l.subtotal;

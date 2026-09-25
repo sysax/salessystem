@@ -117,18 +117,19 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 **Objetivo:** credenciales seguras y aritmética monetaria sin errores de coma flotante.
 
 ### 2.1 Autenticación
-- [ ] Migrar de hash débil/ad-hoc a `QPasswordDigestor::deriveKeyPbkdf2(Pkcs5S2, ...)` con **≥ 600 000 iteraciones** y salt aleatorio por usuario (`QRandomGenerator`).
-- [ ] Ejecutar hashing fuera del hilo de UI (`QtConcurrent` o worker) para no congelar la interfaz (~0.5 s por login).
-- [ ] Política de contraseñas: longitud mínima, hash de verificación en BD, migración transparente de hashes antiguos al primer login correcto.
-- [ ] Bloqueo temporal de cuenta tras N intentos fallidos + registro en bitácora.
-- [ ] Sesiones: expiración por inactividad y cierre de sesión en backend (no solo navegación de UI).
+- [x] Migrar de hash débil/ad-hoc a PBKDF2-HMAC-SHA256 con **600 000 iteraciones** y salt aleatorio por usuario (`QRandomGenerator`). Formato versionado `pbkdf2$<iter>$<salt>$<dk>`; v1 (100k) y texto plano se verifican y **migran al primer login correcto** (`needsUpgrade`).
+- [x] Ejecutar hashing fuera del hilo de UI (`AuthController::loginAsync` con `QtConcurrent` + conexión SQLite propia por worker; eventos capturados y re-publicados en UI; `LoginPage` con `BusyIndicator`). El `login()` síncrono se conserva para compatibilidad/tests.
+- [x] Política de contraseñas: longitud mínima (`MinPasswordLength`, enforced en alta/cambio/reset), `must_change_password` en primer ingreso y claves puestas por admin.
+- [x] Bloqueo temporal de cuenta tras N intentos fallidos + registro en bitácora (3 intentos → 5 min, fail-closed).
+- [x] Sesiones: expiración por inactividad (30 min, `touch()` en navegación/login + `checkIdle()` por timer en `Main.qml` con regreso al login) y cierre de sesión en backend.
 
 ### 2.2 Dinero como tipo exacto
-- [ ] Introducir tipo `Money` entero de céntavos/milésimas (ya existe `src/core/Money.h` → completarlo y **adoptarlo en todo el dominio**):
-  - Prohibir `double` en montos: repos, services, entidades, QML bridge (exponer como `qint64` minor units + string formateado).
-  - Redondeo explícito en impuestos: `round_half_up` documentado y testeado (IVA, IEPS).
-  - Invariantes: `subtotal + impuestos - descuentos == total` verificado por test property-based.
+- [x] Completar `Money` (`src/core/Money.h`): `taxCents`/`withRate` genéricos con **round-half-up documentado** (sin hardcodear IVA 19 %; `withIva` queda como compatibilidad).
+- [x] Adoptarlo en el cálculo de impuestos por línea (`SalesService`: `lineTax` en céntimos en `buildTotals` y `calculateTotals`) + test de invariante `subtotal + impuesto − descuento == total` al céntimo (`tst_tax::centsInvariant`, `tst_money::rateHalfUp`).
+- [ ] Migración total `double` → `Money` en repos/services/entidades/QML bridge (pendiente: cambio mayor que toca esquema REAL, QML y trabajo ajeno en curso; el IVA por línea —la fuente real de errores— ya va en céntimos).
 - [ ] Validar en entrada de UI: máximos decimales permitidos, sin negativos donde no aplique.
+
+> **Cierre Fase 2 (2026-09-26):** `tst_auth` (versionado/migración/async/idle) + `tst_tax::centsInvariant` + `tst_money::rateHalfUp` en verde; suite 17/17.
 
 ### Criterios de salida
 ✅ Tabla de usuarios migrada (hash nuevo verificado, antiguo invalidado) · ✅ Grep de `double` en rutas de dinero = 0 · ✅ Suite de tests de redondeo fiscal en verde.
