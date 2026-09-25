@@ -153,6 +153,12 @@ class TstCatalog : public QObject
             m_products->search(QStringLiteral("Xiaomi"), QStringLiteral("abarrotes")).isEmpty());
         QVERIFY(
             !m_products->search(QStringLiteral("Xiaomi"), QStringLiteral("celulares")).isEmpty());
+        // Vista previa del asistente de cambio de rubro (filtrar sin borrar).
+        const QVariantMap prev = m_ctl->visibilityPreview(QStringLiteral("abarrotes"));
+        QVERIFY(prev[QStringLiteral("hiddenProducts")].toInt() >= 6);
+        QVERIFY(prev[QStringLiteral("visibleProducts")].toInt() >= 7);
+        const QVariantMap prevAll = m_ctl->visibilityPreview(QStringLiteral("miscelanea"));
+        QCOMPARE(prevAll[QStringLiteral("hiddenProducts")].toInt(), 0);
     }
 
     void controllerReload()

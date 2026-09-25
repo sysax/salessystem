@@ -147,6 +147,8 @@ struct Promo
     QString code;
     bool active = true;
     QString desc;
+    // Multitienda: rubro dueño ('' = todas las verticales).
+    QString businessType;
 };
 
 struct CajaSale

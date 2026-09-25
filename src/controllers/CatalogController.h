@@ -40,6 +40,10 @@ class CatalogController : public QObject
     Q_INVOKABLE QVariantMap addCategory(const QString &name, int parentId = 0,
                                         const QString &businessType = {});
     Q_INVOKABLE QVariantMap removeCategory(int id);
+    // Multitienda: vista previa del cambio de rubro (filtrar sin borrar).
+    // Retorna {visibleProducts, hiddenProducts, visibleCategories,
+    // hiddenCategories, hiddenSamples[]}. 'miscelanea'/vacío = ve todo.
+    Q_INVOKABLE QVariantMap visibilityPreview(const QString &businessType) const;
 
     static QVariantMap toMap(const Product &p);
     static Product fromMap(const QVariantMap &m, const Product &base = {});

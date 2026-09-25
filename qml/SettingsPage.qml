@@ -56,7 +56,16 @@ ScrollView {
                         id: fType
                         Layout.fillWidth: true
                         model: ["miscelanea", "farmacia", "abarrotes", "celulares", "ferreteria", "ropa", "restaurante", "cafeteria", "panaderia", "peluqueria", "taller", "lavanderia", "consultorio", "veterinaria"]
+                        onCurrentTextChanged: root.updatePreview()
                     }
+                }
+                // Multitienda: vista previa del cambio de rubro (filtrar sin borrar).
+                Label {
+                    id: previewLabel
+                    font.pixelSize: Theme.fontS
+                    opacity: 0.8
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
                 }
                 TextField {
                     id: fAddress
@@ -255,25 +264,19 @@ ScrollView {
                         msg.text = qsTr("La tasa por defecto (%1%) no está en la lista: añádela primero.").arg(dflt);
                         return;
                     }
-                    var r = settingsCtl.save({
-                        "business_name": fName.text,
-                        "business_nit": fNit.text,
-                        "business_type": fType.currentText,
-                        "business_address": fAddress.text,
-                        "business_phone": fPhone.text,
-                        "currency_symbol": fSymbol.text,
-                        "currency_decimals": fDecimals.text,
-                        "default_tax_rate": fTax.text,
-                        "tax_rates_json": JSON.stringify(ratesBox.rates),
-                        "mora_rate_monthly": fMora.text,
-                        "require_expiry": fExpiry.checked ? "1" : "0",
-                        "require_serial": fSerial.checked ? "1" : "0"
-                    });
-                    if (r.ok) {
-                        okMsg.text = qsTr("Guardado. Los próximos tickets y reportes usan estos datos.");
-                    } else {
-                        msg.text = r.error;
+                    // Multitienda: si cambia el rubro y hay productos que se
+                    // ocultarán, pedir confirmación (no se borra nada).
+                    var prev = root.visibilityInfo(fType.currentText);
+                    var current = "";
+                    try { current = settingsCtl.settings["business_type"] || ""; } catch (e) {}
+                    if (current !== "" && current !== fType.currentText && prev.hiddenProducts > 0) {
+                        confirmSwitchDialog.hiddenCount = prev.hiddenProducts;
+                        confirmSwitchDialog.targetType = fType.currentText;
+                        confirmSwitchDialog.samples = prev.hiddenSamples;
+                        confirmSwitchDialog.open();
+                        return;
                     }
+                    root.doSave();
                 }
             }
         }
@@ -282,6 +285,49 @@ ScrollView {
     function loadAll() {
         settingsCtl.load();
         root.fillFields();
+    }
+
+    function doSave() {
+        var r = settingsCtl.save({
+            "business_name": fName.text,
+            "business_nit": fNit.text,
+            "business_type": fType.currentText,
+            "business_address": fAddress.text,
+            "business_phone": fPhone.text,
+            "currency_symbol": fSymbol.text,
+            "currency_decimals": fDecimals.text,
+            "default_tax_rate": fTax.text,
+            "tax_rates_json": JSON.stringify(ratesBox.rates),
+            "mora_rate_monthly": fMora.text,
+            "require_expiry": fExpiry.checked ? "1" : "0",
+            "require_serial": fSerial.checked ? "1" : "0"
+        });
+        if (r.ok) {
+            okMsg.text = qsTr("Guardado. Los próximos tickets y reportes usan estos datos.");
+        } else {
+            msg.text = r.error;
+        }
+    }
+
+    // Multitienda: {visibleProducts, hiddenProducts, hiddenSamples}.
+    function visibilityInfo(bt) {
+        try {
+            return catalog.visibilityPreview(bt);
+        } catch (e) {
+            return {"visibleProducts": 0, "hiddenProducts": 0, "hiddenSamples": []};
+        }
+    }
+
+    function updatePreview() {
+        var info = root.visibilityInfo(fType.currentText);
+        if (info.hiddenProducts > 0) {
+            var extra = info.hiddenSamples.length > 0 ? qsTr(" Ej.: %1.").arg(info.hiddenSamples.join(", ")) : "";
+            previewLabel.text = qsTr("Rubro \"%1\": se mostrarán %2 productos; %3 de otros rubros se ocultarán (no se borran).")
+                .arg(fType.currentText).arg(info.visibleProducts).arg(info.hiddenProducts) + extra;
+        } else {
+            previewLabel.text = qsTr("Rubro \"%1\": se mostrarán %2 productos.")
+                .arg(fType.currentText).arg(info.visibleProducts);
+        }
     }
 
     function refreshRates() {
@@ -315,6 +361,7 @@ ScrollView {
         fType.currentIndex = idx >= 0 ? idx : 0;
         fExpiry.checked = (s["require_expiry"] || "0") === "1";
         fSerial.checked = (s["require_serial"] || "0") === "1";
+        root.updatePreview();
     }
 
     Component.onCompleted: loadAll()
@@ -343,7 +390,37 @@ ScrollView {
             catalog.reloadCategories(fType.currentText);
             catalog.search("");
             okMsg.text = qsTr("Catálogo de \"%1\" añadido.").arg(fType.currentText);
+            root.updatePreview();
         }
+    }
+
+    // Multitienda: confirmación al cambiar de rubro con productos que se ocultan.
+    Dialog {
+        id: confirmSwitchDialog
+        title: qsTr("Cambiar de rubro")
+        modal: true
+        width: 340
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property int hiddenCount: 0
+        property string targetType: ""
+        property var samples: []
+        ColumnLayout {
+            width: 300
+            Label {
+                text: qsTr("Al pasar a \"%1\" se ocultarán %2 productos de otros rubros. No se borra nada: vuelven al regresar al rubro anterior.")
+                    .arg(confirmSwitchDialog.targetType).arg(confirmSwitchDialog.hiddenCount)
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            Label {
+                visible: confirmSwitchDialog.samples.length > 0
+                text: qsTr("Ej.: %1").arg(confirmSwitchDialog.samples.join(", "))
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                opacity: 0.7
+            }
+        }
+        onAccepted: root.doSave()
     }
 
     Connections {

@@ -37,8 +37,11 @@ class PromoRepository : public QObject
                              AuditRepository *audit = nullptr, QObject *parent = nullptr);
 
     QList<Promo> list() const;
+    // Multitienda: bt vacío o 'miscelanea' = todas; si no, ('' OR bt).
+    QList<Promo> list(const QString &businessType) const;
     std::optional<Promo> findById(int id) const;
     std::optional<Promo> findActiveByCode(const QString &code) const;
+    std::optional<Promo> findActiveByCode(const QString &code, const QString &businessType) const;
 
     Result<Promo> add(const Promo &p);
     Result<Promo> update(int id, const Promo &p);
@@ -46,6 +49,9 @@ class PromoRepository : public QObject
 
     // Descuento en COP para un carrito; código vacío → 0 sin error.
     Result<PromoDiscount> evaluate(const QList<CartLine> &cart, const QString &code) const;
+    // Multitienda: con bt de otro rubro la promo se rechaza (filtrar sin borrar).
+    Result<PromoDiscount> evaluate(const QList<CartLine> &cart, const QString &code,
+                                   const QString &businessType) const;
 
     static Promo rowToPromo(const QSqlQuery &q);
 

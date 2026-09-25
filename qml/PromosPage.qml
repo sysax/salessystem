@@ -19,6 +19,14 @@ ColumnLayout {
             font.bold: true
             Layout.fillWidth: true
         }
+        Label {
+            // Multitienda: rubro dueño de la lista visible.
+            text: {
+                try { return settingsCtl.settings["business_type"] || ""; } catch (e) { return ""; }
+            }
+            font.pixelSize: Theme.fontS
+            opacity: 0.6
+        }
         Button {
             text: qsTr("Nueva")
             onClicked: {
@@ -45,6 +53,7 @@ ColumnLayout {
             }
             Label {
                 text: modelData.code + "  ·  " + modelData.name + "  ·  " + modelData.type + " " + modelData.value
+                      + (modelData.businessType ? "  ·  " + modelData.businessType : "")
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
@@ -133,5 +142,11 @@ ColumnLayout {
             root.pendingRemoveId = "";
             root.pendingRemoveCode = "";
         }
+    }
+
+    // Multitienda: al cambiar de rubro se refiltran (las ajenas se ocultan).
+    Connections {
+        target: settingsCtl
+        function onSettingsChanged() { promosCtl.refresh(); }
     }
 }

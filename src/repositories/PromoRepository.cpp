@@ -22,6 +22,8 @@ Promo PromoRepository::rowToPromo(const QSqlQuery &q)
     p.code = q.value(QStringLiteral("code")).toString();
     p.active = q.value(QStringLiteral("active")).toInt() != 0;
     p.desc = q.value(QStringLiteral("desc")).toString();
+    // Multitienda: columna aditiva; en BDs legadas aún no existe → ''.
+    p.businessType = q.value(QStringLiteral("business_type")).toString().trimmed();
     return p;
 }
 
@@ -30,6 +32,23 @@ QList<Promo> PromoRepository::list() const
     QList<Promo> out;
     QSqlQuery q(m_db);
     if (!q.exec(QStringLiteral("SELECT * FROM promos ORDER BY id")))
+        return out;
+    while (q.next())
+        out << rowToPromo(q);
+    return out;
+}
+
+QList<Promo> PromoRepository::list(const QString &businessType) const
+{
+    const QString bt = businessType.trimmed();
+    if (bt.isEmpty() || bt == QLatin1String("miscelanea"))
+        return list();
+    QList<Promo> out;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT * FROM promos WHERE (business_type IS NULL OR "
+                             "business_type='' OR business_type=?) ORDER BY id"));
+    q.addBindValue(bt);
+    if (!q.exec())
         return out;
     while (q.next())
         out << rowToPromo(q);
@@ -48,11 +67,24 @@ std::optional<Promo> PromoRepository::findById(int id) const
 
 std::optional<Promo> PromoRepository::findActiveByCode(const QString &code) const
 {
+    return findActiveByCode(code, {});
+}
+
+std::optional<Promo> PromoRepository::findActiveByCode(const QString &code,
+                                                       const QString &businessType) const
+{
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("SELECT * FROM promos WHERE lower(code)=lower(?) AND active=1"));
     q.addBindValue(code.trimmed());
-    if (q.exec() && q.next())
-        return rowToPromo(q);
+    if (q.exec() && q.next()) {
+        Promo p = rowToPromo(q);
+        // Multitienda: promo de otro rubro no existe para este bt (sin borrar).
+        const QString bt = businessType.trimmed();
+        if (!bt.isEmpty() && bt != QLatin1String("miscelanea") && !p.businessType.isEmpty()
+            && p.businessType != QLatin1String("miscelanea") && p.businessType != bt)
+            return std::nullopt;
+        return p;
+    }
     return std::nullopt;
 }
 
@@ -63,8 +95,8 @@ Result<Promo> PromoRepository::add(const Promo &pin)
         return Result<Promo>::failure(QStringLiteral("Código requerido"));
     QSqlQuery q(m_db);
     q.prepare(
-        QStringLiteral("INSERT INTO promos (name, type, value, condition, code, active, desc) "
-                       "VALUES (?,?,?,?,?,?,?)"));
+        QStringLiteral("INSERT INTO promos (name, type, value, condition, code, active, desc, "
+                       "business_type) VALUES (?,?,?,?,?,?,?,?)"));
     q.addBindValue(p.name);
     q.addBindValue(p.type);
     q.addBindValue(p.value);
@@ -72,6 +104,7 @@ Result<Promo> PromoRepository::add(const Promo &pin)
     q.addBindValue(p.code.trimmed());
     q.addBindValue(p.active ? 1 : 0);
     q.addBindValue(p.desc);
+    q.addBindValue(p.businessType.trimmed());
     if (!q.exec())
         return Result<Promo>::failure(q.lastError().text());
     return Result<Promo>::success(*findActiveByCode(p.code));
@@ -83,8 +116,8 @@ Result<Promo> PromoRepository::update(int id, const Promo &p)
         return Result<Promo>::failure(QStringLiteral("Promo %1 no encontrada").arg(id));
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
-        "UPDATE promos SET name=?, type=?, value=?, condition=?, code=?, active=?, desc=? "
-        "WHERE id=?"));
+        "UPDATE promos SET name=?, type=?, value=?, condition=?, code=?, active=?, desc=?, "
+        "business_type=? WHERE id=?"));
     q.addBindValue(p.name);
     q.addBindValue(p.type);
     q.addBindValue(p.value);
@@ -92,6 +125,7 @@ Result<Promo> PromoRepository::update(int id, const Promo &p)
     q.addBindValue(p.code);
     q.addBindValue(p.active ? 1 : 0);
     q.addBindValue(p.desc);
+    q.addBindValue(p.businessType.trimmed());
     q.addBindValue(id);
     if (!q.exec())
         return Result<Promo>::failure(q.lastError().text());
@@ -118,10 +152,16 @@ static std::optional<Product> lookup(ProductRepository *repos, int productId)
 Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart,
                                                 const QString &code) const
 {
+    return evaluate(cart, code, {});
+}
+
+Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart, const QString &code,
+                                                const QString &businessType) const
+{
     PromoDiscount d;
     if (code.trimmed().isEmpty())
         return Result<PromoDiscount>::success(d);
-    const auto promo = findActiveByCode(code);
+    const auto promo = findActiveByCode(code, businessType);
     if (!promo)
         return Result<PromoDiscount>::failure(
             QStringLiteral("Promo %1 no existe o inactiva").arg(code.trimmed()));

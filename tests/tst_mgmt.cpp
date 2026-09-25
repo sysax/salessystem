@@ -63,7 +63,8 @@ class TstMgmt : public QObject
         m_purchases = new PurchasesController(purSvc, purchases, this);
         m_cxc = new ReceivablesController(cxcSvc, this);
         m_cxp = new PayablesController(cxpSvc, this);
-        m_promos = new PromosController(promos, this);
+        m_promos = new PromosController(promos, nullptr, this);
+        m_promoRepo = promos;
         m_users = new UsersController(auth, this);
     }
 
@@ -167,6 +168,38 @@ class TstMgmt : public QObject
         QVERIFY(m_promos->remove(newId)["ok"].toBool());
     }
 
+    void promosVertical()
+    {
+        // Multitienda: promo de celulares no lista ni aplica en abarrotes.
+        Promo p;
+        p.code = QStringLiteral("CELQML10");
+        p.name = QStringLiteral("Cel 10%");
+        p.type = QStringLiteral("porcentaje");
+        p.value = 10.0;
+        p.businessType = QStringLiteral("celulares");
+        QVERIFY(m_promoRepo->add(p).ok());
+        m_promos->refresh(QStringLiteral("abarrotes"));
+        for (const QVariant &v : m_promos->promos())
+            QVERIFY(v.toMap()["code"].toString() != QLatin1String("CELQML10"));
+        m_promos->refresh(QStringLiteral("celulares"));
+        bool seen = false;
+        for (const QVariant &v : m_promos->promos()) {
+            if (v.toMap()["code"].toString() == QLatin1String("CELQML10"))
+                seen = true;
+        }
+        QVERIFY(seen);
+        // Sin bt (legacy) aplica; con bt ajeno se rechaza.
+        QVERIFY(m_promoRepo->evaluate({}, QStringLiteral("CELQML10")).ok());
+        QVERIFY(!m_promoRepo->evaluate({}, QStringLiteral("CELQML10"), QStringLiteral("abarrotes"))
+                     .ok());
+        QVERIFY(m_promoRepo->evaluate({}, QStringLiteral("CELQML10"), QStringLiteral("celulares"))
+                    .ok());
+        // Limpieza: no contaminar otros casos.
+        const auto found = m_promoRepo->findActiveByCode(QStringLiteral("CELQML10"));
+        QVERIFY(found.has_value());
+        QVERIFY(m_promoRepo->remove(found->id).ok());
+    }
+
     void usersFlow()
     {
         QCOMPARE(m_users->users().size(), 5);
@@ -195,6 +228,7 @@ class TstMgmt : public QObject
     ReceivablesController *m_cxc = nullptr;
     PayablesController *m_cxp = nullptr;
     PromosController *m_promos = nullptr;
+    PromoRepository *m_promoRepo = nullptr;
     UsersController *m_users = nullptr;
 };
 

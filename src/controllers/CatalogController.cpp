@@ -235,3 +235,33 @@ QVariantMap CatalogController::removeCategory(int id)
     reloadCategories(m_catFilter);
     return {{"ok", true}};
 }
+
+QVariantMap CatalogController::visibilityPreview(const QString &businessType) const
+{
+    // Multitienda: contar sin modificar nada (filtrar sin borrar).
+    const QString bt = businessType.trimmed();
+    const bool showAll = bt.isEmpty() || bt == QLatin1String("miscelanea");
+    const int totalProducts = m_repos ? m_repos->search({}).size() : 0;
+    const int visibleProducts = m_repos ? m_repos->search({}, showAll ? QString() : bt).size() : 0;
+    int visibleCategories = 0, totalCategories = 0;
+    if (m_cats) {
+        totalCategories = m_cats->list().size();
+        visibleCategories = m_cats->list(showAll ? QString() : bt).size();
+    }
+    QStringList hiddenSamples;
+    if (m_repos && !showAll) {
+        for (const Product &p : m_repos->search({})) {
+            const QString pb = p.businessType.trimmed();
+            if (!pb.isEmpty() && pb != QLatin1String("miscelanea") && pb != bt) {
+                hiddenSamples << p.name;
+                if (hiddenSamples.size() >= 5)
+                    break;
+            }
+        }
+    }
+    return {{"visibleProducts", visibleProducts},
+            {"hiddenProducts", totalProducts - visibleProducts},
+            {"visibleCategories", visibleCategories},
+            {"hiddenCategories", totalCategories - visibleCategories},
+            {"hiddenSamples", hiddenSamples}};
+}

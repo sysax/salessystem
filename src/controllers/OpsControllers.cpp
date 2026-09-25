@@ -170,8 +170,9 @@ QVariantMap PayablesController::pay(const QString &id, double amount, const QStr
 
 // ── Promos ────────────────────────────────────────────────────────────────
 
-PromosController::PromosController(PromoRepository *promos, QObject *parent)
-    : QObject(parent), m_repos(promos)
+PromosController::PromosController(PromoRepository *promos, SettingsService *settings,
+                                   QObject *parent)
+    : QObject(parent), m_repos(promos), m_settings(settings)
 {
     refresh();
 }
@@ -185,13 +186,19 @@ QVariantMap PromosController::toMap(const Promo &p)
             {"condition", p.condition},
             {"code", p.code},
             {"active", p.active},
+            {"businessType", p.businessType},
             {"desc", p.desc}};
 }
 
-void PromosController::refresh()
+void PromosController::refresh(const QString &businessType)
 {
+    // Multitienda: con bt explícito manda; si no, rubro activo
+    // ('miscelanea'/vacío = todas).
+    QString bt = businessType.trimmed();
+    if (bt.isEmpty() && m_settings)
+        bt = m_settings->businessType().trimmed();
     m_promos.clear();
-    for (const Promo &p : m_repos->list())
+    for (const Promo &p : m_repos->list(bt))
         m_promos << toMap(p);
     emit promosChanged();
 }
@@ -206,6 +213,15 @@ QVariantMap PromosController::add(const QVariantMap &fields)
     p.code = fields.value(QStringLiteral("code")).toString();
     p.active = fields.value(QStringLiteral("active"), true).toBool();
     p.desc = fields.value(QStringLiteral("desc")).toString();
+    p.businessType = fields.value(QStringLiteral("businessType")).toString().trimmed();
+    if (p.businessType.isEmpty())
+        p.businessType = fields.value(QStringLiteral("business_type")).toString().trimmed();
+    // Multitienda: auto-etiquetar con el rubro activo (filtrar sin borrar).
+    if (p.businessType.isEmpty() && m_settings) {
+        const QString bt = m_settings->businessType().trimmed();
+        if (!bt.isEmpty() && bt != QLatin1String("miscelanea"))
+            p.businessType = bt;
+    }
     const auto r = m_repos->add(p);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};

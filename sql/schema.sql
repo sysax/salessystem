@@ -90,7 +90,8 @@ CREATE TABLE IF NOT EXISTS payments_cxp (
 );
 
 CREATE TABLE IF NOT EXISTS promos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, type TEXT, value REAL, condition TEXT, code TEXT UNIQUE, active INTEGER, desc TEXT
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, type TEXT, value REAL, condition TEXT, code TEXT UNIQUE, active INTEGER, desc TEXT,
+    business_type TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (

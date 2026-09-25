@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
     PurchasesController purchasesCtl(&purSvc, &purchases);
     ReceivablesController cxcCtl(&cxcSvc);
     PayablesController cxpCtl(&cxpSvc);
-    PromosController promosCtl(&promos);
+    PromosController promosCtl(&promos, &settingsSvc);
     UsersController usersCtl(&auth);
 
     QQmlApplicationEngine engine;

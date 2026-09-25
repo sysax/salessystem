@@ -347,7 +347,8 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
             c.subtotal = l.subtotal;
             cart << c;
         }
-        auto promo = m_promos->evaluate(cart, promoCode);
+        auto promo = m_promos->evaluate(cart, promoCode,
+                                        m_settings ? m_settings->businessType() : QString());
         if (!promo.ok())
             return Result<CreatedSale>::failure(promo.error());
         promoDiscount = promo.value().discount;

@@ -202,7 +202,8 @@ void PosController::recompute()
                              .price = l.unitPrice,
                              .qty = l.qty,
                              .subtotal = l.subtotal};
-        const auto pr = m_promos->evaluate(cart, m_promoCode);
+        const auto pr = m_promos->evaluate(cart, m_promoCode,
+                                           m_settings ? m_settings->businessType() : QString());
         if (pr.ok())
             promoDiscount = pr.value().discount;
     }
@@ -243,7 +244,8 @@ QVariantMap PosController::applyPromo(const QString &code)
                          .price = l.unitPrice,
                          .qty = l.qty,
                          .subtotal = l.subtotal};
-    const auto pr = m_promos->evaluate(cart, code);
+    const auto pr
+        = m_promos->evaluate(cart, code, m_settings ? m_settings->businessType() : QString());
     if (!pr.ok())
         return {{"ok", false}, {"error", pr.error()}};
     m_promoCode = pr.value().promoCode;

@@ -179,6 +179,8 @@ bool DatabaseManager::migrateLegacyColumns()
         {"products", "attrs_json", "attrs_json TEXT DEFAULT '{}'"},  // Fase 3: metadatos vertical
         {"products", "business_type",
          "business_type TEXT DEFAULT ''"}, // Multitienda: rubro dueño, filtrar sin borrar
+        {"promos", "business_type",
+         "business_type TEXT DEFAULT ''"}, // Multitienda: promos por rubro ('' = todas)
         {"sale_items", "attrs_json", "attrs_json TEXT DEFAULT '{}'"},
         {"sale_items", "serial", "serial TEXT DEFAULT ''"},
     };

@@ -13,6 +13,7 @@
 #include "../services/CreditService.h"
 #include "../services/InventoryService.h"
 #include "../services/PurchaseService.h"
+#include "../services/SettingsService.h"
 
 // Inventario: movimientos, ajustes, transferencias, alertas (antes InventoryScreen).
 class InventoryController : public QObject
@@ -146,14 +147,15 @@ class PromosController : public QObject
     Q_PROPERTY(QVariantList promos READ promos NOTIFY promosChanged)
 
   public:
-    explicit PromosController(PromoRepository *promos, QObject *parent = nullptr);
+    explicit PromosController(PromoRepository *promos, SettingsService *settings = nullptr,
+                              QObject *parent = nullptr);
 
     QVariantList promos() const
     {
         return m_promos;
     }
 
-    Q_INVOKABLE void refresh();
+    Q_INVOKABLE void refresh(const QString &businessType = {});
     Q_INVOKABLE QVariantMap add(const QVariantMap &fields);
     Q_INVOKABLE QVariantMap setActive(int id, bool active);
     Q_INVOKABLE QVariantMap remove(int id);
@@ -165,6 +167,7 @@ class PromosController : public QObject
     static QVariantMap toMap(const Promo &p);
 
     PromoRepository *m_repos = nullptr;
+    SettingsService *m_settings = nullptr;
     QVariantList m_promos;
 };
 
