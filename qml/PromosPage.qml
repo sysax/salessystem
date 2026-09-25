@@ -54,6 +54,7 @@ ColumnLayout {
             Label {
                 text: modelData.code + "  ·  " + modelData.name + "  ·  " + modelData.type + " " + modelData.value
                       + (modelData.businessType ? "  ·  " + modelData.businessType : "")
+                      + ((modelData.validFrom || modelData.validTo) ? "  ·  " + (modelData.validFrom || "…") + " → " + (modelData.validTo || "…") : "")
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
@@ -106,18 +107,37 @@ ColumnLayout {
                 id: pCond
                 placeholderText: qsTr("Condición (categoría, SKU o min N)")
             }
+            // Fase 3: vigencia opcional (vacía = siempre vigente).
+            RowLayout {
+                TextField {
+                    id: pFrom
+                    placeholderText: qsTr("Desde AAAA-MM-DD")
+                    inputMask: "9999-99-99;_"
+                    Layout.fillWidth: true
+                }
+                TextField {
+                    id: pTo
+                    placeholderText: qsTr("Hasta AAAA-MM-DD")
+                    inputMask: "9999-99-99;_"
+                    Layout.fillWidth: true
+                }
+            }
             Label {
                 id: pErr
                 color: Theme.error
             }
         }
         onAccepted: {
+            var from = pFrom.text.replace(/_/g, "").trim();
+            var to = pTo.text.replace(/_/g, "").trim();
             var r = promosCtl.add({
                 "code": pCode.text,
                 "name": pName.text,
                 "type": pType.currentText,
                 "value": parseFloat(pValue.text) || 0,
                 "condition": pCond.text,
+                "validFrom": (from === "----" || from === "--" || from === "") ? "" : from,
+                "validTo": (to === "----" || to === "--" || to === "") ? "" : to,
                 "active": true
             });
             if (!r.ok) {

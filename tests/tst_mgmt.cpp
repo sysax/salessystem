@@ -24,6 +24,7 @@
 #include "services/SyncService.h"
 #include "services/TicketPrinter.h"
 
+#include <QDate>
 #include <QTemporaryDir>
 
 class TstMgmt : public QObject
@@ -198,6 +199,50 @@ class TstMgmt : public QObject
         const auto found = m_promoRepo->findActiveByCode(QStringLiteral("CELQML10"));
         QVERIFY(found.has_value());
         QVERIFY(m_promoRepo->remove(found->id).ok());
+    }
+
+    void promosValidity()
+    {
+        // Fase 3: ventana de vigencia (vacía = siempre vigente).
+        const QString past = QDate::currentDate().addDays(-10).toString(Qt::ISODate);
+        const QString future = QDate::currentDate().addDays(10).toString(Qt::ISODate);
+        Promo e;
+        e.code = QStringLiteral("EXPQML");
+        e.name = QStringLiteral("Expirada");
+        e.type = QStringLiteral("porcentaje");
+        e.value = 10.0;
+        e.validTo = past;
+        QVERIFY(m_promoRepo->add(e).ok());
+        QVERIFY(!m_promoRepo->evaluate({}, QStringLiteral("EXPQML")).ok()); // vencida
+        Promo f;
+        f.code = QStringLiteral("FUTQML");
+        f.name = QStringLiteral("Futura");
+        f.type = QStringLiteral("porcentaje");
+        f.value = 10.0;
+        f.validFrom = future;
+        QVERIFY(m_promoRepo->add(f).ok());
+        QVERIFY(!m_promoRepo->evaluate({}, QStringLiteral("FUTQML")).ok()); // aún no
+        Promo w;
+        w.code = QStringLiteral("WINQML");
+        w.name = QStringLiteral("Vigente");
+        w.type = QStringLiteral("porcentaje");
+        w.value = 10.0;
+        w.validFrom = past;
+        w.validTo = future;
+        QVERIFY(m_promoRepo->add(w).ok());
+        QVERIFY(m_promoRepo->evaluate({}, QStringLiteral("WINQML")).ok());
+        // Fecha malformada se rechaza en alta.
+        Promo bad;
+        bad.code = QStringLiteral("BADQML");
+        bad.name = QStringLiteral("Mala");
+        bad.validFrom = QStringLiteral("mañana");
+        QVERIFY(!m_promoRepo->add(bad).ok());
+        for (const QString &c :
+             {QStringLiteral("EXPQML"), QStringLiteral("FUTQML"), QStringLiteral("WINQML")}) {
+            const auto fd = m_promoRepo->findActiveByCode(c);
+            QVERIFY(fd.has_value());
+            QVERIFY(m_promoRepo->remove(fd->id).ok());
+        }
     }
 
     void usersFlow()

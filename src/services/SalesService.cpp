@@ -363,6 +363,33 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
     }
     const double total = totals.value().total - promoDiscount;
 
+    // Fase 3: la venta a crédito no puede superar el límite del cliente
+    // (saldo pendiente + nuevo crédito <= límite). Cliente desconocido
+    // (Mostrador sin ficha) no se valida: no hay límite contra qué.
+    if (m_clients) {
+        const double creditPart = payments.value(QStringLiteral("credito"), 0.0);
+        const bool toCredit = creditPart > 0
+            || (payments.isEmpty() && paymentMethod.trimmed() == QLatin1String("Credito"));
+        if (toCredit) {
+            const double newCredit = payments.isEmpty() ? total : creditPart;
+            if (const auto c = m_clients->findByName(clientName.trimmed())) {
+                if (c->creditLimit <= 0) {
+                    return Result<CreatedSale>::failure(
+                        QStringLiteral("'%1' no tiene crédito asignado").arg(c->name));
+                }
+                if (c->balance + newCredit > c->creditLimit + 1e-9) {
+                    return Result<CreatedSale>::failure(
+                        QStringLiteral("Límite de crédito excedido para '%1' (saldo %2 + venta %3 > "
+                                       "límite %4)")
+                            .arg(c->name)
+                            .arg(c->balance, 0, 'f', 0)
+                            .arg(newCredit, 0, 'f', 0)
+                            .arg(c->creditLimit, 0, 'f', 0));
+                }
+            }
+        }
+    }
+
     SaleRepository::NewSale ns;
     ns.clientName = clientName;
     ns.vendedor = vendedor.isEmpty() ? QStringLiteral("vendedor") : vendedor;
@@ -458,9 +485,13 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
 }
 
 Result<SalesService::CreatedSale> SalesService::cancel(const QString &saleId, const QString &reason,
-                                                       const QString &user)
+                                                       const QString &user, const QString &role)
 {
     Q_UNUSED(reason);
+    // Fase 3: anular exige supervisor (fail-closed: sin rol no se anula).
+    if (role.trimmed() != QLatin1String("Administrador"))
+        return Result<CreatedSale>::failure(
+            QStringLiteral("Anular ventas requiere rol Administrador"));
     const auto s = m_sales->find(saleId);
     if (!s)
         return Result<CreatedSale>::failure(QStringLiteral("Venta %1 no existe").arg(saleId));

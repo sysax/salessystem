@@ -96,7 +96,8 @@ class SalesService : public QObject
                                const QMap<QString, double> &payments, const QString &paymentMethod,
                                const QString &promoCode, const QString &vendedor,
                                bool offline = false, const QString &role = {});
-    Result<CreatedSale> cancel(const QString &saleId, const QString &reason, const QString &user);
+    Result<CreatedSale> cancel(const QString &saleId, const QString &reason, const QString &user,
+                               const QString &role = {});
     Totals calculateTotals(const QList<ServiceItem> &items) const;
 
     // Impuesto desde texto BD ("IVA 19%"→19, "19"→19, otro→0). Legacy: se

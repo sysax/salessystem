@@ -187,6 +187,8 @@ QVariantMap PromosController::toMap(const Promo &p)
             {"code", p.code},
             {"active", p.active},
             {"businessType", p.businessType},
+            {"validFrom", p.validFrom},
+            {"validTo", p.validTo},
             {"desc", p.desc}};
 }
 
@@ -213,6 +215,12 @@ QVariantMap PromosController::add(const QVariantMap &fields)
     p.code = fields.value(QStringLiteral("code")).toString();
     p.active = fields.value(QStringLiteral("active"), true).toBool();
     p.desc = fields.value(QStringLiteral("desc")).toString();
+    p.validFrom = fields.value(QStringLiteral("validFrom")).toString().trimmed();
+    if (p.validFrom.isEmpty())
+        p.validFrom = fields.value(QStringLiteral("valid_from")).toString().trimmed();
+    p.validTo = fields.value(QStringLiteral("validTo")).toString().trimmed();
+    if (p.validTo.isEmpty())
+        p.validTo = fields.value(QStringLiteral("valid_to")).toString().trimmed();
     p.businessType = fields.value(QStringLiteral("businessType")).toString().trimmed();
     if (p.businessType.isEmpty())
         p.businessType = fields.value(QStringLiteral("business_type")).toString().trimmed();

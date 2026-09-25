@@ -271,6 +271,8 @@ ColumnLayout {
                 }
                 Button {
                     text: qsTr("Cancelar venta")
+                    // Fase 3: anular exige supervisor (el backend lo valida también).
+                    visible: auth.currentRole === "Administrador"
                     onClicked: confirmCancelSale.open()
                 }
             }
@@ -283,7 +285,7 @@ ColumnLayout {
         message: qsTr("¿Cancelar la venta %1? Se reversará el stock y no se puede deshacer.").arg(detailDialog.saleId)
         confirmText: qsTr("Sí, cancelar")
         onAccepted: {
-            var r = salesCtl.cancel(detailDialog.saleId, "UI", auth.currentUser);
+            var r = salesCtl.cancel(detailDialog.saleId, "UI", auth.currentUser, auth.currentRole);
             if (!r.ok)
                 detailText.text = r.error;
             else

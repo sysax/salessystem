@@ -1,5 +1,6 @@
 #include "PromoRepository.h"
 
+#include <QDate>
 #include <QSqlError>
 #include <QSqlQuery>
 
@@ -24,6 +25,9 @@ Promo PromoRepository::rowToPromo(const QSqlQuery &q)
     p.desc = q.value(QStringLiteral("desc")).toString();
     // Multitienda: columna aditiva; en BDs legadas aún no existe → ''.
     p.businessType = q.value(QStringLiteral("business_type")).toString().trimmed();
+    // Fase 3: vigencia aditiva ('' = sin límite).
+    p.validFrom = q.value(QStringLiteral("valid_from")).toString().trimmed();
+    p.validTo = q.value(QStringLiteral("valid_to")).toString().trimmed();
     return p;
 }
 
@@ -93,10 +97,15 @@ Result<Promo> PromoRepository::add(const Promo &pin)
     Promo p = pin;
     if (p.code.trimmed().isEmpty())
         return Result<Promo>::failure(QStringLiteral("Código requerido"));
+    // Fase 3: vigencia con formato válido si se informa.
+    for (const QString &d : {p.validFrom, p.validTo}) {
+        if (!d.trimmed().isEmpty() && !QDate::fromString(d.trimmed(), Qt::ISODate).isValid())
+            return Result<Promo>::failure(QStringLiteral("Vigencia inválida (use AAAA-MM-DD)"));
+    }
     QSqlQuery q(m_db);
     q.prepare(
         QStringLiteral("INSERT INTO promos (name, type, value, condition, code, active, desc, "
-                       "business_type) VALUES (?,?,?,?,?,?,?,?)"));
+                       "business_type, valid_from, valid_to) VALUES (?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(p.name);
     q.addBindValue(p.type);
     q.addBindValue(p.value);
@@ -105,6 +114,8 @@ Result<Promo> PromoRepository::add(const Promo &pin)
     q.addBindValue(p.active ? 1 : 0);
     q.addBindValue(p.desc);
     q.addBindValue(p.businessType.trimmed());
+    q.addBindValue(p.validFrom.trimmed());
+    q.addBindValue(p.validTo.trimmed());
     if (!q.exec())
         return Result<Promo>::failure(q.lastError().text());
     return Result<Promo>::success(*findActiveByCode(p.code));
@@ -114,10 +125,14 @@ Result<Promo> PromoRepository::update(int id, const Promo &p)
 {
     if (!findById(id))
         return Result<Promo>::failure(QStringLiteral("Promo %1 no encontrada").arg(id));
+    for (const QString &d : {p.validFrom, p.validTo}) {
+        if (!d.trimmed().isEmpty() && !QDate::fromString(d.trimmed(), Qt::ISODate).isValid())
+            return Result<Promo>::failure(QStringLiteral("Vigencia inválida (use AAAA-MM-DD)"));
+    }
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
         "UPDATE promos SET name=?, type=?, value=?, condition=?, code=?, active=?, desc=?, "
-        "business_type=? WHERE id=?"));
+        "business_type=?, valid_from=?, valid_to=? WHERE id=?"));
     q.addBindValue(p.name);
     q.addBindValue(p.type);
     q.addBindValue(p.value);
@@ -126,6 +141,8 @@ Result<Promo> PromoRepository::update(int id, const Promo &p)
     q.addBindValue(p.active ? 1 : 0);
     q.addBindValue(p.desc);
     q.addBindValue(p.businessType.trimmed());
+    q.addBindValue(p.validFrom.trimmed());
+    q.addBindValue(p.validTo.trimmed());
     q.addBindValue(id);
     if (!q.exec())
         return Result<Promo>::failure(q.lastError().text());
@@ -165,6 +182,16 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart, con
     if (!promo)
         return Result<PromoDiscount>::failure(
             QStringLiteral("Promo %1 no existe o inactiva").arg(code.trimmed()));
+    // Fase 3: ventana de vigencia (vacía = sin límite; malformada = se ignora).
+    const QDate today = QDate::currentDate();
+    const QDate from = QDate::fromString(promo->validFrom.trimmed(), Qt::ISODate);
+    const QDate to = QDate::fromString(promo->validTo.trimmed(), Qt::ISODate);
+    if (from.isValid() && today < from)
+        return Result<PromoDiscount>::failure(QStringLiteral("Promo %1 aún no vigente (desde %2)")
+                                                  .arg(promo->code, promo->validFrom));
+    if (to.isValid() && today > to)
+        return Result<PromoDiscount>::failure(
+            QStringLiteral("Promo %1 vencida (%2)").arg(promo->code, promo->validTo));
 
     double subtotal = 0.0;
     double qtyTotal = 0.0;

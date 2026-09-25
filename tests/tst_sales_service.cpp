@@ -134,22 +134,95 @@ class TstSalesService : public QObject
         QCOMPARE(m_products->findById(1)->stock, 12 - 1);
     }
 
+    void creditLimitEnforced()
+    {
+        // Fase 3: saldo + nuevo crédito <= límite (P002: 45000 + IVA = 53550).
+        Client c;
+        c.name = QStringLiteral("LIMIT-TEST");
+        c.creditLimit = 100000.0;
+        QVERIFY(m_clients->add(c).ok());
+        auto okSale
+            = m_svc->create({SI{.productId = 2, .qty = 1.0}}, QStringLiteral("LIMIT-TEST"), {},
+                            QStringLiteral("Credito"), QString(), QStringLiteral("tester"));
+        QVERIFY(okSale.ok());
+        // Saldo 53550 + otros 53550 > 100000 → bloqueada.
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = 2, .qty = 1.0}}, QStringLiteral("LIMIT-TEST"), {},
+                              QStringLiteral("Credito"), QString(), QStringLiteral("tester"))
+                     .ok());
+        // Sin límite asignado (0) → crédito bloqueado; contado sí pasa.
+        Client z;
+        z.name = QStringLiteral("NOLIMIT");
+        z.creditLimit = 0.0;
+        QVERIFY(m_clients->add(z).ok());
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = 2, .qty = 1.0}}, QStringLiteral("NOLIMIT"), {},
+                              QStringLiteral("Credito"), QString(), QStringLiteral("tester"))
+                     .ok());
+        QVERIFY(m_svc
+                    ->create({SI{.productId = 2, .qty = 1.0}}, QStringLiteral("NOLIMIT"), {},
+                             QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"))
+                    .ok());
+    }
+
     void cancelRevertsStock()
     {
         auto r = m_svc->create({SI{.productId = 6, .qty = 3}}, QStringLiteral("Juan Pérez"), {},
                                QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(m_products->findById(6)->stock, 30 - 3);
-        auto c
-            = m_svc->cancel(r.value().id, QStringLiteral("arrepentido"), QStringLiteral("tester"));
+        auto c = m_svc->cancel(r.value().id, QStringLiteral("arrepentido"),
+                               QStringLiteral("tester"), QStringLiteral("Administrador"));
         QVERIFY(c.ok());
         QCOMPARE(c.value().status, QStringLiteral("Cancelada"));
         QCOMPARE(m_products->findById(6)->stock, 30);
-        QVERIFY(!m_svc->cancel(r.value().id, QStringLiteral("otra vez"), QStringLiteral("tester"))
-                     .ok());
+        // Sin rol no se anula (fail-closed), aunque exista la venta.
         QVERIFY(
-            !m_svc->cancel(QStringLiteral("NOPE"), QStringLiteral("x"), QStringLiteral("tester"))
-                 .ok());
+            !m_svc->cancel(r.value().id, QStringLiteral("sin rol"), QStringLiteral("tester")).ok());
+        QVERIFY(!m_svc
+                     ->cancel(r.value().id, QStringLiteral("otra vez"), QStringLiteral("tester"),
+                              QStringLiteral("Administrador"))
+                     .ok());
+        QVERIFY(!m_svc
+                     ->cancel(QStringLiteral("NOPE"), QStringLiteral("x"), QStringLiteral("tester"),
+                              QStringLiteral("Administrador"))
+                     .ok());
+    }
+
+    void cancelRevertsExactly()
+    {
+        // Fase 1: la cancelación revierte EXACTAMENTE todas las escrituras
+        // de la venta (stock + crédito del cliente + turno de caja).
+        QVERIFY(m_caja->open(100000.0, QStringLiteral("tester")).ok());
+        const double cajaBefore = m_caja->status().expected;
+        const double stockBefore = m_products->findById(6)->stock;
+        const double creditBefore = m_clients->findByName(QStringLiteral("Juan Pérez"))->balance;
+
+        // Venta 100 % a crédito (2 uds. producto 6).
+        auto r = m_svc->create({SI{.productId = 6, .qty = 2}}, QStringLiteral("Juan Pérez"), {},
+                               QStringLiteral("Credito"), QString(), QStringLiteral("tester"));
+        QVERIFY(r.ok());
+        QCOMPARE(r.value().status, QStringLiteral("Pendiente"));
+        const double total = r.value().total;
+        QCOMPARE(m_clients->findByName(QStringLiteral("Juan Pérez"))->balance,
+                 creditBefore + total);
+        QCOMPARE(m_caja->status().expected, cajaBefore + total);
+
+        auto c = m_svc->cancel(r.value().id, QStringLiteral("devolución"), QStringLiteral("tester"),
+                               QStringLiteral("Administrador"));
+        QVERIFY(c.ok());
+        QCOMPARE(c.value().status, QStringLiteral("Cancelada"));
+        // Todo revertido al valor previo, sin restos.
+        QCOMPARE(m_products->findById(6)->stock, stockBefore);
+        QCOMPARE(m_clients->findByName(QStringLiteral("Juan Pérez"))->balance, creditBefore);
+        QCOMPARE(m_caja->status().expected, cajaBefore);
+        const auto s = m_sales->find(r.value().id);
+        QVERIFY(s.has_value());
+        QCOMPARE(s->balance, 0.0);
+        // Cerrar el turno abierto por este test (conteo exacto, diff 0).
+        auto closed = m_caja->close(cajaBefore, QStringLiteral("tester"));
+        QVERIFY(closed.ok());
+        QCOMPARE(closed.value().diff, 0.0);
     }
 
     void totalsDryRun()

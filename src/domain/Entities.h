@@ -151,6 +151,9 @@ struct Promo
     QString desc;
     // Multitienda: rubro dueño ('' = todas las verticales).
     QString businessType;
+    // Fase 3: vigencia AAAA-MM-DD ('' = sin límite).
+    QString validFrom;
+    QString validTo;
 };
 
 struct CajaSale

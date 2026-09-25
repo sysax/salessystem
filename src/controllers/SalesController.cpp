@@ -69,9 +69,10 @@ QVariantMap SalesController::advance(const QString &id, const QString &status, c
     return {{"ok", true}};
 }
 
-QVariantMap SalesController::cancel(const QString &id, const QString &reason, const QString &user)
+QVariantMap SalesController::cancel(const QString &id, const QString &reason, const QString &user,
+                                    const QString &role)
 {
-    const auto r = m_service->cancel(id, reason, user);
+    const auto r = m_service->cancel(id, reason, user, role);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     refresh();

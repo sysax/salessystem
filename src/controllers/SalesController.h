@@ -27,7 +27,8 @@ class SalesController : public QObject
     Q_INVOKABLE void refresh();
     Q_INVOKABLE QVariantMap detail(const QString &id) const;
     Q_INVOKABLE QVariantMap advance(const QString &id, const QString &status, const QString &user);
-    Q_INVOKABLE QVariantMap cancel(const QString &id, const QString &reason, const QString &user);
+    Q_INVOKABLE QVariantMap cancel(const QString &id, const QString &reason, const QString &user,
+                                   const QString &role = {});
     Q_INVOKABLE QVariantMap createDoc(const QString &type, const QString &client, double total,
                                       const QString &user);
     Q_INVOKABLE QVariantMap creditNote(const QString &id, double amount, const QString &reason,

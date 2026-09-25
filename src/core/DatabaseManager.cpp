@@ -183,6 +183,8 @@ bool DatabaseManager::migrateLegacyColumns()
          "business_type TEXT DEFAULT ''"}, // Multitienda: rubro dueño, filtrar sin borrar
         {"promos", "business_type",
          "business_type TEXT DEFAULT ''"}, // Multitienda: promos por rubro ('' = todas)
+        {"promos", "valid_from", "valid_from TEXT DEFAULT ''"}, // Fase 3: vigencia
+        {"promos", "valid_to", "valid_to TEXT DEFAULT ''"},
         {"sale_items", "attrs_json", "attrs_json TEXT DEFAULT '{}'"},
         {"sale_items", "serial", "serial TEXT DEFAULT ''"},
     };

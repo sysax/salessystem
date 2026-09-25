@@ -253,7 +253,10 @@ class TstVertical : public QObject
         const auto w = m_serials->warrantyStatus(QStringLiteral("IMEI001"), 12);
         QVERIFY(w[QStringLiteral("inWarranty")].toBool());
         // Cancelar devuelve el serial.
-        QVERIFY(m_svc->cancel(r.value().id, QStringLiteral("test"), QStringLiteral("t")).ok());
+        QVERIFY(m_svc
+                    ->cancel(r.value().id, QStringLiteral("test"), QStringLiteral("t"),
+                             QStringLiteral("Administrador"))
+                    .ok());
         QCOMPARE(m_serials->find(QStringLiteral("IMEI001"))->status, QStringLiteral("in_stock"));
         // RMA.
         QVERIFY(m_serials
