@@ -1,11 +1,33 @@
---- docs/MULTI_NEGOCIO_ESPECIFICACIONES.md (原始)
+--- docs/MULTI_NEGOCIO_SPEC.md
 
 
 +++ docs/MULTI_NEGOCIO_ESPECIFICACIONES.md (修改后)
 # Especificaciones: Sistema Multi-Negocio (Farmacia, Abarrotes, Celulares, Miscelánea, etc.)
 
-**Estado:** Propuesta · **Fecha:** 2026-09-24
+**Estado:** Implementado (Fases 1–5 + aislamiento) · **Fecha:** 2026-09-25
 **Objetivo:** Eliminar supuestos hardcodeados del proyecto (Colombia/COP/IVA 19 %) y convertirlo en una plataforma parametrizable por tipo de negocio, sin romper la compatibilidad con bases de datos existentes.
+
+## Decisiones implementadas (as-built)
+
+- **Filtrar sin borrar:** `products.business_type` y `promos.business_type`
+  (columnas aditivas, `''` = legacy visible en todos). Cambiar de rubro
+  **oculta** lo ajeno, nunca lo elimina; al regresar, todo reaparece.
+- **`miscelanea` = modo mixto:** ve todos los productos, promos y módulos.
+  Es el valor por defecto de una BD nueva.
+- **Seeds solo-datos:** `sql/seeds/*.sql` etiquetan categorías/productos con
+  su rubro pero **no tocan `settings.business_type`**. El cambio de rubro es
+  explícito en Configuración (Guardar o Inicializar catálogo, con vista
+  previa de lo que se ocultará y confirmación).
+- **Blindaje backend:** `CatalogController` rechaza altas con categoría de
+  otro rubro; `SalesService` rechaza vender productos de otro rubro;
+  `PromoRepository::evaluate` rechaza promos de otro rubro.
+- **UI por rubro:** sidebar (Lotes: farmacia/veterinaria/perecederos;
+  Seriales: celulares/taller), Productos (seriales, receta, garantía y lotes
+  solo donde aplican), POS (diálogos serial/receta), Ventas (Garantía/RMA),
+  Reportes y Dashboard filtrados. En abarrotes no aparece garantía/RMA.
+- **Límite conocido:** los agregados de dinero (`sales`, caja, impuestos,
+  KPIs) son globales porque `sales` no lleva rubro y una venta mixta
+  histórica no es atribuible. Solo lo atribuible a producto se filtra.
 
 Arquitectura de referencia (ver `arquitectura.txt`):
 `qml/ → src/controllers → src/services → src/repositories → SQLite`
@@ -98,8 +120,16 @@ Hoy `products.cat`/`subcat` son TEXT libres (`sql/schema.sql:14`).
 ### 2.3 Seeds por vertical
 
 - `sql/seed.sql` actual → renombrar como seed genérico/demo.
-- Nuevos archivos embebidos en el `.qrc`: `sql/seeds/farmacia.sql`, `abarrotes.sql`, `celulares.sql`, `miscelanea.sql`, `ferreteria.sql` (cada uno: categorías, tax rates, 5–10 productos de ejemplo, settings del vertical).
-- En `SettingsPage`, botón **"Inicializar catálogo para este rubro"** ejecuta el seed correspondiente con `INSERT OR IGNORE` (idempotente). Primer arranque con BD virgen: asistente pregunta el tipo de negocio.
+- Nuevos archivos embebidos en el `.qrc`: `sql/seeds/farmacia.sql`,
+  `abarrotes.sql`, `celulares.sql`, `miscelanea.sql`, `ferreteria.sql`, …
+  (cada uno: categorías y 5–10 productos etiquetados con su `business_type`,
+  más tasas/flags del vertical). Los seeds son **solo-datos**: no modifican
+  `settings.business_type` (el cambio de rubro es explícito en
+  Configuración).
+- En `SettingsPage`, botón **"Inicializar catálogo para este rubro"**: guarda
+  el rubro elegido y ejecuta el seed correspondiente con `INSERT OR IGNORE`
+  (idempotente). Muestra vista previa (visibles/ocultos) y pide confirmación
+  si se ocultarán productos de otros rubros (no se borra nada).
 
 **Criterio de aceptación:** vender 0,350 kg de tomate y 2 cajas de aspireta en el mismo ticket; categorías aparecen según seed del vertical elegido.
 

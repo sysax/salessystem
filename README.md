@@ -43,7 +43,7 @@ tickets siempre en `.txt`, cola `outbox` idempotente.
 ```bash
 cmake -S . -B build -DCMAKE_PREFIX_PATH=$HOME/Qt/6.11.2/gcc_64
 cmake --build build -j$(nproc)
-ctest --test-dir build   # 16 suites QtTest
+ctest --test-dir build   # 17 suites QtTest
 QT_QUICK_CONTROLS_STYLE=Material ./build/qtsales
 ```
 
@@ -85,15 +85,18 @@ Usuarios; toda clave asignada por un admin también exige cambio al entrar.
 │   └── controllers/        # 15 controllers Q_PROPERTY/Q_INVOKABLE
 ├── qml/                    # Main + 14 páginas + sidebar, Material
 ├── sql/schema.sql + seed.sql (solo admin, embebidos en el binario vía .qrc)
-├── tests/                  # 16 suites QtTest (ctest; datos demo en tests/fixtures/)
+├── tests/                  # 17 suites QtTest (ctest; datos demo en tests/fixtures/)
 └── fases.md                # Especificación original de los 12 módulos
 ```
 
 ## Notas
 
-- Multinegocio (Fases 1–5 de `MULTI_NEGOCIO_SPEC.md`): moneda, impuestos,
-  vertical y datos del negocio salen de `Settings`; sin literales COP/IVA
-  fuera de `SettingsService`. Valores por defecto: COP, IVA 19 %, NIT.
+- Multinegocio (Fases 1–5 de `MULTI_NEGOCIO_SPEC.md` + aislamiento por rubro):
+  moneda, impuestos, vertical y datos del negocio salen de `Settings`; sin
+  literales COP/IVA fuera de `SettingsService`. Cada producto/promo lleva su
+  `business_type`: cambiar de rubro oculta lo ajeno sin borrarlo
+  (`miscelanea` = modo mixto, ve todo). Valores por defecto: COP, IVA 19 %,
+  NIT.
 - Higiene Fase 0 (`MAP_PRO.md`): `-Wall -Wextra -Werror`,
   `format-check` (clang-format 23.1.1), `cmake-format-check`,
   `qml-lint` como targets del build; CI en Linux/Windows/macOS +

@@ -241,11 +241,22 @@ class TstReport : public QObject
             "INSERT INTO products (sku,name,price,price_buy,stock,business_type,status) "
             "VALUES ('REPV-CE','Rep Ce',2000,1500,7,'celulares','activo')")));
         // Valorizado: cada rubro excluye al otro (legacy '' visible en ambos).
+        // Se calcula lo etiquetado en BD para no depender del fixture.
+        QSqlQuery sumQ(m_dbm->database());
+        QVERIFY(sumQ.exec(QStringLiteral(
+            "SELECT COALESCE(SUM(stock),0) FROM products WHERE business_type='abarrotes'")));
+        QVERIFY(sumQ.next());
+        const double abTagged = sumQ.value(0).toDouble();
+        QVERIFY(sumQ.exec(QStringLiteral(
+            "SELECT COALESCE(SUM(stock),0) FROM products WHERE business_type='celulares'")));
+        QVERIFY(sumQ.next());
+        const double ceTagged = sumQ.value(0).toDouble();
         const QVariantMap all = m_rep->inventoryValue();
         const QVariantMap ab = m_rep->inventoryValue(QStringLiteral("abarrotes"));
         const QVariantMap ce = m_rep->inventoryValue(QStringLiteral("celulares"));
-        QCOMPARE(all["units"].toDouble() - 10.0, ce["units"].toDouble());
-        QCOMPARE(all["units"].toDouble() - 7.0, ab["units"].toDouble());
+        QVERIFY(abTagged >= 10.0 && ceTagged >= 7.0);
+        QCOMPARE(all["units"].toDouble() - abTagged, ce["units"].toDouble());
+        QCOMPARE(all["units"].toDouble() - ceTagged, ab["units"].toDouble());
         // Top con relleno a cero: el rubro ajeno no aparece.
         const QVariantList topCe = m_rep->topProducts(50, QStringLiteral("celulares"));
         bool seenCe = false, seenAb = false;
