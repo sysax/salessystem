@@ -5,10 +5,14 @@
 
 -- Fase 2: diccionario de categorías (los productos guardan cat/subcat como
 -- texto plano; esta tabla NO es FK, solo alimenta combos y filtros).
+-- Fase 1: SIN cláusula REFERENCES en parent_id. La convención del código es
+-- parent_id=0 para raíces (ver CategoryRepository::add) y ningún id 0 existe
+-- como fila, así que un FK autorreferencial rechazaría toda raíz con
+-- foreign_keys=ON. El padre se valida en la app (add/removeProtected).
 CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    parent_id INTEGER REFERENCES categories(id),
+    parent_id INTEGER DEFAULT 0,
     business_type TEXT DEFAULT '',
     sort_order INTEGER DEFAULT 0,
     UNIQUE(name, parent_id)
@@ -51,7 +55,7 @@ CREATE TABLE IF NOT EXISTS sales (
     id TEXT PRIMARY KEY, date TEXT, client TEXT, vendedor TEXT, total REAL, subtotal REAL,
     tax REAL, discount REAL, promo TEXT, status TEXT, doc_type TEXT, payment TEXT,
     payments_json TEXT, paid REAL, balance REAL, due TEXT, estado TEXT, dian_cufe TEXT, dian_status TEXT,
-    tax_breakdown TEXT DEFAULT ''
+    tax_breakdown TEXT DEFAULT '', business_type TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS sale_items (

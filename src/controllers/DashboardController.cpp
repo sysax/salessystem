@@ -24,15 +24,15 @@ QVariantList DashboardController::toExpiring(const QList<Product> &ps)
 
 void DashboardController::refresh()
 {
-    QVariantMap d = m_reports->stats();
-    // Multitienda: el rubro activo filtra lo atribuible a producto; los
-    // agregados de dinero quedan globales (ventas mixtas no atribuibles).
+    // Multitienda: el rubro activo filtra ventas y lo atribuible a producto;
+    // solo agregados sin rubro (clientes, CxP) quedan globales.
     const QString bt = m_settings ? m_settings->businessType().trimmed() : QString();
     const QString fbt = (bt.isEmpty() || bt == QLatin1String("miscelanea")) ? QString() : bt;
+    QVariantMap d = m_reports->stats(fbt);
     d[QStringLiteral("topProducts")] = m_reports->topProducts(5, fbt);
-    d[QStringLiteral("salesByDay")] = m_reports->salesByDay(7);
-    d[QStringLiteral("summary")] = m_reports->salesSummary();
-    d[QStringLiteral("kpis")] = m_reports->kpis();
+    d[QStringLiteral("salesByDay")] = m_reports->salesByDay(7, fbt);
+    d[QStringLiteral("summary")] = m_reports->salesSummary(fbt);
+    d[QStringLiteral("kpis")] = m_reports->kpis(fbt);
     QVariantList low;
     for (const Product &p : m_inventory->belowMin(fbt)) {
         low << QVariantMap{

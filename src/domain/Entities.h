@@ -105,6 +105,8 @@ struct Sale
     double tax = 0.0;
     // Fase 1: desglose por tasa (JSON); vacío en ventas históricas.
     QString taxBreakdown;
+    // Multitienda: rubro de la venta ('' = mixta o legacy, visible en todos).
+    QString businessType;
     double discount = 0.0;
     QString promo;
     QString status;

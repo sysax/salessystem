@@ -42,6 +42,8 @@ class SaleRepository : public QObject
         bool offline = false;
         // Fase 1: desglose por tasa (JSON de SalesService::bucketsToJson).
         QString taxBreakdownJson;
+        // Multitienda: rubro de la venta ('' = mixta/legacy).
+        QString businessType;
     };
 
     explicit SaleRepository(QSqlDatabase db, ClientRepository *clients = nullptr,

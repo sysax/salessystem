@@ -51,6 +51,8 @@ Sale SaleRepository::rowToSale(const QSqlQuery &q)
     s.dianStatus = q.value(QStringLiteral("dian_status")).toString();
     // Columna aditiva Fase 1: en BDs legadas aún no existe → "" (QVariant inválido).
     s.taxBreakdown = q.value(QStringLiteral("tax_breakdown")).toString();
+    // Multitienda: columna aditiva; '' = mixta/legacy (visible en todos).
+    s.businessType = q.value(QStringLiteral("business_type")).toString().trimmed();
     return s;
 }
 
@@ -156,7 +158,8 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     q.prepare(QStringLiteral(
         "INSERT INTO sales (id, date, client, vendedor, total, subtotal, tax, discount, promo, "
         "status, doc_type, payment, payments_json, paid, balance, due, estado, dian_cufe, "
-        "dian_status, tax_breakdown) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
+        "dian_status, tax_breakdown, business_type) VALUES "
+        "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(folio);
     q.addBindValue(today);
     q.addBindValue(s.clientName);
@@ -177,6 +180,7 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     q.addBindValue(cufe);
     q.addBindValue(dianStatus);
     q.addBindValue(s.taxBreakdownJson);
+    q.addBindValue(s.businessType.trimmed());
     if (!q.exec())
         return Result<Sale>::failure(q.lastError().text());
 

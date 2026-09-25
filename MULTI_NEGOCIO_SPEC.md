@@ -25,9 +25,11 @@
   Seriales: celulares/taller), Productos (seriales, receta, garantía y lotes
   solo donde aplican), POS (diálogos serial/receta), Ventas (Garantía/RMA),
   Reportes y Dashboard filtrados. En abarrotes no aparece garantía/RMA.
-- **Límite conocido:** los agregados de dinero (`sales`, caja, impuestos,
-  KPIs) son globales porque `sales` no lleva rubro y una venta mixta
-  histórica no es atribuible. Solo lo atribuible a producto se filtra.
+- **Ventas por rubro:** `sales.business_type` se calcula al crear la venta
+  (líneas de un solo rubro → ese; mezcla o legacy → `''`, visible en todos).
+  Los reportes de dinero (ventas, resultados, caja, impuestos, KPIs, ticket
+  promedio, top clientes/vendedores) filtran por rubro; solo clientes
+  globales y salidas de CxP (proveedores sin rubro) quedan sin filtrar.
 
 Arquitectura de referencia (ver `arquitectura.txt`):
 `qml/ → src/controllers → src/services → src/repositories → SQLite`

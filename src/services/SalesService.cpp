@@ -368,6 +368,21 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
     ns.paymentMethod = paymentMethod.isEmpty() ? QStringLiteral("Efectivo") : paymentMethod;
     ns.offline = offline;
     ns.taxBreakdownJson = bucketsToJson(totals.value().buckets);
+    // Multitienda: rubro de la venta desde sus líneas (un solo rubro
+    // específico → ese; mezcla o legacy → '' = visible en todos).
+    {
+        QSet<QString> rubros;
+        for (const LineTotal &l : totals.value().lines) {
+            const auto prod = m_products ? m_products->findById(l.productId) : std::nullopt;
+            if (!prod)
+                continue;
+            const QString pb = prod->businessType.trimmed();
+            if (!pb.isEmpty() && pb != QLatin1String("miscelanea"))
+                rubros.insert(pb);
+        }
+        if (rubros.size() == 1)
+            ns.businessType = *rubros.begin();
+    }
     for (const LineTotal &l : totals.value().lines) {
         SaleItem it;
         it.productId = l.productId;

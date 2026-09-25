@@ -421,6 +421,72 @@ class TstVertical : public QObject
                     .ok());
     }
 
+    void salesAttribution()
+    {
+        // Multitienda: la venta hereda el rubro de sus líneas (puras) y el
+        // dinero se filtra por rubro; la mixta queda '' (visible en todos).
+        QVERIFY(m_settings
+                    ->save({{QStringLiteral("business_type"),
+                             QStringLiteral("miscelanea")}})[QStringLiteral("ok")]
+                    .toBool());
+        Product a;
+        a.sku = QStringLiteral("SA-AB");
+        a.name = QStringLiteral("Venta Ab");
+        a.price = 5000.0;
+        a.stock = 10.0;
+        a.tax = QStringLiteral("Excluido");
+        a.businessType = QStringLiteral("abarrotes");
+        QVERIFY(m_products->add(a).ok());
+        Product c;
+        c.sku = QStringLiteral("SA-CE");
+        c.name = QStringLiteral("Venta Ce");
+        c.price = 7000.0;
+        c.stock = 10.0;
+        c.tax = QStringLiteral("Excluido");
+        c.businessType = QStringLiteral("celulares");
+        QVERIFY(m_products->add(c).ok());
+        const int aid = m_products->findBySku(QStringLiteral("SA-AB"))->id;
+        const int cid = m_products->findBySku(QStringLiteral("SA-CE"))->id;
+        auto ra = m_svc->create({SI{.productId = aid, .qty = 1.0}}, QStringLiteral("X"), {},
+                                QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
+        QVERIFY(ra.ok());
+        auto rc = m_svc->create({SI{.productId = cid, .qty = 1.0}}, QStringLiteral("X"), {},
+                                QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
+        QVERIFY(rc.ok());
+        auto rm = m_svc->create(
+            {SI{.productId = aid, .qty = 1.0}, SI{.productId = cid, .qty = 1.0}},
+            QStringLiteral("X"), {}, QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
+        QVERIFY(rm.ok());
+        auto saleBt = [&](const QString &id) {
+            QSqlQuery q(m_db);
+            q.prepare(QStringLiteral("SELECT business_type FROM sales WHERE id=?"));
+            q.addBindValue(id);
+            return (q.exec() && q.next()) ? q.value(0).toString() : QStringLiteral("?");
+        };
+        QCOMPARE(saleBt(ra.value().id), QStringLiteral("abarrotes"));
+        QCOMPARE(saleBt(rc.value().id), QStringLiteral("celulares"));
+        QCOMPARE(saleBt(rm.value().id), QString());
+        // Dinero por rubro: filtrado == suma de ventas puras (mixta/legacy
+        // suma en ambos y se cancela en la diferencia).
+        ReportService rep(m_db);
+        const double ce = rep.incomeStatement(QStringLiteral("celulares"))["ingresos"].toDouble();
+        const double ab = rep.incomeStatement(QStringLiteral("abarrotes"))["ingresos"].toDouble();
+        auto pureSum = [&](const QString &bt) {
+            QSqlQuery q(m_db);
+            q.prepare(
+                QStringLiteral("SELECT COALESCE(SUM(total),0) FROM sales WHERE status='Pagada' AND "
+                               "business_type=?"));
+            q.addBindValue(bt);
+            return (q.exec() && q.next()) ? q.value(0).toDouble() : -1.0;
+        };
+        QVERIFY(pureSum(QStringLiteral("celulares")) >= 7000.0);
+        QVERIFY(pureSum(QStringLiteral("abarrotes")) >= 5000.0);
+        QVERIFY(
+            qAbs((ce - ab)
+                 - (pureSum(QStringLiteral("celulares")) - pureSum(QStringLiteral("abarrotes"))))
+            < 0.01);
+    }
+
     void ean13()
     { // Ejemplo GS1 válido + variante con dígito malo.
         QVERIFY(ProductRepository::isValidEan13(QStringLiteral("5901234123457")));

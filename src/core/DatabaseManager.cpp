@@ -176,7 +176,9 @@ bool DatabaseManager::migrateLegacyColumns()
         {"products", "is_kit", "is_kit INTEGER DEFAULT 0"},
         {"products", "kit_json", "kit_json TEXT DEFAULT '[]'"},
         {"sales", "tax_breakdown", "tax_breakdown TEXT DEFAULT ''"}, // Fase 1: desglose por tasa
-        {"products", "attrs_json", "attrs_json TEXT DEFAULT '{}'"},  // Fase 3: metadatos vertical
+        {"sales", "business_type",
+         "business_type TEXT DEFAULT ''"}, // Multitienda: rubro de la venta ('' = mixta/legacy)
+        {"products", "attrs_json", "attrs_json TEXT DEFAULT '{}'"}, // Fase 3: metadatos vertical
         {"products", "business_type",
          "business_type TEXT DEFAULT ''"}, // Multitienda: rubro dueño, filtrar sin borrar
         {"promos", "business_type",
