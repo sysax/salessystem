@@ -1,6 +1,5 @@
 -- Seed opt-in: farmacia (Fase 2). Idempotente (INSERT OR IGNORE / OR REPLACE
 -- solo en settings). No toca usuarios, ventas ni productos existentes de otros SKUs.
-INSERT OR REPLACE INTO settings (key, value) VALUES ('business_type', 'farmacia');
 INSERT OR REPLACE INTO settings (key, value) VALUES ('tax_rates_json', '[{"name":"IVA 19%","rate":19},{"name":"Excluido","rate":0}]');
 INSERT OR REPLACE INTO settings (key, value) VALUES ('default_tax_rate', '19');
 INSERT OR REPLACE INTO settings (key, value) VALUES ('require_expiry', '1');

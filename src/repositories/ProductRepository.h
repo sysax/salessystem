@@ -47,6 +47,8 @@ class ProductRepository : public QObject
     double kitStock(const QList<KitComponent> &components) const;
 
     QList<Product> expiringWithin(int days) const;
+    // Multitienda: bt vacío o 'miscelanea' = todos los rubros.
+    QList<Product> expiringWithin(int days, const QString &businessType) const;
 
     // Fase 2: unidades canónicas. Vacío se normaliza a "unidad" en add/update.
     static const QStringList Units;

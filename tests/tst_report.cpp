@@ -2,10 +2,14 @@
 #include <QtTest>
 
 #include "core/DatabaseManager.h"
+#include "core/EventBus.h"
 #include "TestDb.h"
+#include "repositories/SettingsRepository.h"
 #include "services/ReportService.h"
+#include "services/SettingsService.h"
 
 #include <QDate>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 
 class TstReport : public QObject
@@ -20,7 +24,7 @@ class TstReport : public QObject
         QVERIFY(m_dbm->initialize(m_tmp.filePath(QStringLiteral("report.db"))));
         // Datos demo solo-tests (la app siembra base limpia)
         QVERIFY(TestDb::loadDemo(m_dbm->database()));
-        m_rep = new ReportService(m_dbm->database(), this);
+        m_rep = new ReportService(m_dbm->database(), nullptr, this);
     }
 
     void statsShape()
@@ -223,6 +227,46 @@ class TstReport : public QObject
         }
         const QString pdf = m_rep->exportPdf(QStringLiteral("garantias"), m_tmp.path());
         QVERIFY(!pdf.isEmpty() && QFile::exists(pdf));
+    }
+
+    void verticalFilter()
+    {
+        // Multitienda: lo atribuible a producto se filtra por rubro; el
+        // agregado de dinero queda global (ventas mixtas no atribuibles).
+        QSqlQuery q(m_dbm->database());
+        QVERIFY(q.exec(
+            QStringLiteral("INSERT INTO products (sku,name,price,stock,business_type,status) "
+                           "VALUES ('REPV-AB','Rep Ab',1000,10,'abarrotes','activo')")));
+        QVERIFY(q.exec(QStringLiteral(
+            "INSERT INTO products (sku,name,price,price_buy,stock,business_type,status) "
+            "VALUES ('REPV-CE','Rep Ce',2000,1500,7,'celulares','activo')")));
+        // Valorizado: cada rubro excluye al otro (legacy '' visible en ambos).
+        const QVariantMap all = m_rep->inventoryValue();
+        const QVariantMap ab = m_rep->inventoryValue(QStringLiteral("abarrotes"));
+        const QVariantMap ce = m_rep->inventoryValue(QStringLiteral("celulares"));
+        QCOMPARE(all["units"].toDouble() - 10.0, ce["units"].toDouble());
+        QCOMPARE(all["units"].toDouble() - 7.0, ab["units"].toDouble());
+        // Top con relleno a cero: el rubro ajeno no aparece.
+        const QVariantList topCe = m_rep->topProducts(50, QStringLiteral("celulares"));
+        bool seenCe = false, seenAb = false;
+        for (const QVariant &v : topCe) {
+            const QString nm = v.toMap()["name"].toString();
+            if (nm == QStringLiteral("Rep Ce"))
+                seenCe = true;
+            if (nm == QStringLiteral("Rep Ab"))
+                seenAb = true;
+        }
+        QVERIFY(seenCe && !seenAb);
+        // Sin bt explícito, el rubro activo de settings filtra solo.
+        auto *bus = new EventBus(this);
+        auto *settingsRepo = new SettingsRepository(m_dbm->database(), this);
+        auto *settings = new SettingsService(settingsRepo, bus, this);
+        QVERIFY(settings
+                    ->save({{QStringLiteral("business_type"),
+                             QStringLiteral("celulares")}})[QStringLiteral("ok")]
+                    .toBool());
+        ReportService filtered(m_dbm->database(), settings, this);
+        QCOMPARE(filtered.inventoryValue()["units"].toDouble(), ce["units"].toDouble());
     }
 
   private:

@@ -27,7 +27,8 @@ class InventoryRepository : public QObject
 
     InventoryValue value() const;
     QList<Product> lowStock(int threshold) const;
-    QList<Product> belowMin() const;
+    // Multitienda: bt vacío o 'miscelanea' = todos los rubros.
+    QList<Product> belowMin(const QString &businessType = {}) const;
     QList<Product> aboveMax() const;
     QList<Product> outOfStock() const;
 

@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
                           &settingsSvc, &audit, &serials);
     InventoryService invSvc(conn, &products, &inventory, &bus);
     PurchaseService purSvc(conn, &purchases, &products, &suppliers, &inventory, &cxp, &audit);
-    ReportService reports(conn);
+    ReportService reports(conn, &settingsSvc);
     SyncService sync(conn, &bus);
     ReceivablesService cxcSvc(&cxc, &bus);
     PayablesService cxpSvc(&cxp, &bus);
@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
 
     AuthController authCtl(&auth);
     SettingsController settingsCtl(&settingsSvc, &auth);
-    DashboardController dashCtl(&reports, &inventory, &products, &serials);
+    DashboardController dashCtl(&reports, &inventory, &products, &serials, &settingsSvc);
     PosController posCtl(&salesSvc, &products, &promos, &caja, &printer, &sync, &settingsSvc,
                          &serials);
     CatalogController catalogCtl(&products, &categories, &settingsSvc);

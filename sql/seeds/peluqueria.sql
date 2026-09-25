@@ -1,6 +1,5 @@
 -- Seed opt-in: peluquería (Fase 2; citas en Fase 6). Servicios como ítems sin stock
 -- se modelan en Fase 6; aquí solo retail de mostrador. Idempotente.
-INSERT OR REPLACE INTO settings (key, value) VALUES ('business_type', 'peluqueria');
 INSERT OR REPLACE INTO settings (key, value) VALUES ('tax_rates_json', '[{"name":"IVA 19%","rate":19},{"name":"Excluido","rate":0}]');
 INSERT OR REPLACE INTO settings (key, value) VALUES ('default_tax_rate', '19');
 

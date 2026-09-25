@@ -5,6 +5,7 @@
 #include <QVariantMap>
 
 #include "../services/ReportService.h"
+#include "../services/SettingsService.h"
 #include "../repositories/InventoryRepository.h"
 #include "../repositories/ProductRepository.h"
 #include "../repositories/SerialRepository.h"
@@ -18,7 +19,8 @@ class DashboardController : public QObject
   public:
     explicit DashboardController(ReportService *reports, InventoryRepository *inventory,
                                  ProductRepository *products = nullptr,
-                                 SerialRepository *serials = nullptr, QObject *parent = nullptr);
+                                 SerialRepository *serials = nullptr,
+                                 SettingsService *settings = nullptr, QObject *parent = nullptr);
 
     QVariantMap data() const
     {
@@ -36,5 +38,6 @@ class DashboardController : public QObject
     InventoryRepository *m_inventory = nullptr;
     ProductRepository *m_products = nullptr;
     SerialRepository *m_serials = nullptr;
+    SettingsService *m_settings = nullptr;
     QVariantMap m_data;
 };

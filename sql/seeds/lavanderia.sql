@@ -1,5 +1,4 @@
 -- Seed opt-in: lavandería (Fase 2). Idempotente. No toca usuarios/ventas existentes.
-INSERT OR REPLACE INTO settings (key, value) VALUES ('business_type', 'lavanderia');
 INSERT OR REPLACE INTO settings (key, value) VALUES ('tax_rates_json', '[{"name":"IVA 19%","rate":19},{"name":"Excluido","rate":0}]');
 INSERT OR REPLACE INTO settings (key, value) VALUES ('default_tax_rate', '19');
 INSERT OR REPLACE INTO settings (key, value) VALUES ('weight_unit_default', 'kg');

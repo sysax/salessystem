@@ -382,14 +382,23 @@ ScrollView {
         }
         onAccepted: {
             seedMsg.text = "";
+            // Multitienda: el cambio de rubro es explícito (los seeds ya no
+            // tocan settings). Primero se guarda el rubro, luego el seed.
+            var s = settingsCtl.save({"business_type": fType.currentText});
+            if (!s.ok) {
+                seedMsg.text = s.error;
+                return;
+            }
             if (!db.applySeedFile(fType.currentText)) {
-                seedMsg.text = qsTr("No hay seed para ese rubro: ") + db.statusMessage;
+                seedMsg.text = qsTr("Rubro guardado, pero sin seed: ") + db.statusMessage;
+                settingsCtl.load();
                 return;
             }
             settingsCtl.load();
             catalog.reloadCategories(fType.currentText);
             catalog.search("");
-            okMsg.text = qsTr("Catálogo de \"%1\" añadido.").arg(fType.currentText);
+            promosCtl.refresh(fType.currentText);
+            okMsg.text = qsTr("Rubro \"%1\" activo y catálogo añadido.").arg(fType.currentText);
             root.updatePreview();
         }
     }

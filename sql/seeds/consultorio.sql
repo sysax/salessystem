@@ -1,5 +1,4 @@
 -- Seed opt-in: consultorio (Fase 2; citas/expediente en Fase 6). Idempotente.
-INSERT OR REPLACE INTO settings (key, value) VALUES ('business_type', 'consultorio');
 INSERT OR REPLACE INTO settings (key, value) VALUES ('tax_rates_json', '[{"name":"IVA 19%","rate":19},{"name":"Excluido","rate":0}]');
 INSERT OR REPLACE INTO settings (key, value) VALUES ('default_tax_rate', '0');
 

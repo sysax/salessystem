@@ -102,12 +102,21 @@ QList<Product> InventoryRepository::lowStock(int threshold) const
     return out;
 }
 
-QList<Product> InventoryRepository::belowMin() const
+QList<Product> InventoryRepository::belowMin(const QString &businessType) const
 {
     QList<Product> out;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral("SELECT * FROM products WHERE stock < stock_min")))
-        return out;
+    const QString bt = businessType.trimmed();
+    if (bt.isEmpty() || bt == QLatin1String("miscelanea")) {
+        if (!q.exec(QStringLiteral("SELECT * FROM products WHERE stock < stock_min")))
+            return out;
+    } else {
+        q.prepare(QStringLiteral("SELECT * FROM products WHERE stock < stock_min AND "
+                                 "(business_type IS NULL OR business_type='' OR business_type=?)"));
+        q.addBindValue(bt);
+        if (!q.exec())
+            return out;
+    }
     while (q.next())
         out << ProductRepository::rowToProduct(q);
     return out;

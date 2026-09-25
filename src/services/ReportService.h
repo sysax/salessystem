@@ -5,21 +5,30 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include "SettingsService.h"
+
 // Reportes operativos/financieros/KPIs — port de los get_* de
 // data/repository.py. Retorna QVariant nativo para QML directo.
+//
+// Multitienda: los reportes atribuibles a producto (top, margen, rotación,
+// valorizado, granel, vencimientos, seriales, mermas, controlados,
+// garantías) se filtran por rubro; los agregados de dinero/cliente
+// (ventas, caja, impuestos, KPIs) son globales porque `sales` no lleva
+// rubro y una venta mixta no es atribuible.
 class ReportService : public QObject
 {
     Q_OBJECT
 
   public:
-    explicit ReportService(QSqlDatabase db, QObject *parent = nullptr);
+    explicit ReportService(QSqlDatabase db, SettingsService *settings = nullptr,
+                           QObject *parent = nullptr);
 
     Q_INVOKABLE QVariantMap stats() const;
-    Q_INVOKABLE QVariantList topProducts(int n = 5) const;
-    Q_INVOKABLE QVariantList leastSold(int n = 5) const;
+    Q_INVOKABLE QVariantList topProducts(int n = 5, const QString &businessType = {}) const;
+    Q_INVOKABLE QVariantList leastSold(int n = 5, const QString &businessType = {}) const;
     Q_INVOKABLE QVariantList topClients(int n = 5) const;
     Q_INVOKABLE QVariantList topSellers(int n = 5) const;
-    Q_INVOKABLE QVariantList marginPerProduct() const;
+    Q_INVOKABLE QVariantList marginPerProduct(const QString &businessType = {}) const;
     Q_INVOKABLE double averageTicket() const;
     Q_INVOKABLE QVariantMap salesForPeriod(const QString &range) const; // dia|semana|mes|año
     Q_INVOKABLE QVariantList salesByDay(int days = 7) const;
@@ -30,16 +39,17 @@ class ReportService : public QObject
     Q_INVOKABLE QVariantMap kpis() const;
 
     // Fase 3: próximos a vencer (lista {sku,name,lote,vencimiento,stock}).
-    Q_INVOKABLE QVariantList expiringProducts(int days = 30) const;
+    Q_INVOKABLE QVariantList expiringProducts(int days = 30,
+                                              const QString &businessType = {}) const;
     // Fase 4: seriales por estado + mermas valorizadas.
-    Q_INVOKABLE QVariantMap serialsReport() const;
-    Q_INVOKABLE QVariantList wasteReport() const;
+    Q_INVOKABLE QVariantMap serialsReport(const QString &businessType = {}) const;
+    Q_INVOKABLE QVariantList wasteReport(const QString &businessType = {}) const;
     // Fase 5: reportes por vertical + genéricos (rotación, valorizado).
-    Q_INVOKABLE QVariantList rotationByCategory() const;
-    Q_INVOKABLE QVariantMap inventoryValue() const;
-    Q_INVOKABLE QVariantList controlledSales() const;
-    Q_INVOKABLE QVariantList warrantyOpen() const;
-    Q_INVOKABLE QVariantList bulkPerformance() const;
+    Q_INVOKABLE QVariantList rotationByCategory(const QString &businessType = {}) const;
+    Q_INVOKABLE QVariantMap inventoryValue(const QString &businessType = {}) const;
+    Q_INVOKABLE QVariantList controlledSales(const QString &businessType = {}) const;
+    Q_INVOKABLE QVariantList warrantyOpen(const QString &businessType = {}) const;
+    Q_INVOKABLE QVariantList bulkPerformance(const QString &businessType = {}) const;
 
     // Exporta CSV operativo/financiero; retorna ruta o "" en error.
     // Cabecera con business_name/NIT de `settings` (Fase 0 multinegocio).
@@ -49,5 +59,9 @@ class ReportService : public QObject
 
   private:
     QString setting(const QString &key, const QString &fallback = {}) const;
+    // Multitienda: rubro efectivo (param explícito manda; si no, activo).
+    // Vacío o 'miscelanea' = sin filtro.
+    QString effectiveBt(const QString &businessType) const;
     QSqlDatabase m_db;
+    SettingsService *m_settings = nullptr;
 };

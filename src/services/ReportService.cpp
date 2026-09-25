@@ -19,16 +19,41 @@
 
 #include "../domain/Attrs.h"
 
-ReportService::ReportService(QSqlDatabase db, QObject *parent)
-    : QObject(parent), m_db(std::move(db))
+ReportService::ReportService(QSqlDatabase db, SettingsService *settings, QObject *parent)
+    : QObject(parent), m_db(std::move(db)), m_settings(settings)
 {
 }
+
+QString ReportService::effectiveBt(const QString &businessType) const
+{
+    QString bt = businessType.trimmed();
+    if (bt.isEmpty() && m_settings)
+        bt = m_settings->businessType().trimmed();
+    if (bt == QLatin1String("miscelanea"))
+        return {};
+    return bt;
+}
+
+namespace
+{
+// Multitienda: predicado sobre el alias de products dado ('' = legacy
+// visible en todos). Retorna "" si no hay filtro; el llamador enlaza bt.
+QString btPred(const QString &alias, const QString &bt)
+{
+    if (bt.isEmpty())
+        return {};
+    return QStringLiteral(" AND (%1.business_type IS NULL OR %1.business_type='' OR "
+                          "%1.business_type=?)")
+        .arg(alias);
+}
+} // namespace
 
 static double scalar(QSqlDatabase db, const QString &sql)
 {
     QSqlQuery q(db);
-    q.exec(sql);
-    return (q.next() ? q.value(0).toDouble() : 0.0);
+    if (!q.exec(sql) || !q.next())
+        return 0.0;
+    return q.value(0).toDouble();
 }
 
 QVariantMap ReportService::stats() const
@@ -46,13 +71,20 @@ QVariantMap ReportService::stats() const
     };
 }
 
-QVariantList ReportService::topProducts(int n) const
+QVariantList ReportService::topProducts(int n, const QString &businessType) const
 {
     QVariantList out;
+    const QString bt = effectiveBt(businessType);
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral(
-        "SELECT product_id, SUM(qty) FROM sale_items JOIN sales ON sale_items.sale_id=sales.id "
-        "WHERE sales.status!='Cancelada' GROUP BY product_id ORDER BY SUM(qty) DESC LIMIT ?"));
+    q.prepare(
+        QStringLiteral(
+            "SELECT si.product_id, SUM(si.qty) FROM sale_items si JOIN sales s ON si.sale_id=s.id "
+            "JOIN products p ON si.product_id=p.id "
+            "WHERE s.status!='Cancelada'")
+        + btPred(QStringLiteral("p"), bt)
+        + QStringLiteral(" GROUP BY si.product_id ORDER BY SUM(si.qty) DESC LIMIT ?"));
+    if (!bt.isEmpty())
+        q.addBindValue(bt);
     q.addBindValue(n);
     if (!q.exec())
         return out;
@@ -71,7 +103,16 @@ QVariantList ReportService::topProducts(int n) const
     // Rellenar con cero vendidos hasta n (como en Python)
     if (out.size() < n) {
         QSqlQuery all(m_db);
-        all.exec(QStringLiteral("SELECT id, name FROM products ORDER BY id"));
+        if (bt.isEmpty()) {
+            if (!all.exec(QStringLiteral("SELECT id, name FROM products ORDER BY id")))
+                return out;
+        } else {
+            all.prepare(QStringLiteral("SELECT id, name FROM products WHERE (business_type IS NULL "
+                                       "OR business_type='' OR business_type=?) ORDER BY id"));
+            all.addBindValue(bt);
+            if (!all.exec())
+                return out;
+        }
         while (all.next() && out.size() < n) {
             if (!seen.contains(all.value(0).toInt()))
                 out << QVariantMap{
@@ -81,17 +122,40 @@ QVariantList ReportService::topProducts(int n) const
     return out;
 }
 
-QVariantList ReportService::leastSold(int n) const
+QVariantList ReportService::leastSold(int n, const QString &businessType) const
 {
+    QVariantList out;
+    const QString bt = effectiveBt(businessType);
     QMap<int, double> cnt;
     QSqlQuery q(m_db);
-    q.exec(QStringLiteral(
-        "SELECT product_id, SUM(qty) FROM sale_items JOIN sales ON sale_items.sale_id=sales.id "
-        "WHERE sales.status!='Cancelada' GROUP BY product_id"));
+    if (bt.isEmpty()) {
+        if (!q.exec(QStringLiteral("SELECT product_id, SUM(qty) FROM sale_items JOIN sales ON "
+                                   "sale_items.sale_id=sales.id "
+                                   "WHERE sales.status!='Cancelada' GROUP BY product_id")))
+            return out;
+    } else {
+        q.prepare(QStringLiteral("SELECT si.product_id, SUM(si.qty) FROM sale_items si JOIN sales "
+                                 "s ON si.sale_id=s.id "
+                                 "JOIN products p ON si.product_id=p.id "
+                                 "WHERE s.status!='Cancelada'")
+                  + btPred(QStringLiteral("p"), bt) + QStringLiteral(" GROUP BY si.product_id"));
+        q.addBindValue(bt);
+        if (!q.exec())
+            return out;
+    }
     while (q.next())
         cnt[q.value(0).toInt()] = q.value(1).toDouble();
     QSqlQuery all(m_db);
-    all.exec(QStringLiteral("SELECT id, name FROM products ORDER BY id"));
+    if (bt.isEmpty()) {
+        if (!all.exec(QStringLiteral("SELECT id, name FROM products ORDER BY id")))
+            return out;
+    } else {
+        all.prepare(QStringLiteral("SELECT id, name FROM products WHERE (business_type IS NULL OR "
+                                   "business_type='' OR business_type=?) ORDER BY id"));
+        all.addBindValue(bt);
+        if (!all.exec())
+            return out;
+    }
     QList<QPair<int, QString>> prods;
     while (all.next()) {
         prods << qMakePair(all.value(0).toInt(), all.value(1).toString());
@@ -140,18 +204,40 @@ QVariantList ReportService::topSellers(int n) const
     return out;
 }
 
-QVariantList ReportService::marginPerProduct() const
+QVariantList ReportService::marginPerProduct(const QString &businessType) const
 {
+    QVariantList out;
+    const QString bt = effectiveBt(businessType);
     QMap<int, double> sold;
     QSqlQuery q(m_db);
-    q.exec(QStringLiteral(
-        "SELECT product_id, SUM(qty) FROM sale_items JOIN sales ON sale_items.sale_id=sales.id "
-        "WHERE sales.status='Pagada' GROUP BY product_id"));
+    if (bt.isEmpty()) {
+        if (!q.exec(QStringLiteral("SELECT product_id, SUM(qty) FROM sale_items JOIN sales ON "
+                                   "sale_items.sale_id=sales.id "
+                                   "WHERE sales.status='Pagada' GROUP BY product_id")))
+            return out;
+    } else {
+        q.prepare(QStringLiteral("SELECT si.product_id, SUM(si.qty) FROM sale_items si JOIN sales "
+                                 "s ON si.sale_id=s.id "
+                                 "JOIN products p ON si.product_id=p.id "
+                                 "WHERE s.status='Pagada'")
+                  + btPred(QStringLiteral("p"), bt) + QStringLiteral(" GROUP BY si.product_id"));
+        q.addBindValue(bt);
+        if (!q.exec())
+            return out;
+    }
     while (q.next())
         sold[q.value(0).toInt()] = q.value(1).toDouble();
-    QVariantList out;
     QSqlQuery p(m_db);
-    p.exec(QStringLiteral("SELECT id, sku, name, price, price_buy FROM products"));
+    if (bt.isEmpty()) {
+        if (!p.exec(QStringLiteral("SELECT id, sku, name, price, price_buy FROM products")))
+            return out;
+    } else {
+        p.prepare(QStringLiteral("SELECT id, sku, name, price, price_buy FROM products WHERE "
+                                 "(business_type IS NULL OR business_type='' OR business_type=?)"));
+        p.addBindValue(bt);
+        if (!p.exec())
+            return out;
+    }
     while (p.next()) {
         const int pid = p.value(0).toInt();
         const double price = p.value(3).toDouble();
@@ -350,16 +436,27 @@ QVariantMap ReportService::kpis() const
             {"costos_fijos", costosFijos}};
 }
 
-QVariantList ReportService::expiringProducts(int days) const
+QVariantList ReportService::expiringProducts(int days, const QString &businessType) const
 {
     QVariantList out;
+    const QString bt = effectiveBt(businessType);
     const QString limit = QDate::currentDate().addDays(days > 0 ? days : 30).toString(Qt::ISODate);
     QSqlQuery q(m_db);
-    q.prepare(
-        QStringLiteral("SELECT sku, name, lote, vencimiento, stock FROM products "
-                       "WHERE vencimiento IS NOT NULL AND vencimiento != '' AND vencimiento <= ? "
-                       "ORDER BY vencimiento"));
-    q.addBindValue(limit);
+    if (bt.isEmpty()) {
+        q.prepare(QStringLiteral(
+            "SELECT sku, name, lote, vencimiento, stock FROM products "
+            "WHERE vencimiento IS NOT NULL AND vencimiento != '' AND vencimiento <= ? "
+            "ORDER BY vencimiento"));
+        q.addBindValue(limit);
+    } else {
+        q.prepare(QStringLiteral(
+            "SELECT sku, name, lote, vencimiento, stock FROM products "
+            "WHERE vencimiento IS NOT NULL AND vencimiento != '' AND vencimiento <= ? "
+            "AND (business_type IS NULL OR business_type='' OR business_type=?) "
+            "ORDER BY vencimiento"));
+        q.addBindValue(limit);
+        q.addBindValue(bt);
+    }
     if (!q.exec())
         return out;
     while (q.next()) {
@@ -372,16 +469,27 @@ QVariantList ReportService::expiringProducts(int days) const
     return out;
 }
 
-QVariantMap ReportService::serialsReport() const
+QVariantMap ReportService::serialsReport(const QString &businessType) const
 {
     // Fase 4: conteo por estado + detalle (para celulares/taller).
+    const QString bt = effectiveBt(businessType);
     QVariantMap counts{{"in_stock", 0}, {"sold", 0}, {"rma", 0}, {"repaired", 0}};
     QVariantList items;
     QSqlQuery q(m_db);
-    if (!q.exec(
-            QStringLiteral("SELECT s.serial, s.sku, s.status, s.sale_id, p.name FROM serials s "
-                           "LEFT JOIN products p ON p.sku = s.sku ORDER BY s.id DESC LIMIT 500")))
-        return {{"counts", counts}, {"items", items}};
+    if (bt.isEmpty()) {
+        if (!q.exec(QStringLiteral(
+                "SELECT s.serial, s.sku, s.status, s.sale_id, p.name FROM serials s "
+                "LEFT JOIN products p ON p.sku = s.sku ORDER BY s.id DESC LIMIT 500")))
+            return {{"counts", counts}, {"items", items}};
+    } else {
+        q.prepare(QStringLiteral(
+            "SELECT s.serial, s.sku, s.status, s.sale_id, p.name FROM serials s "
+            "JOIN products p ON p.sku = s.sku WHERE (p.business_type IS NULL OR "
+            "p.business_type='' OR p.business_type=?) ORDER BY s.id DESC LIMIT 500"));
+        q.addBindValue(bt);
+        if (!q.exec())
+            return {{"counts", counts}, {"items", items}};
+    }
     int inStock = 0, sold = 0, rma = 0, repaired = 0;
     while (q.next()) {
         const QString st = q.value(2).toString();
@@ -406,16 +514,28 @@ QVariantMap ReportService::serialsReport() const
     return {{"counts", counts}, {"items", items}};
 }
 
-QVariantList ReportService::wasteReport() const
+QVariantList ReportService::wasteReport(const QString &businessType) const
 {
     // Fase 4: mermas por producto (cantidad + costo).
+    const QString bt = effectiveBt(businessType);
     QVariantList out;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral(
+    if (bt.isEmpty()) {
+        if (!q.exec(QStringLiteral(
+                "SELECT m.sku, m.product, SUM(-m.qty), p.price_buy FROM inventory_movements m "
+                "LEFT JOIN products p ON p.sku = m.sku WHERE m.type='Merma' "
+                "GROUP BY m.sku ORDER BY SUM(-m.qty) DESC")))
+            return out;
+    } else {
+        q.prepare(QStringLiteral(
             "SELECT m.sku, m.product, SUM(-m.qty), p.price_buy FROM inventory_movements m "
-            "LEFT JOIN products p ON p.sku = m.sku WHERE m.type='Merma' "
-            "GROUP BY m.sku ORDER BY SUM(-m.qty) DESC")))
-        return out;
+            "JOIN products p ON p.sku = m.sku WHERE m.type='Merma' AND (p.business_type IS NULL OR "
+            "p.business_type='' OR p.business_type=?) "
+            "GROUP BY m.sku ORDER BY SUM(-m.qty) DESC"));
+        q.addBindValue(bt);
+        if (!q.exec())
+            return out;
+    }
     while (q.next()) {
         const double qty = q.value(2).toDouble();
         double cost = q.value(3).toDouble();
@@ -438,25 +558,50 @@ QString normCat(const QString &cat)
 }
 } // namespace
 
-QVariantList ReportService::rotationByCategory() const
+QVariantList ReportService::rotationByCategory(const QString &businessType) const
 {
     // Fase 5 (genérico): vendidos e ingreso por categoría vs stock (rotación).
+    const QString bt = effectiveBt(businessType);
     QMap<QString, QVariantMap> sold;
     QSqlQuery q(m_db);
-    if (q.exec(QStringLiteral("SELECT p.cat, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
-                              "JOIN sales s ON si.sale_id=s.id "
-                              "JOIN products p ON si.product_id=p.id "
-                              "WHERE s.status!='Cancelada' GROUP BY p.cat"))) {
-        while (q.next()) {
-            sold[normCat(q.value(0).toString())]
-                = {{"sold", q.value(1).toDouble()}, {"revenue", q.value(2).toDouble()}};
+    if (bt.isEmpty()) {
+        if (q.exec(QStringLiteral("SELECT p.cat, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
+                                  "JOIN sales s ON si.sale_id=s.id "
+                                  "JOIN products p ON si.product_id=p.id "
+                                  "WHERE s.status!='Cancelada' GROUP BY p.cat"))) {
+            while (q.next()) {
+                sold[normCat(q.value(0).toString())]
+                    = {{"sold", q.value(1).toDouble()}, {"revenue", q.value(2).toDouble()}};
+            }
+        }
+    } else {
+        q.prepare(QStringLiteral("SELECT p.cat, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
+                                 "JOIN sales s ON si.sale_id=s.id "
+                                 "JOIN products p ON si.product_id=p.id "
+                                 "WHERE s.status!='Cancelada' AND (p.business_type IS NULL OR "
+                                 "p.business_type='' OR p.business_type=?) GROUP BY p.cat"));
+        q.addBindValue(bt);
+        if (q.exec()) {
+            while (q.next()) {
+                sold[normCat(q.value(0).toString())]
+                    = {{"sold", q.value(1).toDouble()}, {"revenue", q.value(2).toDouble()}};
+            }
         }
     }
     QVariantList out;
     QSqlQuery p(m_db);
-    if (!p.exec(QStringLiteral(
-            "SELECT cat, COUNT(*), COALESCE(SUM(stock),0) FROM products GROUP BY cat")))
-        return out;
+    if (bt.isEmpty()) {
+        if (!p.exec(QStringLiteral(
+                "SELECT cat, COUNT(*), COALESCE(SUM(stock),0) FROM products GROUP BY cat")))
+            return out;
+    } else {
+        p.prepare(QStringLiteral("SELECT cat, COUNT(*), COALESCE(SUM(stock),0) FROM products WHERE "
+                                 "(business_type IS NULL OR business_type='' OR business_type=?) "
+                                 "GROUP BY cat"));
+        p.addBindValue(bt);
+        if (!p.exec())
+            return out;
+    }
     while (p.next()) {
         const QString cat = normCat(p.value(0).toString());
         const double units = sold.value(cat).value(QStringLiteral("sold"), 0.0).toDouble();
@@ -472,33 +617,58 @@ QVariantList ReportService::rotationByCategory() const
     return out;
 }
 
-QVariantMap ReportService::inventoryValue() const
+QVariantMap ReportService::inventoryValue(const QString &businessType) const
 {
     // Fase 5 (genérico): inventario valorizado a costo y a precio de venta.
+    const QString bt = effectiveBt(businessType);
     QSqlQuery q(m_db);
-    q.exec(QStringLiteral("SELECT COALESCE(SUM(price_buy*stock),0), "
-                          "COALESCE(SUM(price*stock),0), COALESCE(SUM(stock),0), "
-                          "COUNT(*) FROM products"));
-    if (!q.next())
-        return {{"cost", 0.0}, {"sale", 0.0}, {"units", 0.0}, {"items", 0}};
+    if (bt.isEmpty()) {
+        if (!q.exec(QStringLiteral("SELECT COALESCE(SUM(price_buy*stock),0), "
+                                   "COALESCE(SUM(price*stock),0), COALESCE(SUM(stock),0), "
+                                   "COUNT(*) FROM products"))
+            || !q.next())
+            return {{"cost", 0.0}, {"sale", 0.0}, {"units", 0.0}, {"items", 0}};
+    } else {
+        q.prepare(QStringLiteral("SELECT COALESCE(SUM(price_buy*stock),0), "
+                                 "COALESCE(SUM(price*stock),0), COALESCE(SUM(stock),0), "
+                                 "COUNT(*) FROM products WHERE (business_type IS NULL OR "
+                                 "business_type='' OR business_type=?)"));
+        q.addBindValue(bt);
+        if (!q.exec() || !q.next())
+            return {{"cost", 0.0}, {"sale", 0.0}, {"units", 0.0}, {"items", 0}};
+    }
     return {{"cost", q.value(0).toDouble()},
             {"sale", q.value(1).toDouble()},
             {"units", q.value(2).toDouble()},
             {"items", q.value(3).toInt()}};
 }
 
-QVariantList ReportService::controlledSales() const
+QVariantList ReportService::controlledSales(const QString &businessType) const
 {
     // Fase 5 (farmacia): líneas vendidas de productos controlados.
+    const QString bt = effectiveBt(businessType);
     QVariantList out;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral(
+    if (bt.isEmpty()) {
+        if (!q.exec(QStringLiteral(
+                "SELECT s.id, s.date, p.sku, p.name, si.qty FROM sale_items si "
+                "JOIN sales s ON si.sale_id=s.id "
+                "JOIN products p ON si.product_id=p.id "
+                "WHERE s.status!='Cancelada' AND p.attrs_json LIKE '%\"controlled\":true%' "
+                "ORDER BY s.date DESC LIMIT 500")))
+            return out;
+    } else {
+        q.prepare(QStringLiteral(
             "SELECT s.id, s.date, p.sku, p.name, si.qty FROM sale_items si "
             "JOIN sales s ON si.sale_id=s.id "
             "JOIN products p ON si.product_id=p.id "
             "WHERE s.status!='Cancelada' AND p.attrs_json LIKE '%\"controlled\":true%' "
-            "ORDER BY s.date DESC LIMIT 500")))
-        return out;
+            "AND (p.business_type IS NULL OR p.business_type='' OR p.business_type=?) "
+            "ORDER BY s.date DESC LIMIT 500"));
+        q.addBindValue(bt);
+        if (!q.exec())
+            return out;
+    }
     while (q.next()) {
         out << QVariantMap{{"saleId", q.value(0).toString()},
                            {"date", q.value(1).toString()},
@@ -509,17 +679,31 @@ QVariantList ReportService::controlledSales() const
     return out;
 }
 
-QVariantList ReportService::warrantyOpen() const
+QVariantList ReportService::warrantyOpen(const QString &businessType) const
 {
     // Fase 5 (celulares): seriales vendidos con garantía vigente
     // (fecha venta + warranty_months del producto).
+    const QString bt = effectiveBt(businessType);
     QVariantList out;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral("SELECT s.serial, s.sku, p.name, s.sale_id, sa.date, p.attrs_json "
+    if (bt.isEmpty()) {
+        if (!q.exec(
+                QStringLiteral("SELECT s.serial, s.sku, p.name, s.sale_id, sa.date, p.attrs_json "
                                "FROM serials s LEFT JOIN products p ON p.sku=s.sku "
                                "LEFT JOIN sales sa ON sa.id=s.sale_id "
                                "WHERE s.status='sold' ORDER BY sa.date DESC LIMIT 500")))
-        return out;
+            return out;
+    } else {
+        q.prepare(QStringLiteral(
+            "SELECT s.serial, s.sku, p.name, s.sale_id, sa.date, p.attrs_json "
+            "FROM serials s JOIN products p ON p.sku=s.sku "
+            "LEFT JOIN sales sa ON sa.id=s.sale_id "
+            "WHERE s.status='sold' AND (p.business_type IS NULL OR p.business_type='' OR "
+            "p.business_type=?) ORDER BY sa.date DESC LIMIT 500"));
+        q.addBindValue(bt);
+        if (!q.exec())
+            return out;
+    }
     const QDate today = QDate::currentDate();
     while (q.next()) {
         const QDate sold = QDate::fromString(q.value(4).toString(), Qt::ISODate);
@@ -538,17 +722,31 @@ QVariantList ReportService::warrantyOpen() const
     return out;
 }
 
-QVariantList ReportService::bulkPerformance() const
+QVariantList ReportService::bulkPerformance(const QString &businessType) const
 {
     // Fase 5 (abarrotes): cantidad e ingreso agrupados por unidad de medida.
+    const QString bt = effectiveBt(businessType);
     QVariantList out;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral("SELECT p.unit, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
+    if (bt.isEmpty()) {
+        if (!q.exec(
+                QStringLiteral("SELECT p.unit, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
                                "JOIN sales s ON si.sale_id=s.id "
                                "JOIN products p ON si.product_id=p.id "
                                "WHERE s.status!='Cancelada' GROUP BY p.unit "
                                "ORDER BY SUM(si.subtotal) DESC")))
-        return out;
+            return out;
+    } else {
+        q.prepare(QStringLiteral("SELECT p.unit, SUM(si.qty), SUM(si.subtotal) FROM sale_items si "
+                                 "JOIN sales s ON si.sale_id=s.id "
+                                 "JOIN products p ON si.product_id=p.id "
+                                 "WHERE s.status!='Cancelada' AND (p.business_type IS NULL OR "
+                                 "p.business_type='' OR p.business_type=?) GROUP BY p.unit "
+                                 "ORDER BY SUM(si.subtotal) DESC"));
+        q.addBindValue(bt);
+        if (!q.exec())
+            return out;
+    }
     while (q.next()) {
         QString unit = q.value(0).toString().trimmed();
         if (unit.isEmpty())

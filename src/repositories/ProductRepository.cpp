@@ -458,13 +458,28 @@ Result<Product> ProductRepository::createKit(const QString &sku, const QString &
 
 QList<Product> ProductRepository::expiringWithin(int days) const
 {
+    return expiringWithin(days, {});
+}
+
+QList<Product> ProductRepository::expiringWithin(int days, const QString &businessType) const
+{
     QList<Product> out;
     const QString limit = QDate::currentDate().addDays(days).toString(Qt::ISODate);
+    const QString bt = businessType.trimmed();
     QSqlQuery q(m_db);
-    q.prepare(
-        QStringLiteral("SELECT * FROM products WHERE vencimiento IS NOT NULL AND vencimiento != '' "
-                       "AND vencimiento <= ? ORDER BY vencimiento"));
-    q.addBindValue(limit);
+    if (bt.isEmpty() || bt == QLatin1String("miscelanea")) {
+        q.prepare(QStringLiteral(
+            "SELECT * FROM products WHERE vencimiento IS NOT NULL AND vencimiento != '' "
+            "AND vencimiento <= ? ORDER BY vencimiento"));
+        q.addBindValue(limit);
+    } else {
+        q.prepare(QStringLiteral(
+            "SELECT * FROM products WHERE vencimiento IS NOT NULL AND vencimiento != '' "
+            "AND vencimiento <= ? AND (business_type IS NULL OR business_type='' OR "
+            "business_type=?) ORDER BY vencimiento"));
+        q.addBindValue(limit);
+        q.addBindValue(bt);
+    }
     if (!q.exec())
         return out;
     while (q.next())

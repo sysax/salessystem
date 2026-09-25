@@ -2,9 +2,9 @@
 
 DashboardController::DashboardController(ReportService *reports, InventoryRepository *inventory,
                                          ProductRepository *products, SerialRepository *serials,
-                                         QObject *parent)
+                                         SettingsService *settings, QObject *parent)
     : QObject(parent), m_reports(reports), m_inventory(inventory), m_products(products),
-      m_serials(serials)
+      m_serials(serials), m_settings(settings)
 {
     refresh();
 }
@@ -25,33 +25,37 @@ QVariantList DashboardController::toExpiring(const QList<Product> &ps)
 void DashboardController::refresh()
 {
     QVariantMap d = m_reports->stats();
-    d[QStringLiteral("topProducts")] = m_reports->topProducts(5);
+    // Multitienda: el rubro activo filtra lo atribuible a producto; los
+    // agregados de dinero quedan globales (ventas mixtas no atribuibles).
+    const QString bt = m_settings ? m_settings->businessType().trimmed() : QString();
+    const QString fbt = (bt.isEmpty() || bt == QLatin1String("miscelanea")) ? QString() : bt;
+    d[QStringLiteral("topProducts")] = m_reports->topProducts(5, fbt);
     d[QStringLiteral("salesByDay")] = m_reports->salesByDay(7);
     d[QStringLiteral("summary")] = m_reports->salesSummary();
     d[QStringLiteral("kpis")] = m_reports->kpis();
     QVariantList low;
-    for (const Product &p : m_inventory->belowMin()) {
+    for (const Product &p : m_inventory->belowMin(fbt)) {
         low << QVariantMap{
             {"sku", p.sku}, {"name", p.name}, {"stock", p.stock}, {"min", p.stockMin}};
     }
     d[QStringLiteral("lowStock")] = low;
     // Fase 3: próximos a vencer (solo si hay repo de productos).
     if (m_products) {
-        d[QStringLiteral("expiring30")] = toExpiring(m_products->expiringWithin(30));
-        d[QStringLiteral("expiring60")] = toExpiring(m_products->expiringWithin(60));
-        d[QStringLiteral("expiring90")] = toExpiring(m_products->expiringWithin(90));
+        d[QStringLiteral("expiring30")] = toExpiring(m_products->expiringWithin(30, fbt));
+        d[QStringLiteral("expiring60")] = toExpiring(m_products->expiringWithin(60, fbt));
+        d[QStringLiteral("expiring90")] = toExpiring(m_products->expiringWithin(90, fbt));
     }
     // Fase 4: seriales en RMA + mermas del mes (widgets por vertical).
     if (m_serials) {
-        const QVariantMap rep = m_reports->serialsReport();
+        const QVariantMap rep = m_reports->serialsReport(fbt);
         d[QStringLiteral("serialsRma")] = rep["counts"].toMap().value(QStringLiteral("rma"), 0);
         d[QStringLiteral("serialsInStock")]
             = rep["counts"].toMap().value(QStringLiteral("in_stock"), 0);
     }
     // Fase 5: garantías vigentes (celulares/taller).
-    d[QStringLiteral("warrantyOpen")] = m_reports->warrantyOpen().size();
+    d[QStringLiteral("warrantyOpen")] = m_reports->warrantyOpen(fbt).size();
     double wasteMonth = 0.0;
-    for (const QVariant &v : m_reports->wasteReport())
+    for (const QVariant &v : m_reports->wasteReport(fbt))
         wasteMonth += v.toMap()["cost"].toDouble();
     d[QStringLiteral("wasteCost")] = wasteMonth;
     m_data = d;
