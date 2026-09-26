@@ -4,7 +4,8 @@
 
 CatalogController::CatalogController(ProductRepository *products, CategoryRepository *categories,
                                      SettingsService *settings, QObject *parent)
-    : QObject(parent), m_repos(products), m_cats(categories), m_settings(settings)
+    : QObject(parent), m_repos(products), m_cats(categories), m_settings(settings),
+      m_productModel(this)
 {
     search({});
     reloadCategories();
@@ -146,6 +147,8 @@ void CatalogController::search(const QString &text, const QString &businessType)
     m_lastText = text;
     m_lastBt = businessType;
     m_pagedActive = false;
+    m_modelActive = false;
+    m_modelActive = false;
     m_products.clear();
     for (const Product &p : m_repos->search(text, bt))
         m_products << toMap(p);
@@ -169,6 +172,7 @@ void CatalogController::searchPaged(const QString &text, const QString &business
     m_lastSortKey = sortKey;
     m_lastSortAsc = sortAsc;
     m_pagedActive = true;
+    m_modelActive = false;
     if (pageSize <= 0) {
         search(text, businessType);
         return;
@@ -228,10 +232,62 @@ QVariantMap CatalogController::remove(const QString &sku)
 
 void CatalogController::reloadProducts()
 {
+    if (m_modelActive) {
+        searchProducts(m_modelText, m_modelSortKey, m_modelSortAsc);
+        return;
+    }
     if (m_pagedActive)
         searchPaged(m_lastText, m_lastBt, m_lastPage, m_lastSize, m_lastSortKey, m_lastSortAsc);
     else
         search(m_lastText, m_lastBt);
+}
+
+QString CatalogController::resolvedBt(const QString &businessType) const
+{
+    QString bt = businessType.trimmed();
+    if (bt.isEmpty() && m_settings)
+        bt = m_settings->businessType().trimmed();
+    if (bt == QLatin1String("miscelanea"))
+        bt.clear();
+    return bt;
+}
+
+void CatalogController::searchProducts(const QString &text, const QString &sortKey, bool sortAsc)
+{
+    m_modelActive = true;
+    // Fase 4: reinicia el scroll infinito (página 0 al modelo).
+    m_modelText = text;
+    m_modelSortKey = sortKey;
+    m_modelSortAsc = sortAsc;
+    m_modelPage = 0;
+    const QString bt = resolvedBt();
+    m_totalCount = m_repos->countSearch(text, bt);
+    m_productModel.setTotalCount(m_totalCount);
+    QVariantList rows;
+    for (const Product &p : m_repos->searchPaged(text, bt, ModelPageSize, 0, sortKey, sortAsc))
+        rows << toMap(p);
+    m_productModel.setRows(rows);
+    m_modelPage = 1;
+    emit productsChanged();
+}
+
+void CatalogController::fetchMoreProducts()
+{
+    // Fase 4: anexa el siguiente lote si el servidor tiene más.
+    if (!m_productModel.canFetchMore())
+        return;
+    const QString bt = resolvedBt();
+    QVariantList rows;
+    for (const Product &p :
+         m_repos->searchPaged(m_modelText, bt, ModelPageSize, m_modelPage * ModelPageSize,
+                              m_modelSortKey, m_modelSortAsc))
+        rows << toMap(p);
+    if (rows.isEmpty()) {
+        m_productModel.setTotalCount(m_productModel.rowCount());
+        return;
+    }
+    m_productModel.appendRows(rows);
+    ++m_modelPage;
 }
 
 QVariantMap CatalogController::categoryToMap(const Category &c)

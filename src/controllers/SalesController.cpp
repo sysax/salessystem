@@ -5,7 +5,8 @@
 SalesController::SalesController(SaleRepository *sales, SalesService *service,
                                  SerialRepository *serials, ProductRepository *products,
                                  QObject *parent)
-    : QObject(parent), m_repos(sales), m_service(service), m_serials(serials), m_products(products)
+    : QObject(parent), m_repos(sales), m_service(service), m_serials(serials), m_products(products),
+      m_saleModel(this)
 {
     refresh();
 }
@@ -34,6 +35,7 @@ QVariantMap SalesController::toMap(const Sale &s)
 void SalesController::refresh()
 {
     m_pagedActive = false;
+    m_modelActive = false;
     m_sales.clear();
     for (const Sale &s : m_repos->list())
         m_sales << toMap(s);
@@ -65,6 +67,7 @@ void SalesController::searchPaged(const QString &text, const QString &sortKey, b
     m_lastPage = page;
     m_lastSize = pageSize;
     m_pagedActive = true;
+    m_modelActive = false;
     m_totalCount = m_repos->countSearch(text);
     if (pageSize <= 0)
         pageSize = m_totalCount;
@@ -77,10 +80,48 @@ void SalesController::searchPaged(const QString &text, const QString &sortKey, b
 
 void SalesController::reloadSales()
 {
+    if (m_modelActive) {
+        searchSales(m_modelText, m_modelSortKey, m_modelSortAsc);
+        return;
+    }
     if (m_pagedActive)
         searchPaged(m_lastText, m_lastSortKey, m_lastSortAsc, m_lastPage, m_lastSize);
     else
         refresh();
+}
+
+void SalesController::searchSales(const QString &text, const QString &sortKey, bool sortAsc)
+{
+    // Fase 4: reinicia el scroll infinito (página 0 al modelo).
+    m_modelActive = true;
+    m_modelSortKey = sortKey;
+    m_modelSortAsc = sortAsc;
+    m_modelPage = 0;
+    m_totalCount = m_repos->countSearch(text);
+    m_saleModel.setTotalCount(m_totalCount);
+    QVariantList rows;
+    for (const Sale &s : m_repos->searchPaged(text, sortKey, sortAsc, ModelPageSize, 0))
+        rows << toMap(s);
+    m_saleModel.setRows(rows);
+    m_modelPage = 1;
+    emit salesChanged();
+}
+
+void SalesController::fetchMoreSales()
+{
+    // Fase 4: anexa el siguiente lote si el servidor tiene más.
+    if (!m_saleModel.canFetchMore())
+        return;
+    QVariantList rows;
+    for (const Sale &s : m_repos->searchPaged(m_modelText, m_modelSortKey, m_modelSortAsc,
+                                              ModelPageSize, m_modelPage * ModelPageSize))
+        rows << toMap(s);
+    if (rows.isEmpty()) {
+        m_saleModel.setTotalCount(m_saleModel.rowCount());
+        return;
+    }
+    m_saleModel.appendRows(rows);
+    ++m_modelPage;
 }
 
 QVariantMap SalesController::detail(const QString &id) const

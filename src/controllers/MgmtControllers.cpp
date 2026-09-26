@@ -4,7 +4,7 @@
 
 ClientsController::ClientsController(ClientRepository *clients, ReceivablesService *cxc,
                                      QObject *parent)
-    : QObject(parent), m_repos(clients), m_cxc(cxc)
+    : QObject(parent), m_repos(clients), m_cxc(cxc), m_clientModel(this)
 {
     search({});
 }
@@ -56,6 +56,7 @@ void ClientsController::search(const QString &text)
 {
     m_lastText = text;
     m_pagedActive = false;
+    m_modelActive = false;
     m_clients.clear();
     for (const Client &c : m_repos->search(text))
         m_clients << toMap(c);
@@ -70,6 +71,7 @@ void ClientsController::searchPaged(const QString &text, int page, int pageSize)
     m_lastPage = page;
     m_lastSize = pageSize;
     m_pagedActive = true;
+    m_modelActive = false;
     m_totalCount = m_repos->countSearch(text);
     if (pageSize <= 0) {
         search(text);
@@ -83,10 +85,46 @@ void ClientsController::searchPaged(const QString &text, int page, int pageSize)
 
 void ClientsController::reloadClients()
 {
+    if (m_modelActive) {
+        searchClients(m_modelText);
+        return;
+    }
     if (m_pagedActive)
         searchPaged(m_lastText, m_lastPage, m_lastSize);
     else
         search(m_lastText);
+}
+
+void ClientsController::searchClients(const QString &text)
+{
+    // Fase 4: reinicia el scroll infinito (página 0 al modelo).
+    m_modelActive = true;
+    m_modelPage = 0;
+    m_totalCount = m_repos->countSearch(text);
+    m_clientModel.setTotalCount(m_totalCount);
+    QVariantList rows;
+    for (const Client &c : m_repos->searchPaged(text, ModelPageSize, 0))
+        rows << toMap(c);
+    m_clientModel.setRows(rows);
+    m_modelPage = 1;
+    emit clientsChanged();
+}
+
+void ClientsController::fetchMoreClients()
+{
+    // Fase 4: anexa el siguiente lote si el servidor tiene más.
+    if (!m_clientModel.canFetchMore())
+        return;
+    QVariantList rows;
+    for (const Client &c :
+         m_repos->searchPaged(m_modelText, ModelPageSize, m_modelPage * ModelPageSize))
+        rows << toMap(c);
+    if (rows.isEmpty()) {
+        m_clientModel.setTotalCount(m_clientModel.rowCount());
+        return;
+    }
+    m_clientModel.appendRows(rows);
+    ++m_modelPage;
 }
 
 QVariantMap ClientsController::add(const QVariantMap &fields)

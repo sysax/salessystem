@@ -6,6 +6,7 @@
 
 #include "../repositories/ClientRepository.h"
 #include "../services/CreditService.h"
+#include "PagedListModel.h"
 
 // CRM clientes (antes ClientsScreen): CRUD + estado de cuenta + abonos.
 class ClientsController : public QObject
@@ -13,6 +14,7 @@ class ClientsController : public QObject
     Q_OBJECT
     Q_PROPERTY(QVariantList clients READ clients NOTIFY clientsChanged)
     Q_PROPERTY(int totalCount READ totalCount NOTIFY clientsChanged)
+    Q_PROPERTY(PagedListModel *clientModel READ clientModel CONSTANT)
 
   public:
     explicit ClientsController(ClientRepository *clients, ReceivablesService *cxc,
@@ -26,10 +28,17 @@ class ClientsController : public QObject
     {
         return m_totalCount;
     }
+    PagedListModel *clientModel()
+    {
+        return &m_clientModel;
+    }
 
     Q_INVOKABLE void search(const QString &text);
     // Fase 4: página servidor (page 0-based; pageSize <= 0 = todo).
     Q_INVOKABLE void searchPaged(const QString &text, int page, int pageSize);
+    // Fase 4: scroll infinito sobre el modelo incremental (página fija 30).
+    Q_INVOKABLE void searchClients(const QString &text);
+    Q_INVOKABLE void fetchMoreClients();
     Q_INVOKABLE QVariantMap add(const QVariantMap &fields);
     Q_INVOKABLE QVariantMap update(int id, const QVariantMap &fields);
     Q_INVOKABLE QVariantMap remove(int id);
@@ -55,6 +64,12 @@ class ClientsController : public QObject
     int m_lastPage = 0;
     int m_lastSize = 0;
     bool m_pagedActive = false;
+    // Fase 4: scroll infinito (tamaño de lote servidor).
+    PagedListModel m_clientModel;
+    QString m_modelText;
+    int m_modelPage = 0;
+    bool m_modelActive = false;
+    static constexpr int ModelPageSize = 30;
 };
 
 // Proveedores (antes SuppliersScreen): CRUD.

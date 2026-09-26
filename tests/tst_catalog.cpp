@@ -185,6 +185,32 @@ class TstCatalog : public QObject
         QCOMPARE(m_ctl->totalCount(), 7);
         m_ctl->searchPaged(QStringLiteral("PX"), {}, 2, 3);
         QCOMPARE(m_ctl->products().size(), 1);
+        // Scroll infinito: página 0 al modelo + anexos hasta el total.
+        m_ctl->searchProducts(QStringLiteral("PXZ"));
+        QCOMPARE(m_ctl->productModel()->rowCount(), 0);
+        QVERIFY(!m_ctl->productModel()->canFetchMore());
+        m_ctl->searchProducts(QStringLiteral("PX"));
+        QCOMPARE(m_ctl->productModel()->rowCount(), 7); // < lote de 30
+        QCOMPARE(m_ctl->productModel()->totalCount(), 7);
+        QVERIFY(!m_ctl->productModel()->canFetchMore());
+        m_ctl->fetchMoreProducts(); // sin más: no-op
+        QCOMPARE(m_ctl->productModel()->rowCount(), 7);
+        // Lote múltiple: 35 PY → 30 + 5.
+        for (int i = 1; i <= 35; ++i) {
+            Product p;
+            p.sku = QStringLiteral("PY%1").arg(i);
+            p.name = QStringLiteral("PagedY %1").arg(i);
+            p.price = 1000.0;
+            p.stock = 5.0;
+            QVERIFY(m_products->add(p).ok());
+        }
+        m_ctl->searchProducts(QStringLiteral("PY"));
+        QCOMPARE(m_ctl->productModel()->rowCount(), 30);
+        QCOMPARE(m_ctl->productModel()->totalCount(), 35);
+        QVERIFY(m_ctl->productModel()->canFetchMore());
+        m_ctl->fetchMoreProducts();
+        QCOMPARE(m_ctl->productModel()->rowCount(), 35);
+        QVERIFY(!m_ctl->productModel()->canFetchMore());
     }
 
     void controllerReload()

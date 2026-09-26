@@ -209,6 +209,12 @@ class TstMgmt : public QObject
         QVERIFY(m_clients->totalCount() >= 5); // fixture demo
         m_clients->searchPaged(QStringLiteral("María"), 0, 10);
         QCOMPARE(m_clients->totalCount(), 1);
+        // Scroll infinito: modelo incremental.
+        m_clients->searchClients(QStringLiteral(""));
+        QVERIFY(m_clients->clientModel()->rowCount() > 0);
+        QCOMPARE(m_clients->clientModel()->totalCount(), m_clients->totalCount());
+        m_clients->fetchMoreClients(); // < lote: no-op
+        QCOMPARE(m_clients->clientModel()->rowCount(), m_clients->clientModel()->totalCount());
     }
 
     void promosValidity()

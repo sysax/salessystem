@@ -9,22 +9,19 @@ ColumnLayout {
     id: root
     spacing: Theme.spacingSmall
 
-    property int page: 0
-    property int pageSize: 20
-    property int totalRows: 0
-    property int pageCount: 1
     property bool loading: false
+    property string pendingOp: "search"
 
     RowLayout {
         TextField {
             id: searchField
             placeholderText: qsTr("Buscar cliente…")
             Layout.fillWidth: true
-            onAccepted: { root.page = 0; root.requestSearch(); }
+            onAccepted: root.requestSearch()
         }
         Button {
             text: qsTr("Buscar")
-            onClicked: { root.page = 0; root.requestSearch(); }
+            onClicked: root.requestSearch()
         }
         BusyIndicator {
             visible: root.loading
@@ -42,30 +39,38 @@ ColumnLayout {
         }
     }
     ListView {
+        id: clientList
         Layout.fillWidth: true
         Layout.fillHeight: true
         clip: true
-        model: clientsCtl.clients
-        visible: (clientsCtl.clients || []).length > 0
+        model: clientsCtl.clientModel
         delegate: ItemDelegate {
             width: ListView.view.width
-            text: modelData.name + "  ·  " + modelData.balance + " saldo  ·  " + modelData.status
+            text: model.name + "  ·  " + model.balance + " saldo  ·  " + model.status
             onClicked: {
-                stmtModel.model = clientsCtl.statement(modelData.name);
-                stmtLabel.text = qsTr("Estado: ") + modelData.name;
+                stmtModel.model = clientsCtl.statement(model.name);
+                stmtLabel.text = qsTr("Estado: ") + model.name;
             }
             onPressAndHold: {
-                editDialog.clientId = modelData.id;
-                editDialog.fields = modelData;
+                editDialog.clientId = model.id;
+                editDialog.fields = clientsCtl.clientModel.get(index);
                 editDialog.open();
             }
         }
         ScrollBar.vertical: ScrollBar {}
+        // Fase 4: scroll infinito (anexa el siguiente lote al llegar abajo).
+        onMovementEnded: {
+            if (clientsCtl.clientModel.canFetchMore && !root.loading) {
+                root.pendingOp = "more";
+                root.loading = true;
+                queryTimer.restart();
+            }
+        }
     }
     EmptyState {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        visible: (clientsCtl.clients || []).length === 0 && !root.loading
+        visible: clientList.count === 0 && !root.loading
         icon: "👥"
         title: qsTr("Sin clientes")
         hint: qsTr("Registra el primero con “Nuevo” para asignar ventas y crédito.")
@@ -76,19 +81,30 @@ ColumnLayout {
             editDialog.open();
         }
     }
-    // Fase 4: paginación servidor.
-    Pager {
+    // Fase 4: pie incremental (en lugar del Pager discreto).
+    RowLayout {
         Layout.fillWidth: true
-        visible: root.totalRows > root.pageSize
-        page: root.page
-        pageCount: root.pageCount
-        total: root.totalRows
-        pageSize: root.pageSize
-        onFirst: { root.page = 0; root.requestSearch(); }
-        onPrev: { if (root.page > 0) { root.page--; root.requestSearch(); } }
-        onNext: { if (root.page < root.pageCount - 1) { root.page++; root.requestSearch(); } }
-        onLast: { root.page = root.pageCount - 1; root.requestSearch(); }
-        onSizeChanged: function(size) { root.pageSize = size; root.page = 0; root.requestSearch(); }
+        spacing: Theme.spacingSmall
+        Label {
+            text: qsTr("Mostrando %1 de %2").arg(clientList.count).arg(clientsCtl.clientModel.totalCount)
+            opacity: 0.7
+            Layout.fillWidth: true
+        }
+        BusyIndicator {
+            visible: root.loading && clientList.count > 0
+            running: root.loading && clientList.count > 0
+            Layout.preferredWidth: 28
+            Layout.preferredHeight: 28
+        }
+        Button {
+            text: qsTr("Cargar más")
+            visible: clientsCtl.clientModel.canFetchMore
+            onClicked: {
+                root.pendingOp = "more";
+                root.loading = true;
+                queryTimer.restart();
+            }
+        }
     }
     Label {
         id: stmtLabel
@@ -213,22 +229,19 @@ ColumnLayout {
         return ApplicationWindow.window.money(v);
     }
 
-    // Fase 4: búsqueda paginada en servidor (deferred para pintar el BusyIndicator).
+    // Fase 4: scroll infinito (búsqueda al modelo; lotes de 30).
     function requestSearch() {
+        root.pendingOp = "search";
         root.loading = true;
         queryTimer.restart();
     }
     function doSearch() {
-        clientsCtl.searchPaged(searchField.text, root.page, root.pageSize);
+        if (root.pendingOp === "more") {
+            clientsCtl.fetchMoreClients();
+        } else {
+            clientsCtl.searchClients(searchField.text);
+        }
         root.loading = false;
-    }
-    function syncView() {
-        root.totalRows = clientsCtl.totalCount;
-        root.pageCount = Math.max(1, Math.ceil(root.totalRows / root.pageSize));
-        if (root.page >= root.pageCount)
-            root.page = root.pageCount - 1;
-        if (root.page < 0)
-            root.page = 0;
     }
 
     Timer {
@@ -236,10 +249,6 @@ ColumnLayout {
         interval: 5
         repeat: false
         onTriggered: root.doSearch()
-    }
-    Connections {
-        target: clientsCtl
-        function onClientsChanged() { root.syncView(); }
     }
     Component.onCompleted: root.requestSearch()
     onVisibleChanged: if (visible) root.requestSearch()

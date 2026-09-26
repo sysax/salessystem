@@ -13,12 +13,8 @@ ColumnLayout {
 
     property string sortKey: "name"
     property bool sortAsc: true
-    property int page: 0
-    property int pageSize: 20
-    property var viewRows: []
-    property int totalRows: 0
-    property int pageCount: 1
     property bool loading: false
+    property string pendingOp: "search"
 
     // Fase 1: nombres de tasas desde Configuración (sin SQL en QML).
     function taxNames() {
@@ -53,12 +49,12 @@ ColumnLayout {
             placeholderText: qsTr("Buscar… (servidor)")
             Layout.fillWidth: true
             implicitHeight: 48
-            onAccepted: { root.page = 0; root.requestView(); }
+            onAccepted: root.requestView()
         }
         Button {
             text: qsTr("Buscar")
             implicitHeight: 48
-            onClicked: { root.page = 0; root.requestView(); }
+            onClicked: root.requestView()
         }
         BusyIndicator {
             visible: root.loading
@@ -83,10 +79,10 @@ ColumnLayout {
             placeholderText: qsTr("Filtrar en servidor (nombre, SKU, categoría)…")
             Layout.fillWidth: true
             implicitHeight: 40
-            onTextChanged: { root.page = 0; root.requestView(); }
+            onTextChanged: root.requestView()
         }
         Label {
-            text: qsTr("%1 ítems").arg(root.totalRows)
+            text: qsTr("%1 de %2").arg(productList.count).arg(catalog.productModel.totalCount)
             opacity: 0.7
         }
     }
@@ -123,73 +119,94 @@ ColumnLayout {
         }
     }
     ListView {
+        id: productList
         Layout.fillWidth: true
         Layout.fillHeight: true
         clip: true
-        model: root.viewRows
-        visible: root.viewRows.length > 0
+        model: catalog.productModel
         delegate: ItemDelegate {
             width: ListView.view.width
             height: 48
             onClicked: {
-                editDialog.sku = modelData.sku;
-                editDialog.fields = modelData;
+                editDialog.sku = model.sku;
+                editDialog.fields = catalog.productModel.get(index);
                 editDialog.open();
             }
             contentItem: RowLayout {
                 spacing: Theme.spacingSmall
                 Label {
-                    text: modelData.sku
+                    text: model.sku
                     Layout.preferredWidth: 120
                     elide: Text.ElideRight
                 }
                 Label {
-                    text: modelData.name
+                    text: model.name
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                 }
                 Label {
-                    text: money(modelData.price)
+                    text: money(model.price)
                     Layout.preferredWidth: 110
                     horizontalAlignment: Text.AlignRight
                 }
                 Label {
-                    text: Utils.formatQty(modelData.stock) + (modelData.unit ? " " + modelData.unit : "")
-                          + ((modelData.reserved || 0) > 0 ? " · disp " + Utils.formatQty((modelData.available !== undefined ? modelData.available : modelData.stock)) : "")
+                    text: Utils.formatQty(model.stock) + (model.unit ? " " + model.unit : "")
+                          + ((model.reserved || 0) > 0 ? " · disp " + Utils.formatQty(model.available) : "")
                     Layout.preferredWidth: 140
                     horizontalAlignment: Text.AlignRight
-                    color: modelData.stock <= 0 ? "red" : palette.text
-                    font.bold: modelData.stock <= 0
+                    color: model.stock <= 0 ? "red" : palette.text
+                    font.bold: model.stock <= 0
                 }
             }
         }
         ScrollBar.vertical: ScrollBar {}
+        // Fase 4: scroll infinito (anexa el siguiente lote al llegar abajo).
+        onMovementEnded: {
+            if (catalog.productModel.canFetchMore && !root.loading) {
+                root.pendingOp = "more";
+                root.loading = true;
+                queryTimer.restart();
+            }
+        }
     }
     EmptyState {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        visible: root.viewRows.length === 0 && !root.loading
+        visible: productList.count === 0 && !root.loading
         icon: "📦"
-        title: root.totalRows === 0 ? qsTr("Sin productos") : qsTr("Sin resultados")
-        hint: root.totalRows === 0 ? qsTr("Crea el primero con “Nuevo”, importa desde Compras o inicializa el catálogo del rubro en Configuración.") : qsTr("Ajusta el filtro o la búsqueda.")
-        actionText: root.totalRows === 0 ? qsTr("Nuevo producto") : ""
+        title: catalog.productModel.totalCount === 0 ? qsTr("Sin productos") : qsTr("Sin resultados")
+        hint: catalog.productModel.totalCount === 0 ? qsTr("Crea el primero con “Nuevo”, importa desde Compras o inicializa el catálogo del rubro en Configuración.") : qsTr("Ajusta el filtro o la búsqueda.")
+        actionText: catalog.productModel.totalCount === 0 ? qsTr("Nuevo producto") : ""
         onAction: {
             editDialog.sku = "";
             editDialog.fields = {};
             editDialog.open();
         }
     }
-    Pager {
+    // Fase 4: pie incremental (en lugar del Pager discreto).
+    RowLayout {
         Layout.fillWidth: true
-        page: root.page
-        pageCount: root.pageCount
-        total: root.totalRows
-        pageSize: root.pageSize
-        onFirst: { root.page = 0; root.requestView(); }
-        onPrev: { if (root.page > 0) { root.page--; root.requestView(); } }
-        onNext: { if (root.page < root.pageCount - 1) { root.page++; root.requestView(); } }
-        onLast: { root.page = root.pageCount - 1; root.requestView(); }
-        onSizeChanged: function(size) { root.pageSize = size; root.page = 0; root.requestView(); }
+        spacing: Theme.spacingSmall
+        Label {
+            text: qsTr("Mostrando %1 de %2").arg(productList.count).arg(catalog.productModel.totalCount)
+            opacity: 0.7
+            Layout.fillWidth: true
+        }
+        BusyIndicator {
+            visible: root.loading && productList.count > 0
+            running: root.loading && productList.count > 0
+            Layout.preferredWidth: 28
+            Layout.preferredHeight: 28
+        }
+        Button {
+            text: qsTr("Cargar más")
+            visible: catalog.productModel.canFetchMore
+            onClicked: {
+                root.pendingOp = "more";
+                root.loading = true;
+                queryTimer.restart();
+            }
+        }
     }
 
     // Multitienda: el rubro activo decide qué campos verticales se muestran.
@@ -255,31 +272,25 @@ ColumnLayout {
             root.sortKey = key;
             root.sortAsc = true;
         }
-        root.page = 0;
         root.requestView();
     }
 
-    // Fase 4: consulta única a servidor (texto + orden + página).
+    // Fase 4: scroll infinito (texto + orden al modelo; lotes de 30).
     function queryText() {
         return filterField.text !== "" ? filterField.text : searchField.text;
     }
     function requestView() {
+        root.pendingOp = "search";
         root.loading = true;
         queryTimer.restart();
     }
     function doView() {
-        catalog.searchPaged(root.queryText(), "", root.page, root.pageSize, root.sortKey,
-                            root.sortAsc);
+        if (root.pendingOp === "more") {
+            catalog.fetchMoreProducts();
+        } else {
+            catalog.searchProducts(root.queryText(), root.sortKey, root.sortAsc);
+        }
         root.loading = false;
-    }
-    function syncView() {
-        root.viewRows = catalog.products || [];
-        root.totalRows = catalog.totalCount;
-        root.pageCount = Math.max(1, Math.ceil(root.totalRows / root.pageSize));
-        if (root.page >= root.pageCount)
-            root.page = root.pageCount - 1;
-        if (root.page < 0)
-            root.page = 0;
     }
 
     Timer {
@@ -293,13 +304,8 @@ ColumnLayout {
     onVisibleChanged: if (visible) root.requestView()
 
     Connections {
-        target: catalog
-        function onProductsChanged() { root.syncView(); }
-        function onCategoriesChanged() { root.syncView(); }
-    }
-    Connections {
         target: settingsCtl
-        function onSettingsChanged() { root.reloadCats(); root.page = 0; root.requestView(); }
+        function onSettingsChanged() { root.reloadCats(); root.requestView(); }
     }
 
     Dialog {

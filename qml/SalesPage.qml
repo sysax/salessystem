@@ -13,12 +13,8 @@ ColumnLayout {
 
     property string sortKey: "id"
     property bool sortAsc: false
-    property int page: 0
-    property int pageSize: 20
-    property var viewRows: []
-    property int totalRows: 0
-    property int pageCount: 1
     property bool loading: false
+    property string pendingOp: "search"
 
     RowLayout {
         Label {
@@ -45,10 +41,10 @@ ColumnLayout {
             placeholderText: qsTr("Filtrar en servidor (folio, cliente, estado)…")
             Layout.fillWidth: true
             implicitHeight: 40
-            onTextChanged: { root.page = 0; root.requestView(); }
+            onTextChanged: root.requestView()
         }
         Label {
-            text: qsTr("%1 ítems").arg(root.totalRows)
+            text: qsTr("%1 de %2").arg(salesList.count).arg(salesCtl.saleModel.totalCount)
             opacity: 0.7
         }
     }
@@ -120,67 +116,88 @@ ColumnLayout {
         }
     }
     ListView {
+        id: salesList
         Layout.fillWidth: true
         Layout.fillHeight: true
         clip: true
-        model: root.viewRows
-        visible: root.viewRows.length > 0
+        model: salesCtl.saleModel
         delegate: ItemDelegate {
             width: ListView.view.width
             height: 48
             onClicked: {
-                var d = salesCtl.detail(modelData.id);
+                var d = salesCtl.detail(model.id);
                 detailText.text = d.ok ? JSON.stringify(d, null, 1) : d.error;
-                detailDialog.saleId = modelData.id;
+                detailDialog.saleId = model.id;
                 detailDialog.open();
             }
             contentItem: RowLayout {
                 spacing: Theme.spacingSmall
                 Label {
-                    text: modelData.id
+                    text: model.id
                     Layout.preferredWidth: 100
                     elide: Text.ElideRight
                 }
                 Label {
-                    text: modelData.client
+                    text: model.client
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                 }
                 Label {
-                    text: money(modelData.total)
+                    text: money(model.total)
                     Layout.preferredWidth: 110
                     horizontalAlignment: Text.AlignRight
                 }
                 Label {
-                    text: modelData.status
+                    text: model.status
                     Layout.preferredWidth: 110
                     elide: Text.ElideRight
                 }
             }
         }
         ScrollBar.vertical: ScrollBar {}
+        // Fase 4: scroll infinito (anexa el siguiente lote al llegar abajo).
+        onMovementEnded: {
+            if (salesCtl.saleModel.canFetchMore && !root.loading) {
+                root.pendingOp = "more";
+                root.loading = true;
+                queryTimer.restart();
+            }
+        }
     }
     EmptyState {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        visible: root.viewRows.length === 0 && !root.loading
+        visible: salesList.count === 0 && !root.loading
         icon: "🧾"
-        title: root.totalRows === 0 ? qsTr("Sin ventas aún") : qsTr("Sin resultados")
-        hint: root.totalRows === 0 ? qsTr("Las ventas cobradas en el POS aparecerán aquí.") : qsTr("Ajusta el filtro.")
-        actionText: root.totalRows === 0 ? qsTr("Ir al POS") : ""
+        title: salesCtl.saleModel.totalCount === 0 ? qsTr("Sin ventas aún") : qsTr("Sin resultados")
+        hint: salesCtl.saleModel.totalCount === 0 ? qsTr("Las ventas cobradas en el POS aparecerán aquí.") : qsTr("Ajusta el filtro.")
+        actionText: salesCtl.saleModel.totalCount === 0 ? qsTr("Ir al POS") : ""
         onAction: root.go("pos")
     }
-    Pager {
+    // Fase 4: pie incremental (en lugar del Pager discreto).
+    RowLayout {
         Layout.fillWidth: true
-        page: root.page
-        pageCount: root.pageCount
-        total: root.totalRows
-        pageSize: root.pageSize
-        onFirst: { root.page = 0; root.requestView(); }
-        onPrev: { if (root.page > 0) { root.page--; root.requestView(); } }
-        onNext: { if (root.page < root.pageCount - 1) { root.page++; root.requestView(); } }
-        onLast: { root.page = root.pageCount - 1; root.requestView(); }
-        onSizeChanged: function(size) { root.pageSize = size; root.page = 0; root.requestView(); }
+        spacing: Theme.spacingSmall
+        Label {
+            text: qsTr("Mostrando %1 de %2").arg(salesList.count).arg(salesCtl.saleModel.totalCount)
+            opacity: 0.7
+            Layout.fillWidth: true
+        }
+        BusyIndicator {
+            visible: root.loading && salesList.count > 0
+            running: root.loading && salesList.count > 0
+            Layout.preferredWidth: 28
+            Layout.preferredHeight: 28
+        }
+        Button {
+            text: qsTr("Cargar más")
+            visible: salesCtl.saleModel.canFetchMore
+            onClicked: {
+                root.pendingOp = "more";
+                root.loading = true;
+                queryTimer.restart();
+            }
+        }
     }
 
     function setSort(key) {
@@ -190,28 +207,22 @@ ColumnLayout {
             root.sortKey = key;
             root.sortAsc = key === "client" || key === "status";
         }
-        root.page = 0;
         root.requestView();
     }
 
-    // Fase 4: filtro + orden + página en servidor (deferred para el BusyIndicator).
+    // Fase 4: scroll infinito (filtro + orden al modelo; lotes de 30).
     function requestView() {
+        root.pendingOp = "search";
         root.loading = true;
         queryTimer.restart();
     }
     function doView() {
-        salesCtl.searchPaged(filterField.text, root.sortKey, root.sortAsc, root.page,
-                             root.pageSize);
+        if (root.pendingOp === "more") {
+            salesCtl.fetchMoreSales();
+        } else {
+            salesCtl.searchSales(filterField.text, root.sortKey, root.sortAsc);
+        }
         root.loading = false;
-    }
-    function syncView() {
-        root.viewRows = salesCtl.sales || [];
-        root.totalRows = salesCtl.totalCount;
-        root.pageCount = Math.max(1, Math.ceil(root.totalRows / root.pageSize));
-        if (root.page >= root.pageCount)
-            root.page = root.pageCount - 1;
-        if (root.page < 0)
-            root.page = 0;
     }
 
     Timer {
@@ -223,11 +234,6 @@ ColumnLayout {
 
     Component.onCompleted: root.requestView()
     onVisibleChanged: if (visible) root.requestView()
-
-    Connections {
-        target: salesCtl
-        function onSalesChanged() { root.syncView(); }
-    }
 
     Dialog {
         id: detailDialog

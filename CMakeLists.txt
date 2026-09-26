@@ -101,6 +101,8 @@ add_library(
     src/controllers/AuthController.cpp
     src/controllers/DashboardController.h
     src/controllers/DashboardController.cpp
+    src/controllers/PagedListModel.h
+    src/controllers/PagedListModel.cpp
     src/controllers/CatalogController.h
     src/controllers/CatalogController.cpp
     src/controllers/PosController.h

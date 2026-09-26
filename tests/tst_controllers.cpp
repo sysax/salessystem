@@ -112,6 +112,12 @@ class TstControllers : public QObject
         const QVariantMap d = m_salesCtl->detail(id);
         QVERIFY(d["ok"].toBool());
         QVERIFY(d.contains("items"));
+        // Scroll infinito: modelo con la primera página + total.
+        m_salesCtl->searchSales({}, QStringLiteral("id"), false);
+        QVERIFY(m_salesCtl->saleModel()->rowCount() > 0);
+        QVERIFY(m_salesCtl->saleModel()->totalCount() >= m_salesCtl->saleModel()->rowCount());
+        m_salesCtl->fetchMoreSales(); // sin más o con más: no rompe
+        QVERIFY(m_salesCtl->saleModel()->rowCount() >= 1);
     }
 
   private:
