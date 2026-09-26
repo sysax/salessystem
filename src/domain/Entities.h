@@ -126,6 +126,9 @@ struct Sale
     QString estado;
     QString dianCufe;
     QString dianStatus;
+    // Fase 5: trazabilidad documental (folio origen) + motivo (NC/ND/cancelación).
+    QString parentId;
+    QString reason;
 };
 
 struct PurchaseItem
@@ -144,6 +147,8 @@ struct Purchase
     QString status;
     QList<PurchaseItem> items;
     QString notes;
+    // Fase 5: recepción parcial acumulada {sku: qty_recibida}.
+    QMap<QString, double> received;
 };
 
 struct Promo
@@ -234,6 +239,32 @@ struct CxcPayment
     double amount = 0.0;
     QString method;
     QString user;
+};
+
+// Fase 5: lote para valuación PEPS (un SKU, varios lotes con costo/vencimiento).
+struct Lot
+{
+    int id = 0;
+    QString sku;
+    QString lote;
+    QString vencimiento; // AAAA-MM-DD ('' = sin vencimiento, sale al final)
+    double qty = 0.0;
+    double cost = 0.0;
+    QString createdTs;
+};
+
+// Fase 5: conteo cíclico (conteo → diferencia → ajuste justificado).
+struct InventoryCount
+{
+    int id = 0;
+    QString ts;
+    QString sku;
+    double expected = 0.0;
+    double counted = 0.0;
+    double diff = 0.0;
+    QString reason;
+    QString user;
+    QString status; // Pendiente|Aplicado
 };
 
 struct AuditEntry

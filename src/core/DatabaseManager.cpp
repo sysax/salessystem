@@ -223,6 +223,10 @@ bool DatabaseManager::migrateLegacyColumns()
         {"audit_log", "after_json", "after_json TEXT DEFAULT ''"},
         {"sale_items", "attrs_json", "attrs_json TEXT DEFAULT '{}'"},
         {"sale_items", "serial", "serial TEXT DEFAULT ''"},
+        {"sales", "parent_id", "parent_id TEXT DEFAULT ''"}, // Fase 5: trazabilidad documental
+        {"sales", "reason", "reason TEXT DEFAULT ''"},       // Fase 5: motivo NC/ND/cancelación
+        {"purchases", "received_json",
+         "received_json TEXT DEFAULT '{}'"}, // Fase 5: recepción parcial acumulada
     };
     for (const Column &c : kColumns) {
         if (!ensureColumn(QString::fromLatin1(c.table), QString::fromLatin1(c.name),
@@ -236,6 +240,31 @@ bool DatabaseManager::migrateLegacyColumns()
             "ts TEXT, turno TEXT, tipo TEXT, monto REAL, metodo_pago TEXT, sale_id TEXT, user_id "
             "TEXT)"))) {
         m_status = QStringLiteral("migrate: ") + mv.lastError().text();
+        return false;
+    }
+    // Fase 5: lotes PEPS + conteos cíclicos (tablas aditivas).
+    QSqlQuery lots(m_db);
+    if (!lots.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS lots (id INTEGER PRIMARY KEY AUTOINCREMENT, sku TEXT NOT "
+            "NULL, lote TEXT DEFAULT '', vencimiento TEXT DEFAULT '', qty REAL DEFAULT 0, cost "
+            "REAL DEFAULT 0, created_ts TEXT DEFAULT '')"))) {
+        m_status = QStringLiteral("migrate: ") + lots.lastError().text();
+        return false;
+    }
+    QSqlQuery counts(m_db);
+    if (!counts.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS inventory_counts (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "ts TEXT, sku TEXT, expected REAL DEFAULT 0, counted REAL DEFAULT 0, diff REAL "
+            "DEFAULT 0, reason TEXT DEFAULT '', user TEXT DEFAULT '', status TEXT DEFAULT "
+            "'Pendiente')"))) {
+        m_status = QStringLiteral("migrate: ") + counts.lastError().text();
+        return false;
+    }
+    QSqlQuery lotIdx(m_db);
+    if (!lotIdx.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_lots_sku ON lots(sku)"))
+        || !lotIdx.exec(
+            QStringLiteral("CREATE INDEX IF NOT EXISTS idx_counts_sku ON inventory_counts(sku)"))) {
+        m_status = QStringLiteral("migrate: ") + lotIdx.lastError().text();
         return false;
     }
     // Fase 4: soltar índices redundantes (el UNIQUE ya crea autoindex).

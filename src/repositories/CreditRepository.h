@@ -47,6 +47,10 @@ class PayablesRepository : public QObject
 
     QList<Payable> pending() const; // balance>0
     std::optional<Payable> find(const QString &id) const;
+    // Fase 5: vencidas (due < hoy, balance>0), estado por proveedor y abonos.
+    QList<Payable> overdue() const;
+    QList<Payable> statement(const QString &supplier) const;
+    QList<CxcPayment> paymentsFor(const QString &payableId) const;
 
     struct PaymentResult
     {

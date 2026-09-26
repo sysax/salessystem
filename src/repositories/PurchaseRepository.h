@@ -22,6 +22,10 @@ class PurchaseRepository : public QObject
 
     Result<Purchase> insert(const Purchase &p);
     bool setStatus(const QString &folio, const QString &status);
+    // Fase 5: recepción parcial acumulada {sku: qty}.
+    bool setReceived(const QString &folio, const QMap<QString, double> &received);
+    static QMap<QString, double> parseReceived(const QString &json);
+    static QString receivedToJson(const QMap<QString, double> &received);
 
     static Purchase rowToPurchase(const QSqlQuery &q);
     static QList<PurchaseItem> parseItems(const QString &json);

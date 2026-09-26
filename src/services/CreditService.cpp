@@ -1,5 +1,7 @@
 #include "CreditService.h"
 
+#include <QDate>
+
 #include "../core/EventBus.h"
 #include "../repositories/SaleRepository.h"
 
@@ -10,6 +12,22 @@ QVariantMap saleToMap(const Sale &s)
     return {{"id", s.id},         {"date", s.date}, {"client", s.client},
             {"total", s.total},   {"paid", s.paid}, {"balance", s.balance},
             {"status", s.status}, {"due", s.due},   {"mora", ReceivablesRepository::mora(s)}};
+}
+QVariantMap payableToMap(const Payable &p)
+{
+    const QDate due = QDate::fromString(p.due, Qt::ISODate);
+    int overdueDays = 0;
+    if (due.isValid() && due < QDate::currentDate() && p.balance > 0)
+        overdueDays = due.daysTo(QDate::currentDate());
+    return {{"id", p.id},
+            {"supplier", p.supplier},
+            {"due", p.due},
+            {"amount", p.amount},
+            {"paid", p.paid},
+            {"balance", p.balance},
+            {"discountEarly", p.discountEarly},
+            {"overdueDays", overdueDays},
+            {"status", p.status}};
 }
 } // namespace
 
@@ -57,11 +75,24 @@ PayablesService::PayablesService(PayablesRepository *repos, EventBus *bus, QObje
 QVariantList PayablesService::pending() const
 {
     QVariantList out;
-    for (const Payable &p : m_repos->pending()) {
-        out << QVariantMap{{"id", p.id},         {"supplier", p.supplier}, {"due", p.due},
-                           {"amount", p.amount}, {"paid", p.paid},         {"balance", p.balance},
-                           {"status", p.status}};
-    }
+    for (const Payable &p : m_repos->pending())
+        out << payableToMap(p);
+    return out;
+}
+
+QVariantList PayablesService::overdue() const
+{
+    QVariantList out;
+    for (const Payable &p : m_repos->overdue())
+        out << payableToMap(p);
+    return out;
+}
+
+QVariantList PayablesService::statement(const QString &supplier) const
+{
+    QVariantList out;
+    for (const Payable &p : m_repos->statement(supplier))
+        out << payableToMap(p);
     return out;
 }
 

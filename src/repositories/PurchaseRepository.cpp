@@ -49,6 +49,8 @@ Purchase PurchaseRepository::rowToPurchase(const QSqlQuery &q)
     p.status = q.value(QStringLiteral("status")).toString();
     p.items = parseItems(q.value(QStringLiteral("items_json")).toString());
     p.notes = q.value(QStringLiteral("notes")).toString();
+    // Fase 5: columna aditiva ('' en BDs legadas → nada recibido).
+    p.received = parseReceived(q.value(QStringLiteral("received_json")).toString());
     return p;
 }
 
@@ -96,6 +98,34 @@ bool PurchaseRepository::setStatus(const QString &folio, const QString &status)
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("UPDATE purchases SET status=? WHERE id=?"));
     q.addBindValue(status);
+    q.addBindValue(folio);
+    return q.exec() && q.numRowsAffected() > 0;
+}
+
+QMap<QString, double> PurchaseRepository::parseReceived(const QString &json)
+{
+    QMap<QString, double> out;
+    if (json.trimmed().isEmpty())
+        return out;
+    const QJsonObject o = QJsonDocument::fromJson(json.toUtf8()).object();
+    for (auto it = o.begin(); it != o.end(); ++it)
+        out[it.key()] = it.value().toDouble();
+    return out;
+}
+
+QString PurchaseRepository::receivedToJson(const QMap<QString, double> &received)
+{
+    QJsonObject o;
+    for (auto it = received.begin(); it != received.end(); ++it)
+        o[it.key()] = it.value();
+    return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
+}
+
+bool PurchaseRepository::setReceived(const QString &folio, const QMap<QString, double> &received)
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("UPDATE purchases SET received_json=? WHERE id=?"));
+    q.addBindValue(receivedToJson(received));
     q.addBindValue(folio);
     return q.exec() && q.numRowsAffected() > 0;
 }

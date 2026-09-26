@@ -55,6 +55,9 @@ Sale SaleRepository::rowToSale(const QSqlQuery &q)
     s.taxBreakdown = q.value(QStringLiteral("tax_breakdown")).toString();
     // Multitienda: columna aditiva; '' = mixta/legacy (visible en todos).
     s.businessType = q.value(QStringLiteral("business_type")).toString().trimmed();
+    // Fase 5: trazabilidad documental (columnas aditivas; '' en legadas).
+    s.parentId = q.value(QStringLiteral("parent_id")).toString();
+    s.reason = q.value(QStringLiteral("reason")).toString();
     return s;
 }
 
@@ -323,23 +326,27 @@ Result<Sale> SaleRepository::create(const NewSale &s)
 }
 
 Result<Sale> SaleRepository::createDocument(const QString &docType, const QString &client,
-                                            double total, const QString &user)
+                                             double total, const QString &user,
+                                             const QString &parentId, const QString &reason)
 {
+    // Fase 5: cada tipo documental con folio y contador propios. Antes,
+    // Remisión/Factura/Nota cargo compartían SALE_COUNTER con las ventas
+    // POS (un V001 podía ser remisión, factura, ticket o nota de cargo).
     static const QMap<QString, QString> prefixes = {
         {QStringLiteral("Cotización"), QStringLiteral("COT")},
         {QStringLiteral("Pedido"), QStringLiteral("PED")},
         {QStringLiteral("Remisión"), QStringLiteral("REM")},
-        {QStringLiteral("Factura"), QStringLiteral("V")},
+        {QStringLiteral("Factura"), QStringLiteral("FE")},
         {QStringLiteral("Nota crédito"), QStringLiteral("NC")},
-        {QStringLiteral("Nota cargo"), QStringLiteral("NCC")},
+        {QStringLiteral("Nota cargo"), QStringLiteral("ND")},
     };
     static const QMap<QString, QString> counters = {
         {QStringLiteral("Cotización"), QStringLiteral("QUOTE_COUNTER")},
         {QStringLiteral("Pedido"), QStringLiteral("ORDER_COUNTER")},
-        {QStringLiteral("Remisión"), QStringLiteral("SALE_COUNTER")},
-        {QStringLiteral("Factura"), QStringLiteral("SALE_COUNTER")},
+        {QStringLiteral("Remisión"), QStringLiteral("REM_COUNTER")},
+        {QStringLiteral("Factura"), QStringLiteral("INVOICE_COUNTER")},
         {QStringLiteral("Nota crédito"), QStringLiteral("CREDIT_NOTE_COUNTER")},
-        {QStringLiteral("Nota cargo"), QStringLiteral("SALE_COUNTER")},
+        {QStringLiteral("Nota cargo"), QStringLiteral("DEBIT_NOTE_COUNTER")},
     };
     if (!prefixes.contains(docType))
         return Result<Sale>::failure(
@@ -354,8 +361,8 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
         "INSERT INTO sales (id, date, client, vendedor, total, subtotal, tax, discount, status, "
-        "doc_type, payment, payments_json, paid, balance, estado) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
+        "doc_type, payment, payments_json, paid, balance, estado, parent_id, reason) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(folio);
     q.addBindValue(today);
     q.addBindValue(client);
@@ -371,6 +378,8 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     q.addBindValue(0.0);
     q.addBindValue(total);
     q.addBindValue(docType);
+    q.addBindValue(parentId);
+    q.addBindValue(reason.trimmed().left(280));
     if (!q.exec())
         return Result<Sale>::failure(q.lastError().text());
     if (m_audit)
@@ -386,6 +395,127 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     return Result<Sale>::success(*created);
 }
 
+bool SaleRepository::transitionAllowed(const QString &from, const QString &to)
+{
+    // Fase 5: máquina de estados documental. Ventas POS (Pagada/Pendiente)
+    // y Cancelada se gestionan por sus propios caminos (create/cancel).
+    static const QMap<QString, QStringList> kAllowed = {
+        {QStringLiteral("Cotización"), {QStringLiteral("Pedido")}},
+        {QStringLiteral("Pedido"), {QStringLiteral("Facturada")}},
+        {QStringLiteral("Facturada"),
+         {QStringLiteral("Pagada"), QStringLiteral("Entregada")}},
+        {QStringLiteral("Pagada"),
+         {QStringLiteral("Entregada"), QStringLiteral("Cerrada")}},
+        {QStringLiteral("Entregada"), {QStringLiteral("Cerrada")}},
+        // Remisión acompaña entrega sin cambiar el estado de facturación.
+        {QStringLiteral("Remisión"), {QStringLiteral("Entregada")}},
+    };
+    return kAllowed.value(from).contains(to);
+}
+
+Result<Sale> SaleRepository::convertDocument(const QString &originFolio,
+                                             const QString &targetDocType, const QString &user)
+{
+    const auto origin = find(originFolio);
+    if (!origin)
+        return Result<Sale>::failure(QStringLiteral("Documento %1 no encontrado").arg(originFolio));
+    if (!DocTypes.contains(targetDocType))
+        return Result<Sale>::failure(
+            QStringLiteral("doc_type debe ser %1").arg(DocTypes.join(u", ")));
+    // Conversión válida: el estado del origen debe poder avanzar al estado
+    // que representa el destino (Cotización→Pedido→Facturada).
+    static const QMap<QString, QString> kTargetState = {
+        {QStringLiteral("Pedido"), QStringLiteral("Pedido")},
+        {QStringLiteral("Factura"), QStringLiteral("Facturada")},
+        {QStringLiteral("Remisión"), QStringLiteral("Entregada")},
+    };
+    const QString wantState = kTargetState.value(
+        targetDocType, targetDocType == QStringLiteral("Cotización")
+                           ? QStringLiteral("Cotización")
+                           : QString());
+    if (wantState.isEmpty() || !transitionAllowed(origin->status, wantState))
+        return Result<Sale>::failure(QStringLiteral("No se puede convertir %1 (%2) a %3")
+                                         .arg(originFolio, origin->status, targetDocType));
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<Sale>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+    auto created = createDocument(targetDocType, origin->client, origin->total, user, originFolio,
+                                  QStringLiteral("Conversión de %1").arg(originFolio));
+    if (!created.ok())
+        return created;
+    // Clonar líneas al nuevo folio (la cotización/pedido ya trae detalle).
+    for (const SaleItem &it : itemsFor(originFolio)) {
+        QSqlQuery ins(m_db);
+        ins.prepare(QStringLiteral(
+            "INSERT INTO sale_items (sale_id, product_id, qty, subtotal, attrs_json, serial) "
+            "VALUES (?,?,?,?,?,?)"));
+        ins.addBindValue(created.value().id);
+        ins.addBindValue(it.productId);
+        ins.addBindValue(it.qty);
+        ins.addBindValue(it.subtotal);
+        ins.addBindValue(it.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}") : it.attrsJson);
+        ins.addBindValue(it.serial);
+        if (!ins.exec())
+            return Result<Sale>::failure(QStringLiteral("Línea de documento: ")
+                                         + ins.lastError().text());
+    }
+    // El origen queda Cerrado como consumido (trazable vía parent_id).
+    QSqlQuery close(m_db);
+    close.prepare(QStringLiteral("UPDATE sales SET status='Cerrada', estado='Cerrada' WHERE id=?"));
+    close.addBindValue(originFolio);
+    if (!close.exec())
+        return Result<Sale>::failure(close.lastError().text());
+    if (m_audit)
+        m_audit->log(user, QStringLiteral("doc_convertido"),
+                     QStringLiteral("%1 -> %2").arg(originFolio, created.value().id));
+    if (!tx.commit())
+        return Result<Sale>::failure(QStringLiteral("No se pudo confirmar la conversión"));
+    return Result<Sale>::success(*find(created.value().id));
+}
+
+Result<Sale> SaleRepository::markCancelled(const QString &saleId, const QString &reason,
+                                           const QString &user)
+{
+    const auto s = find(saleId);
+    if (!s)
+        return Result<Sale>::failure(QStringLiteral("Venta %1 no encontrada").arg(saleId));
+    if (s->status == QLatin1String("Cancelada"))
+        return Result<Sale>::failure(QStringLiteral("Venta %1 ya está cancelada").arg(saleId));
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<Sale>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "UPDATE sales SET status='Cancelada', estado='Cancelada', balance=0, reason=? WHERE id=?"));
+    q.addBindValue(reason.trimmed().left(280));
+    q.addBindValue(saleId);
+    if (!q.exec())
+        return Result<Sale>::failure(q.lastError().text());
+    if (m_audit)
+        m_audit->log(user, QStringLiteral("venta_cancelada"),
+                     saleId + (reason.trimmed().isEmpty()
+                                   ? QString()
+                                   : QStringLiteral(" motivo: ") + reason.trimmed().left(120)));
+    if (!tx.commit())
+        return Result<Sale>::failure(QStringLiteral("No se pudo confirmar el cambio"));
+    const auto cancelled = find(saleId);
+    if (!cancelled)
+        return Result<Sale>::failure(
+            QStringLiteral("Venta %1 no encontrada tras actualizar").arg(saleId));
+    return Result<Sale>::success(*cancelled);
+}
+
+double SaleRepository::creditNotesTotal(const QString &parentId) const
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT COALESCE(SUM(total),0) FROM sales WHERE parent_id=? AND "
+                             "doc_type='Nota crédito' AND status!='Cancelada'"));
+    q.addBindValue(parentId);
+    if (!q.exec() || !q.next())
+        return 0.0;
+    return q.value(0).toDouble();
+}
+
 Result<Sale> SaleRepository::advanceStatus(const QString &saleId, const QString &newStatus,
                                            const QString &user)
 {
@@ -394,31 +524,30 @@ Result<Sale> SaleRepository::advanceStatus(const QString &saleId, const QString 
         return Result<Sale>::failure(QStringLiteral("Venta %1 no encontrada").arg(saleId));
     if (s->status == QLatin1String("Cancelada"))
         return Result<Sale>::failure(QStringLiteral("Venta cancelada no avanza"));
+    // Fase 5: Cancelada solo vía cancel() con reversión (SalesService).
+    // El camino directo dejaba stock/caja/crédito sin revertir.
+    if (newStatus == QLatin1String("Cancelada"))
+        return Result<Sale>::failure(
+            QStringLiteral("Use anular con motivo (revierte stock, caja y crédito)"));
     // Fase 1: cambio de estado + auditoría en una transacción.
     Transaction tx(m_db);
     if (!tx.isValid())
         return Result<Sale>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     QSqlQuery q(m_db);
-    if (newStatus == QLatin1String("Cancelada")) {
-        q.prepare(QStringLiteral(
-            "UPDATE sales SET status='Cancelada', estado='Cancelada', balance=0 WHERE id=?"));
-        q.addBindValue(saleId);
-        if (!q.exec())
-            return Result<Sale>::failure(q.lastError().text());
-        if (m_audit)
-            m_audit->log(user, QStringLiteral("venta_cancelada"), saleId);
-        if (!tx.commit())
-            return Result<Sale>::failure(QStringLiteral("No se pudo confirmar el cambio"));
-        const auto cancelled = find(saleId);
-        if (!cancelled)
-            return Result<Sale>::failure(
-                QStringLiteral("Venta %1 no encontrada tras actualizar").arg(saleId));
-        return Result<Sale>::success(*cancelled);
-    }
     if (!EstadosVenta.contains(newStatus))
         return Result<Sale>::failure(
             QStringLiteral("Estado debe ser %1")
                 .arg((EstadosVenta + QStringList{QStringLiteral("Cancelada")}).join(u", ")));
+    // Fase 5: respetar la máquina documental (sin saltos ni retrocesos).
+    // Ventas POS (Pagada/Pendiente) avanzan a entrega/cierre; documentos
+    // siguen Cotización→Pedido→Facturada→Pagada→Entregada→Cerrada.
+    if (s->status != newStatus && EstadosVenta.contains(s->status)
+        && !transitionAllowed(s->status, newStatus) && s->status != QStringLiteral("Remisión")
+        && !(s->status == QLatin1String("Pendiente") && newStatus == QLatin1String("Pagada"))
+        && !(s->status == QLatin1String("Pagada")
+             && (newStatus == QLatin1String("Entregada") || newStatus == QLatin1String("Cerrada"))))
+        return Result<Sale>::failure(QStringLiteral("Transición %1 → %2 no permitida")
+                                         .arg(s->status, newStatus));
     if (newStatus == QLatin1String("Pagada") || newStatus == QLatin1String("Entregada")
         || newStatus == QLatin1String("Cerrada")) {
         q.prepare(QStringLiteral(
@@ -449,15 +578,24 @@ Result<Sale> SaleRepository::createCreditNote(const QString &saleId, double amou
     const auto s = find(saleId);
     if (!s)
         return Result<Sale>::failure(QStringLiteral("Venta %1 no encontrada").arg(saleId));
+    // Fase 5: la NC vive ligada a su factura (no a cotizaciones/pedidos) y
+    // el acumulado de NCs nunca supera el total facturado.
+    if (s->docType == QStringLiteral("Cotización") || s->docType == QLatin1String("Pedido")
+        || s->status == QStringLiteral("Cotización") || s->status == QLatin1String("Pedido"))
+        return Result<Sale>::failure(
+            QStringLiteral("La nota crédito aplica sobre factura, no sobre %1").arg(s->status));
     if (amount <= 0 || amount > s->total)
         return Result<Sale>::failure(QStringLiteral("Monto inválido"));
+    if (creditNotesTotal(saleId) + amount > s->total + 1e-9)
+        return Result<Sale>::failure(QStringLiteral("Notas crédito acumulan $%1: supera el total $%2")
+                                         .arg(creditNotesTotal(saleId) + amount, 0, 'f', 0)
+                                         .arg(s->total, 0, 'f', 0));
     if (reason.trimmed().isEmpty())
         return Result<Sale>::failure(QStringLiteral("Motivo requerido"));
-    auto note = createDocument(QStringLiteral("Nota crédito"), s->client, amount, user);
+    auto note = createDocument(QStringLiteral("Nota crédito"), s->client, amount, user, saleId,
+                               reason.trimmed());
     if (!note.ok())
         return note;
-    // NOTA: el Python original hacía UPDATE sales SET reason/ref (columnas
-    // inexistentes → OperationalError). Aquí el motivo queda en bitácora.
     if (m_audit)
         m_audit->log(user, QStringLiteral("nota_credito"),
                      QStringLiteral("%1 ref %2 $%3 %4")
@@ -473,11 +611,15 @@ Result<Sale> SaleRepository::createDebitNote(const QString &saleId, double amoun
     const auto s = find(saleId);
     if (!s)
         return Result<Sale>::failure(QStringLiteral("Venta %1 no encontrada").arg(saleId));
+    if (s->docType == QStringLiteral("Cotización") || s->docType == QLatin1String("Pedido"))
+        return Result<Sale>::failure(
+            QStringLiteral("La nota cargo aplica sobre factura, no sobre %1").arg(s->status));
     if (amount <= 0)
         return Result<Sale>::failure(QStringLiteral("Monto >0"));
     if (reason.trimmed().isEmpty())
         return Result<Sale>::failure(QStringLiteral("Motivo requerido"));
-    auto note = createDocument(QStringLiteral("Nota cargo"), s->client, amount, user);
+    auto note = createDocument(QStringLiteral("Nota cargo"), s->client, amount, user, saleId,
+                               reason.trimmed());
     if (!note.ok())
         return note;
     if (m_audit)

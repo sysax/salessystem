@@ -39,6 +39,9 @@ class PayablesService : public QObject
                              QObject *parent = nullptr);
 
     Q_INVOKABLE QVariantList pending() const;
+    // Fase 5: vencidas, estado por proveedor e historial de abonos.
+    Q_INVOKABLE QVariantList overdue() const;
+    Q_INVOKABLE QVariantList statement(const QString &supplier) const;
     Result<PayablesRepository::PaymentResult> pay(const QString &payableId, double amount,
                                                   const QString &method, const QString &user);
 

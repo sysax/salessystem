@@ -63,7 +63,20 @@ class SaleRepository : public QObject
 
     Result<Sale> create(const NewSale &s);
     Result<Sale> createDocument(const QString &docType, const QString &client, double total,
-                                const QString &user);
+                                const QString &user, const QString &parentId = {},
+                                const QString &reason = {});
+    // Fase 5: máquina de estados documental (origen → destino permitido).
+    static bool transitionAllowed(const QString &from, const QString &to);
+    // Fase 5: conversión con trazabilidad (clona cabecera + líneas al nuevo
+    // folio, parent_id = origen; el origen queda Cerrado como consumido).
+    Result<Sale> convertDocument(const QString &originFolio, const QString &targetDocType,
+                                 const QString &user);
+    // Fase 5: cancelación con reversión — único camino a Cancelada. Lo usa
+    // SalesService::cancel (que ya revirtió stock/seriales/crédito/caja);
+    // advanceStatus rechaza Cancelada para cerrar el bypass sin reversión.
+    Result<Sale> markCancelled(const QString &saleId, const QString &reason, const QString &user);
+    // Fase 5: total de notas crédito ligadas a un folio (evita NC múltiple > total).
+    double creditNotesTotal(const QString &parentId) const;
     Result<Sale> advanceStatus(const QString &saleId, const QString &newStatus,
                                const QString &user);
     Result<Sale> createCreditNote(const QString &saleId, double amount, const QString &reason,

@@ -25,8 +25,12 @@ class PurchaseService : public QObject
                              AuditRepository *audit = nullptr, QObject *parent = nullptr);
 
     Result<Purchase> create(const QString &supplierName, const QString &sku, double qty,
-                            const QString &user);
+                             const QString &user);
     Result<Purchase> receive(const QString &folio, const QString &user);
+    // Fase 5: recepción parcial (sku → qty de ESTA entrega; se acumula en
+    // received_json; N entregas hasta completar; estado Parcial/Recibida).
+    Result<Purchase> receive(const QString &folio, const QMap<QString, double> &delivery,
+                             const QString &user);
     Result<Purchase> cancel(const QString &folio, const QString &user);
 
   private:

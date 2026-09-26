@@ -29,7 +29,9 @@ QVariantMap SalesController::toMap(const Sale &s)
             {"payments", pay},
             {"paid", s.paid},
             {"balance", s.balance},
-            {"cufe", s.dianCufe}};
+            {"cufe", s.dianCufe},
+            {"parentId", s.parentId},
+            {"reason", s.reason}};
 }
 
 void SalesController::refresh()
@@ -168,6 +170,16 @@ QVariantMap SalesController::createDoc(const QString &type, const QString &clien
                                        const QString &user)
 {
     const auto r = m_repos->createDocument(type, client, total, user);
+    if (!r.ok())
+        return {{"ok", false}, {"error", r.error()}};
+    reloadSales();
+    return {{"ok", true}, {"id", r.value().id}};
+}
+
+QVariantMap SalesController::convert(const QString &originId, const QString &targetType,
+                                      const QString &user)
+{
+    const auto r = m_repos->convertDocument(originId, targetType, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     reloadSales();

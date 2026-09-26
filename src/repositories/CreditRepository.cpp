@@ -259,3 +259,58 @@ Result<PayablesRepository::PaymentResult> PayablesRepository::addPayment(const Q
         return Result<PaymentResult>::failure(QStringLiteral("No se pudo confirmar el pago"));
     return Result<PaymentResult>::success(r);
 }
+
+QList<Payable> PayablesRepository::overdue() const
+{
+    // Fase 5: vencidas = balance>0 y due válido anterior a hoy.
+    QList<Payable> out;
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral("SELECT * FROM payables WHERE balance>0")))
+        return out;
+    const QDate today = QDate::currentDate();
+    while (q.next()) {
+        Payable p = rowToPayable(q);
+        const QDate due = QDate::fromString(p.due, Qt::ISODate);
+        if (due.isValid() && due < today)
+            out << p;
+    }
+    return out;
+}
+
+QList<Payable> PayablesRepository::statement(const QString &supplier) const
+{
+    // Fase 5: estado de cuenta por proveedor (todas, con saldo o no).
+    QList<Payable> out;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT * FROM payables WHERE supplier=? ORDER BY due"));
+    q.addBindValue(supplier);
+    if (!q.exec())
+        return out;
+    while (q.next())
+        out << rowToPayable(q);
+    return out;
+}
+
+QList<CxcPayment> PayablesRepository::paymentsFor(const QString &payableId) const
+{
+    // Fase 5: historial de abonos de una CxP.
+    QList<CxcPayment> out;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral(
+        "SELECT id, payable_id, date, amount, method, user FROM payments_cxp WHERE payable_id=? "
+        "ORDER BY id"));
+    q.addBindValue(payableId);
+    if (!q.exec())
+        return out;
+    while (q.next()) {
+        CxcPayment p;
+        p.id = q.value(0).toInt();
+        p.saleId = q.value(1).toString();
+        p.date = q.value(2).toString();
+        p.amount = q.value(3).toDouble();
+        p.method = q.value(4).toString();
+        p.user = q.value(5).toString();
+        out << p;
+    }
+    return out;
+}

@@ -4,7 +4,10 @@
 #include <QSqlDatabase>
 
 #include "../domain/Entities.h"
+#include "../core/Result.h"
 #include "AuditRepository.h"
+
+#include <optional>
 
 // Movimientos y consultas de inventario. Solo primitives de escritura
 // (record/setStock vía ProductRepository); las reglas (justificación,
@@ -32,7 +35,24 @@ class InventoryRepository : public QObject
     QList<Product> aboveMax() const;
     QList<Product> outOfStock() const;
 
+    // Fase 5: lotes PEPS (un SKU, varios lotes con costo/vencimiento).
+    Result<Lot> addLot(const QString &sku, const QString &lote, const QString &vencimiento,
+                       double qty, double cost);
+    QList<Lot> lotsBySku(const QString &sku) const; // qty>0, PEPS: vencimiento ASC ('' al final)
+    bool reduceLot(int lotId, double qty);
+    double lotsValue(const QString &sku = {}) const; // valuación PEPS (suma lotes)
+    QList<Lot> expiringLots(int days) const;
+
+    // Fase 5: conteos cíclicos (conteo → diferencia → ajuste justificado).
+    Result<InventoryCount> startCount(const QString &sku, double expected, double counted,
+                                     const QString &reason, const QString &user);
+    QList<InventoryCount> listCounts(const QString &status = {}) const;
+    std::optional<InventoryCount> findCount(int id) const;
+    bool markCountApplied(int id);
+
     static InventoryMovement rowToMovement(const QSqlQuery &q);
+    static Lot rowToLot(const QSqlQuery &q);
+    static InventoryCount rowToCount(const QSqlQuery &q);
 
   private:
     QSqlDatabase m_db;

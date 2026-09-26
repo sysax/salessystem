@@ -51,7 +51,10 @@ class SalesController : public QObject
     Q_INVOKABLE QVariantMap cancel(const QString &id, const QString &reason, const QString &user,
                                    const QString &role = {});
     Q_INVOKABLE QVariantMap createDoc(const QString &type, const QString &client, double total,
-                                      const QString &user);
+                                       const QString &user);
+    // Fase 5: conversión documental con trazabilidad (COT→PED→FE).
+    Q_INVOKABLE QVariantMap convert(const QString &originId, const QString &targetType,
+                                    const QString &user);
     Q_INVOKABLE QVariantMap creditNote(const QString &id, double amount, const QString &reason,
                                        const QString &user);
     Q_INVOKABLE QVariantMap debitNote(const QString &id, double amount, const QString &reason,

@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS sales (
     id TEXT PRIMARY KEY, date TEXT, client TEXT, vendedor TEXT, total REAL, subtotal REAL,
     tax REAL, discount REAL, promo TEXT, status TEXT, doc_type TEXT, payment TEXT,
     payments_json TEXT, paid REAL, balance REAL, due TEXT, estado TEXT, dian_cufe TEXT, dian_status TEXT,
-    tax_breakdown TEXT DEFAULT '', business_type TEXT DEFAULT ''
+    tax_breakdown TEXT DEFAULT '', business_type TEXT DEFAULT '',
+    parent_id TEXT DEFAULT '', reason TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS sale_items (
@@ -73,7 +74,8 @@ CREATE TABLE IF NOT EXISTS serials (
 );
 
 CREATE TABLE IF NOT EXISTS purchases (
-    id TEXT PRIMARY KEY, date TEXT, supplier TEXT, total REAL, status TEXT, items_json TEXT, notes TEXT
+    id TEXT PRIMARY KEY, date TEXT, supplier TEXT, total REAL, status TEXT, items_json TEXT, notes TEXT,
+    received_json TEXT DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS inventory_movements (
@@ -137,6 +139,23 @@ CREATE TABLE IF NOT EXISTS outbox (
     seq INTEGER DEFAULT 0
 );
 
+-- Fase 5: lotes para valuación PEPS y caducidad por lote (un producto
+-- puede tener varios lotes con distinto vencimiento/costo).
+CREATE TABLE IF NOT EXISTS lots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sku TEXT NOT NULL, lote TEXT DEFAULT '', vencimiento TEXT DEFAULT '',
+    qty REAL DEFAULT 0, cost REAL DEFAULT 0, created_ts TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_lots_sku ON lots(sku);
+
+-- Fase 5: conteos cíclicos (conteo → diferencia → ajuste justificado).
+CREATE TABLE IF NOT EXISTS inventory_counts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT, sku TEXT, expected REAL DEFAULT 0, counted REAL DEFAULT 0,
+    diff REAL DEFAULT 0, reason TEXT DEFAULT '', user TEXT DEFAULT '',
+    status TEXT DEFAULT 'Pendiente'
+);
+CREATE INDEX IF NOT EXISTS idx_counts_sku ON inventory_counts(sku);
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY, value TEXT
 );

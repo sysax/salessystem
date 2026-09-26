@@ -77,8 +77,11 @@ class PurchasesController : public QObject
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE QVariantMap create(const QString &supplier, const QString &sku, double qty,
-                                   const QString &user);
+                                    const QString &user);
     Q_INVOKABLE QVariantMap receive(const QString &folio, const QString &user);
+    // Fase 5: recepción parcial (sku → qty de esta entrega).
+    Q_INVOKABLE QVariantMap receivePartial(const QString &folio, const QVariantMap &delivery,
+                                           const QString &user);
     Q_INVOKABLE QVariantMap cancel(const QString &folio, const QString &user);
 
   signals:

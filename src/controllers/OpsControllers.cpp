@@ -94,8 +94,12 @@ PurchasesController::PurchasesController(PurchaseService *service, PurchaseRepos
 
 QVariantMap PurchasesController::toMap(const Purchase &p)
 {
+    QVariantMap rec;
+    for (auto it = p.received.begin(); it != p.received.end(); ++it)
+        rec[it.key()] = it.value();
     return {{"id", p.id},       {"date", p.date},     {"supplier", p.supplier},
-            {"total", p.total}, {"status", p.status}, {"notes", p.notes}};
+            {"total", p.total}, {"status", p.status}, {"notes", p.notes},
+            {"received", rec}};
 }
 
 void PurchasesController::refresh()
@@ -123,6 +127,19 @@ QVariantMap PurchasesController::receive(const QString &folio, const QString &us
         return {{"ok", false}, {"error", r.error()}};
     refresh();
     return {{"ok", true}};
+}
+
+QVariantMap PurchasesController::receivePartial(const QString &folio, const QVariantMap &delivery,
+                                               const QString &user)
+{
+    QMap<QString, double> parts;
+    for (auto it = delivery.begin(); it != delivery.end(); ++it)
+        parts[it.key()] = it.value().toDouble();
+    const auto r = m_service->receive(folio, parts, user);
+    if (!r.ok())
+        return {{"ok", false}, {"error", r.error()}};
+    refresh();
+    return {{"ok", true}, {"status", r.value().status}};
 }
 
 QVariantMap PurchasesController::cancel(const QString &folio, const QString &user)

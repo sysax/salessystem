@@ -520,11 +520,13 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
 Result<SalesService::CreatedSale> SalesService::cancel(const QString &saleId, const QString &reason,
                                                        const QString &user, const QString &role)
 {
-    Q_UNUSED(reason);
     // Fase 3: anular exige supervisor (fail-closed: sin rol no se anula).
     if (role.trimmed() != QLatin1String("Administrador"))
         return Result<CreatedSale>::failure(
             QStringLiteral("Anular ventas requiere rol Administrador"));
+    // Fase 5: motivo obligatorio (queda en sales.reason + bitácora).
+    if (reason.trimmed().isEmpty())
+        return Result<CreatedSale>::failure(QStringLiteral("Motivo de anulación requerido"));
     const auto s = m_sales->find(saleId);
     if (!s)
         return Result<CreatedSale>::failure(QStringLiteral("Venta %1 no existe").arg(saleId));
@@ -570,7 +572,8 @@ Result<SalesService::CreatedSale> SalesService::cancel(const QString &saleId, co
     // Fase 1: retirar la venta del turno de caja abierto.
     if (m_caja && !m_caja->reverseSale(saleId))
         return Result<CreatedSale>::failure(QStringLiteral("No se pudo revertir la caja"));
-    auto adv = m_sales->advanceStatus(saleId, QStringLiteral("Cancelada"), user);
+    // Fase 5: único camino a Cancelada (con motivo persistido).
+    auto adv = m_sales->markCancelled(saleId, reason, user);
     if (!adv.ok())
         return Result<CreatedSale>::failure(adv.error());
     if (!cancelTx.commit())

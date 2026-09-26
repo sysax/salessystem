@@ -409,23 +409,39 @@ class TstRepositories : public QObject
                                       QStringLiteral("tester"))
                      .ok());
 
-        auto f1 = m_sales->advanceStatus(cot.value().id, QStringLiteral("Facturada"),
+        // Fase 5: máquina documental (sin saltos: COT→Pedido→Facturada).
+        QVERIFY(!m_sales
+                     ->advanceStatus(cot.value().id, QStringLiteral("Facturada"),
+                                     QStringLiteral("tester"))
+                     .ok());
+        auto ped = m_sales->convertDocument(cot.value().id, QStringLiteral("Pedido"),
+                                            QStringLiteral("tester"));
+        QVERIFY(ped.ok());
+        QCOMPARE(m_sales->find(cot.value().id)->status, QStringLiteral("Cerrada"));
+        auto f1 = m_sales->advanceStatus(ped.value().id, QStringLiteral("Facturada"),
                                          QStringLiteral("tester"));
         QVERIFY(f1.ok());
-        auto f2 = m_sales->advanceStatus(cot.value().id, QStringLiteral("Pagada"),
+        auto f2 = m_sales->advanceStatus(ped.value().id, QStringLiteral("Pagada"),
                                          QStringLiteral("tester"));
         QVERIFY(f2.ok());
         QCOMPARE(f2.value().balance, 0.0);
         QCOMPARE(f2.value().paid, f2.value().total);
         QVERIFY(!m_sales
-                     ->advanceStatus(cot.value().id, QStringLiteral("Volando"),
+                     ->advanceStatus(ped.value().id, QStringLiteral("Volando"),
                                      QStringLiteral("tester"))
                      .ok());
-        auto cancelled = m_sales->advanceStatus(cot.value().id, QStringLiteral("Cancelada"),
-                                                QStringLiteral("tester"));
-        QVERIFY(cancelled.ok());
+        // Fase 5: Cancelada solo vía cancel() con reversión y motivo.
         QVERIFY(!m_sales
-                     ->advanceStatus(cot.value().id, QStringLiteral("Pagada"),
+                     ->advanceStatus(ped.value().id, QStringLiteral("Cancelada"),
+                                     QStringLiteral("tester"))
+                     .ok());
+        auto cancelled
+            = m_sales->markCancelled(ped.value().id, QStringLiteral("cliente desistió"),
+                                     QStringLiteral("tester"));
+        QVERIFY(cancelled.ok());
+        QCOMPARE(cancelled.value().reason, QStringLiteral("cliente desistió"));
+        QVERIFY(!m_sales
+                     ->advanceStatus(ped.value().id, QStringLiteral("Pagada"),
                                      QStringLiteral("tester"))
                      .ok()); // cancelada no avanza
     }

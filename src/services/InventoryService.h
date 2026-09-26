@@ -35,9 +35,11 @@ class InventoryService : public QObject
                               QObject *parent = nullptr);
 
     // Entrada por compra: costo promedio ponderado + movimiento "Entrada"
+    // (Fase 5: también abre lote PEPS con el costo de la entrada).
     Result<StockResult> registerPurchase(int productId, double qty, double cost,
                                          const QString &supplier, const QString &invoice,
-                                         const QString &user);
+                                         const QString &user, const QString &lote = {},
+                                         const QString &vencimiento = {});
     // Ajuste ±: motivo obligatorio, nunca stock negativo
     Result<StockResult> registerAdjustment(const QString &sku, double delta, const QString &reason,
                                            const QString &user);
@@ -61,7 +63,18 @@ class InventoryService : public QObject
 
     QList<Product> lowStock(double multiplier = 1.0) const;
     Valuation valuation() const;
+    // Fase 5: valuación por método ("promedio" o "peps" por lotes).
+    Valuation valuation(const QString &method) const;
     QList<InventoryMovement> movementsBySku(const QString &sku) const;
+    // Fase 5: salida PEPS (consume lotes por vencimiento; devuelve costo
+    // de lo consumido). No toca products.stock (lo hace el llamador).
+    Result<double> consumeFifo(const QString &sku, double qty);
+    // Fase 5: conteos cíclicos (conteo → diferencia → ajuste justificado).
+    Result<InventoryCount> startCount(const QString &sku, double counted, const QString &reason,
+                                     const QString &user);
+    Result<InventoryCount> applyCount(int countId, const QString &user);
+    QList<InventoryCount> listCounts(const QString &status = {}) const;
+    QList<Lot> expiringLots(int days) const;
 
   private:
     QSqlDatabase m_db;

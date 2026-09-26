@@ -187,13 +187,15 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 
 ### Tareas
 - [x] **Cierre de caja formal:** apertura/cierre por turno con arqueo y diferencia justificada obligatoria (+ reporte en movimientos y bitácora). Firma digital pendiente.
-- [ ] **Documentes fiscales:** flujo cotización → pedido → factura → nota de crédito con estados y folios únicos (contador ya en `Counters.h`); adaptación CFDI (México) / DIAN (Colombia) según `docs/DIAN_IMPROVEMENTS.md` con proveedor de certificación en modo pruebas. (Base documental existe; timbrado externo pendiente.)
+- [x] **Documentos fiscales:** flujo cotización → pedido → factura → nota de crédito con estados y folios únicos (máquina `transitionAllowed`, `convertDocument` con trazabilidad `parent_id`, contadores propios REM/FE/NC/ND, NC/ND ligadas con motivo y tope al total, `Cancelada` solo vía `cancel()` con motivo y reversión). Timbrado externo ante DIAN/PAC pendiente (alcance Fase 9).
 - [x] **Audit log inmutable:** cambios relevantes registran usuario, acción y antes/después (`producto_actualizado` con JSON); explorador `Bitácora` solo-admin con filtros.
-- [ ] **Compras completas:** orden de compra → recepción parcial → CxC con vencimientos y abonos. (Existe OC → recepción total → CxP; parcial pendiente.)
-- [ ] **Inventario avanzado:** lotes y caducidad, valuación PEPS/promedio, conteos cíclicos con ajustes justificados, alertas de stock mínimo y próximos a caducar. (Existe lotes, FIFO visual, alertas y ajustes con motivo; falta PEPS y conteos cíclicos.)
+- [x] **Compras completas:** orden de compra → recepción parcial acumulada (`received_json`, estados Pendiente/Parcial/Recibida) → CxP proporcional por entrega, con vencidas (`overdue`), estado por proveedor (`statement`) e historial de abonos (`paymentsFor`).
+- [x] **Inventario avanzado:** lotes por entrada con vencimiento/costo, consumo PEPS (`consumeFifo`), valuación promedio/PEPS, conteos cíclicos (`inventory_counts`: conteo → ajuste justificado), alertas de stock mínimo y próximos a caducar.
 - [x] **Backups:** respaldo en caliente (`VACUUM INTO`), retención configurable (7) y restauración probada (`tst_backup` reabre la copia).
 
-> **Cierre Fase 5 (2026-09-26, parcial):** auditoría estructurada, backups y cierre justificado en verde; suite 20/20.
+> **Cierre Fase 5 (2026-09-26):** `tst_fase5` (11 casos) + suite 21/21 en verde.
+> Solo queda fuera el timbrado externo (proveedor DIAN/PAC, alcance Fase 9) y la
+> firma digital del cierre.
 
 ### Criterios de salida
 ✅ Ciclo completo compra→venta→nota de crédito→conciliación de caja demostrable · ✅ Restauración desde backup probada · ✅ Auditoría responde "¿quién cambió este precio y cuándo?".

@@ -13,7 +13,8 @@ InventoryService::InventoryService(QSqlDatabase db, ProductRepository *products,
 
 Result<InventoryService::StockResult>
 InventoryService::registerPurchase(int productId, double qty, double cost, const QString &supplier,
-                                   const QString &invoice, const QString &user)
+                                   const QString &invoice, const QString &user, const QString &lote,
+                                   const QString &vencimiento)
 {
     if (qty <= 0)
         return Result<StockResult>::failure(QStringLiteral("La cantidad debe ser mayor a 0"));
@@ -43,6 +44,13 @@ InventoryService::registerPurchase(int productId, double qty, double cost, const
             user)) {
         return Result<StockResult>::failure(QStringLiteral("No se pudo registrar el movimiento"));
     }
+    // Fase 5: abrir lote PEPS con el costo de esta entrada (misma tx: sin
+    // lote huérfano ni entrada sin lote).
+    if (!m_inventory
+             ->addLot(p->sku, lote.trimmed().isEmpty() ? invoice.trimmed() : lote.trimmed(),
+                      vencimiento.trimmed(), qty, cost)
+             .ok())
+        return Result<StockResult>::failure(QStringLiteral("No se pudo abrir el lote PEPS"));
     if (!tx.commit())
         return Result<StockResult>::failure(QStringLiteral("No se pudo confirmar la entrada"));
     if (m_bus)
@@ -293,4 +301,91 @@ InventoryService::releaseStock(const QString &sku, double qty, const QString &us
     r.reserved = cur->reserved;
     r.available = cur->available();
     return Result<ReserveResult>::success(r);
+}
+
+InventoryService::Valuation InventoryService::valuation(const QString &method) const
+{
+    // Fase 5: "peps" suma lotes (costo histórico por entrada); cualquier
+    // otro valor usa el promedio ponderado de products.priceBuy.
+    if (method.trimmed().toLower() == QLatin1String("peps")) {
+        Valuation v;
+        v.totalValue = m_inventory->lotsValue();
+        for (const Product &p : m_products->list()) {
+            if (p.stock > 1e-9)
+                ++v.productsCount;
+        }
+        return v;
+    }
+    return valuation();
+}
+
+Result<double> InventoryService::consumeFifo(const QString &sku, double qty)
+{
+    // Fase 5: salida PEPS sin tocar products.stock (el llamador descuenta
+    // el físico en la misma transacción que la venta/ajuste).
+    if (qty <= 1e-9)
+        return Result<double>::failure(QStringLiteral("Cantidad >0"));
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<double>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+    double need = qty;
+    double cogs = 0.0;
+    for (const Lot &l : m_inventory->lotsBySku(sku)) {
+        if (need <= 1e-9)
+            break;
+        const double take = qMin(need, l.qty);
+        if (!m_inventory->reduceLot(l.id, take))
+            return Result<double>::failure(
+                QStringLiteral("No se pudo consumir el lote %1").arg(l.id));
+        need -= take;
+        cogs += take * l.cost;
+    }
+    if (need > 1e-9)
+        return Result<double>::failure(
+            QStringLiteral("Lotes insuficientes para %1 (faltan %2)").arg(sku).arg(need));
+    if (!tx.commit())
+        return Result<double>::failure(QStringLiteral("No se pudo confirmar el consumo PEPS"));
+    return Result<double>::success(cogs);
+}
+
+Result<InventoryCount> InventoryService::startCount(const QString &sku, double counted,
+                                                   const QString &reason, const QString &user)
+{
+    const auto p = m_products->findBySku(sku);
+    if (!p)
+        return Result<InventoryCount>::failure(QStringLiteral("SKU %1 no encontrado").arg(sku));
+    return m_inventory->startCount(sku, p->stock, counted, reason, user);
+}
+
+Result<InventoryCount> InventoryService::applyCount(int countId, const QString &user)
+{
+    const auto c = m_inventory->findCount(countId);
+    if (!c)
+        return Result<InventoryCount>::failure(
+            QStringLiteral("Conteo %1 no existe").arg(countId));
+    if (c->status != QLatin1String("Pendiente"))
+        return Result<InventoryCount>::failure(
+            QStringLiteral("Conteo %1 ya aplicado").arg(countId));
+    // La diferencia se vuelve ajuste justificado (con motivo del conteo).
+    if (qAbs(c->diff) > 1e-9) {
+        auto adj = registerAdjustment(
+            c->sku, c->diff,
+            QStringLiteral("Conteo #%1: %2").arg(c->id).arg(c->reason.trimmed().left(200)), user);
+        if (!adj.ok())
+            return Result<InventoryCount>::failure(adj.error());
+    }
+    if (!m_inventory->markCountApplied(countId))
+        return Result<InventoryCount>::failure(
+            QStringLiteral("No se pudo cerrar el conteo %1").arg(countId));
+    return Result<InventoryCount>::success(*m_inventory->findCount(countId));
+}
+
+QList<InventoryCount> InventoryService::listCounts(const QString &status) const
+{
+    return m_inventory->listCounts(status);
+}
+
+QList<Lot> InventoryService::expiringLots(int days) const
+{
+    return m_inventory->expiringLots(days);
 }
