@@ -36,6 +36,21 @@ void SalesController::refresh()
     m_sales.clear();
     for (const Sale &s : m_repos->list())
         m_sales << toMap(s);
+    m_totalCount = m_sales.size();
+    emit salesChanged();
+}
+
+void SalesController::refreshPaged(int page, int pageSize)
+{
+    // Fase 4: página servidor; pageSize <= 0 equivale a refresh().
+    m_totalCount = m_repos->count();
+    if (pageSize <= 0) {
+        refresh();
+        return;
+    }
+    m_sales.clear();
+    for (const Sale &s : m_repos->listPaged(pageSize, qMax(0, page) * pageSize))
+        m_sales << toMap(s);
     emit salesChanged();
 }
 

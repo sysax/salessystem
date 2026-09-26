@@ -13,6 +13,7 @@ class SalesController : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantList sales READ sales NOTIFY salesChanged)
+    Q_PROPERTY(int totalCount READ totalCount NOTIFY salesChanged)
 
   public:
     explicit SalesController(SaleRepository *sales, SalesService *service,
@@ -23,8 +24,14 @@ class SalesController : public QObject
     {
         return m_sales;
     }
+    int totalCount() const
+    {
+        return m_totalCount;
+    }
 
     Q_INVOKABLE void refresh();
+    // Fase 4: página servidor (page 0-based; pageSize <= 0 = todo).
+    Q_INVOKABLE void refreshPaged(int page, int pageSize);
     Q_INVOKABLE QVariantMap detail(const QString &id) const;
     Q_INVOKABLE QVariantMap advance(const QString &id, const QString &status, const QString &user);
     Q_INVOKABLE QVariantMap cancel(const QString &id, const QString &reason, const QString &user,
@@ -51,4 +58,5 @@ class SalesController : public QObject
     SerialRepository *m_serials = nullptr;
     ProductRepository *m_products = nullptr;
     QVariantList m_sales;
+    int m_totalCount = 0;
 };

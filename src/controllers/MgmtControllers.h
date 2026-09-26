@@ -12,6 +12,7 @@ class ClientsController : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantList clients READ clients NOTIFY clientsChanged)
+    Q_PROPERTY(int totalCount READ totalCount NOTIFY clientsChanged)
 
   public:
     explicit ClientsController(ClientRepository *clients, ReceivablesService *cxc,
@@ -21,8 +22,14 @@ class ClientsController : public QObject
     {
         return m_clients;
     }
+    int totalCount() const
+    {
+        return m_totalCount;
+    }
 
     Q_INVOKABLE void search(const QString &text);
+    // Fase 4: página servidor (page 0-based; pageSize <= 0 = todo).
+    Q_INVOKABLE void searchPaged(const QString &text, int page, int pageSize);
     Q_INVOKABLE QVariantMap add(const QVariantMap &fields);
     Q_INVOKABLE QVariantMap update(int id, const QVariantMap &fields);
     Q_INVOKABLE QVariantMap remove(int id);
@@ -40,6 +47,7 @@ class ClientsController : public QObject
     ClientRepository *m_repos = nullptr;
     ReceivablesService *m_cxc = nullptr;
     QVariantList m_clients;
+    int m_totalCount = 0;
 };
 
 // Proveedores (antes SuppliersScreen): CRUD.

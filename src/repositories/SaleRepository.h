@@ -51,6 +51,9 @@ class SaleRepository : public QObject
                             QObject *parent = nullptr);
 
     QList<Sale> list() const;
+    // Fase 4: paginación servidor (limit < 0 = sin límite) + total.
+    QList<Sale> listPaged(int limit, int offset) const;
+    int count() const;
     std::optional<Sale> find(const QString &id) const;
     QList<SaleItem> itemsFor(const QString &saleId) const;
 

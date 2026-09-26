@@ -26,6 +26,10 @@ class ProductRepository : public QObject
     // Multitienda (filtrar sin borrar): bt vacío o 'miscelanea' = todo;
     // si no, (business_type='' OR business_type=bt). '' = legacy visible en todos.
     QList<Product> search(const QString &text, const QString &businessType) const;
+    // Fase 4: paginación servidor (limit < 0 = sin límite) + total.
+    QList<Product> searchPaged(const QString &text, const QString &businessType, int limit,
+                               int offset) const;
+    int countSearch(const QString &text, const QString &businessType = {}) const;
 
     Result<Product> add(const Product &p);
     // Reemplazo de campos editables (los vacíos/nulos no se tocan,

@@ -20,6 +20,9 @@ class ClientRepository : public QObject
     std::optional<Client> findById(int id) const;
     std::optional<Client> findByName(const QString &name) const; // case-insensitive
     QList<Client> search(const QString &text) const;
+    // Fase 4: paginación servidor (limit < 0 = sin límite) + total.
+    QList<Client> searchPaged(const QString &text, int limit, int offset) const;
+    int countSearch(const QString &text) const;
 
     Result<Client> add(const Client &c);
     Result<Client> update(int id, const Client &c); // discount validado 0-100

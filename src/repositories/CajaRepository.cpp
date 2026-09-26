@@ -133,8 +133,9 @@ bool CajaRepository::recordSale(const QString &saleId, double total)
         pay.prepare(QStringLiteral("SELECT payments_json FROM sales WHERE id=?"));
         pay.addBindValue(saleId);
         if (pay.exec() && pay.next())
-            method = QStringList(QJsonDocument::fromJson(pay.value(0).toByteArray()).object().keys())
-                         .join(u'+');
+            method
+                = QStringList(QJsonDocument::fromJson(pay.value(0).toByteArray()).object().keys())
+                      .join(u'+');
     }
     return logMovement(QStringLiteral("venta"), total, method, saleId, st.openingUser);
 }
@@ -172,11 +173,16 @@ QList<CajaRepository::Movement> CajaRepository::movements(const QString &turno) 
 {
     QList<Movement> out;
     QSqlQuery q(m_db);
+    // Fase 4: columnas explícitas (tabla nueva, sin legacy que tolerar).
+    static const QString kCols
+        = QStringLiteral("id, ts, turno, tipo, monto, metodo_pago, sale_id, user_id");
     if (turno.trimmed().isEmpty()) {
-        if (!q.exec(QStringLiteral("SELECT * FROM caja_movimientos ORDER BY id")))
+        if (!q.exec(QStringLiteral("SELECT ") + kCols
+                    + QStringLiteral(" FROM caja_movimientos ORDER BY id")))
             return out;
     } else {
-        q.prepare(QStringLiteral("SELECT * FROM caja_movimientos WHERE turno=? ORDER BY id"));
+        q.prepare(QStringLiteral("SELECT ") + kCols
+                  + QStringLiteral(" FROM caja_movimientos WHERE turno=? ORDER BY id"));
         q.addBindValue(turno.trimmed());
         if (!q.exec())
             return out;

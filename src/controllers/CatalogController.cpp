@@ -146,6 +146,27 @@ void CatalogController::search(const QString &text, const QString &businessType)
     m_products.clear();
     for (const Product &p : m_repos->search(text, bt))
         m_products << toMap(p);
+    m_totalCount = m_products.size();
+    emit productsChanged();
+}
+
+void CatalogController::searchPaged(const QString &text, const QString &businessType, int page,
+                                    int pageSize)
+{
+    // Fase 4: página servidor; pageSize <= 0 equivale a search().
+    QString bt = businessType.trimmed();
+    if (bt.isEmpty() && m_settings)
+        bt = m_settings->businessType().trimmed();
+    if (bt == QLatin1String("miscelanea"))
+        bt.clear();
+    m_totalCount = m_repos->countSearch(text, bt);
+    if (pageSize <= 0) {
+        search(text, businessType);
+        return;
+    }
+    m_products.clear();
+    for (const Product &p : m_repos->searchPaged(text, bt, pageSize, qMax(0, page) * pageSize))
+        m_products << toMap(p);
     emit productsChanged();
 }
 

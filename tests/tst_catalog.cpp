@@ -161,6 +161,32 @@ class TstCatalog : public QObject
         QCOMPARE(prevAll[QStringLiteral("hiddenProducts")].toInt(), 0);
     }
 
+    void paging()
+    {
+        // Fase 4: páginas servidor + total (7 productos PX, de a 3).
+        for (int i = 1; i <= 7; ++i) {
+            Product p;
+            p.sku = QStringLiteral("PX%1").arg(i);
+            p.name = QStringLiteral("Paged %1").arg(i);
+            p.price = 1000.0;
+            p.stock = 5.0;
+            QVERIFY(m_products->add(p).ok());
+        }
+        QCOMPARE(m_products->countSearch(QStringLiteral("PX")), 7);
+        QCOMPARE(m_products->searchPaged(QStringLiteral("PX"), {}, 3, 0).size(), 3);
+        QCOMPARE(m_products->searchPaged(QStringLiteral("PX"), {}, 3, 3).size(), 3);
+        QCOMPARE(m_products->searchPaged(QStringLiteral("PX"), {}, 3, 6).size(), 1);
+        QCOMPARE(m_products->searchPaged(QStringLiteral("PX"), {}, 3, 9).size(), 0);
+        // Sin límite equivale al search clásico.
+        QCOMPARE(m_products->searchPaged(QStringLiteral("PX"), {}, -1, 0).size(), 7);
+        // Vía controlador (con total para el Pager QML).
+        m_ctl->searchPaged(QStringLiteral("PX"), {}, 0, 3);
+        QCOMPARE(m_ctl->products().size(), 3);
+        QCOMPARE(m_ctl->totalCount(), 7);
+        m_ctl->searchPaged(QStringLiteral("PX"), {}, 2, 3);
+        QCOMPARE(m_ctl->products().size(), 1);
+    }
+
     void controllerReload()
     {
         m_ctl->reloadCategories(QStringLiteral("farmacia"));

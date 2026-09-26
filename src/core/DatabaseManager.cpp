@@ -206,6 +206,16 @@ bool DatabaseManager::migrateLegacyColumns()
         m_status = QStringLiteral("migrate: ") + mv.lastError().text();
         return false;
     }
+    // Fase 4: soltar índices redundantes (el UNIQUE ya crea autoindex).
+    // barcode se conserva: no es UNIQUE y el escáner POS lo consulta.
+    QSqlQuery drop(m_db);
+    for (const QString &idx : {QStringLiteral("idx_products_sku"),
+                               QStringLiteral("idx_clients_name")}) {
+        if (!drop.exec(QStringLiteral("DROP INDEX IF EXISTS %1").arg(idx))) {
+            m_status = QStringLiteral("migrate: ") + drop.lastError().text();
+            return false;
+        }
+    }
     return true;
 }
 

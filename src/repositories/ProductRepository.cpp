@@ -160,6 +160,12 @@ QList<Product> ProductRepository::search(const QString &text) const
 
 QList<Product> ProductRepository::search(const QString &text, const QString &businessType) const
 {
+    return searchPaged(text, businessType, -1, 0);
+}
+
+QList<Product> ProductRepository::searchPaged(const QString &text, const QString &businessType,
+                                              int limit, int offset) const
+{
     const QString bt = businessType.trimmed();
     // 'miscelanea' = modo mixto intencional: ve todo (incluye legacy '').
     const bool filterBt = !bt.isEmpty() && bt != QLatin1String("miscelanea");
@@ -201,6 +207,42 @@ QList<Product> ProductRepository::search(const QString &text, const QString &bus
     while (q.next())
         out << rowToProduct(q);
     return out;
+}
+
+int ProductRepository::countSearch(const QString &text, const QString &businessType) const
+{
+    // Fase 4: total para paginar (misma condición que searchPaged).
+    const QString bt = businessType.trimmed();
+    const bool filterBt = !bt.isEmpty() && bt != QLatin1String("miscelanea");
+    const QString t = text.trimmed().toLower();
+    QSqlQuery q(m_db);
+    if (t.isEmpty()) {
+        if (!filterBt) {
+            if (q.exec(QStringLiteral("SELECT COUNT(*) FROM products")) && q.next())
+                return q.value(0).toInt();
+            return 0;
+        }
+        q.prepare(QStringLiteral("SELECT COUNT(*) FROM products WHERE (business_type IS NULL OR "
+                                 "business_type='' OR business_type=?)"));
+        q.addBindValue(bt);
+    } else {
+        q.prepare(
+            QStringLiteral("SELECT COUNT(*) FROM products WHERE (lower(name) LIKE ? OR lower(sku) "
+                           "LIKE ? OR lower(barcode) LIKE ? OR lower(cat) LIKE ?)")
+            + (filterBt ? QStringLiteral(" AND (business_type IS NULL OR business_type='' OR "
+                                         "business_type=?)")
+                        : QString()));
+        const QString like = u'%' + t + u'%';
+        q.addBindValue(like);
+        q.addBindValue(like);
+        q.addBindValue(like);
+        q.addBindValue(like);
+        if (filterBt)
+            q.addBindValue(bt);
+    }
+    if (!q.exec() || !q.next())
+        return 0;
+    return q.value(0).toInt();
 }
 
 Result<Product> ProductRepository::add(const Product &pin)

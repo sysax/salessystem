@@ -15,6 +15,7 @@ class CatalogController : public QObject
     Q_OBJECT
     Q_PROPERTY(QVariantList products READ products NOTIFY productsChanged)
     Q_PROPERTY(QVariantList categories READ categories NOTIFY categoriesChanged)
+    Q_PROPERTY(int totalCount READ totalCount NOTIFY productsChanged)
 
   public:
     explicit CatalogController(ProductRepository *products,
@@ -25,12 +26,19 @@ class CatalogController : public QObject
     {
         return m_products;
     }
+    int totalCount() const
+    {
+        return m_totalCount;
+    }
     QVariantList categories() const
     {
         return m_categories;
     }
 
     Q_INVOKABLE void search(const QString &text, const QString &businessType = {});
+    // Fase 4: página servidor (page 0-based; pageSize <= 0 = todo).
+    Q_INVOKABLE void searchPaged(const QString &text, const QString &businessType, int page,
+                                 int pageSize);
     Q_INVOKABLE QVariantMap add(const QVariantMap &fields);
     Q_INVOKABLE QVariantMap update(const QString &sku, const QVariantMap &fields);
     Q_INVOKABLE QVariantMap remove(const QString &sku);
@@ -60,4 +68,5 @@ class CatalogController : public QObject
     QString m_catFilter;
     QVariantList m_products;
     QVariantList m_categories;
+    int m_totalCount = 0;
 };

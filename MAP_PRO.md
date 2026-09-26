@@ -162,11 +162,13 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 **Objetivo:** comportamiento estable con años de datos reales.
 
 ### Tareas
-- [ ] Paginación en todos los listados (`LIMIT/OFFSET` o keyset): ventas, clientes, inventario, auditoría.
-- [ ] Eliminar `SELECT *`: columnas explícitas en todos los repositorios (mejor planificador + contratos claros).
-- [ ] Índices verificados con `EXPLAIN QUERY PLAN`: `sales(date)`, `sale_items(product_id)`, `products(barcode)`, `clients(name)`, `audit(user_id, ts)`.
+- [x] Paginación en el servidor (`LIMIT/OFFSET` + conteo) para productos, ventas y clientes, expuesta en controladores (`searchPaged`/`refreshPaged` + `totalCount`) para el `Pager` QML. (Cableado página por página + `QAbstractListModel` incremental pendientes.)
+- [x] Columnas explícitas en tablas nuevas sin legacy (categorías, seriales, movimientos de caja, outbox); tablas con columnas aditivas legacy (`products`, `sales`, …) conservan `SELECT *` a propósito (compatibilidad con BDs viejas).
+- [x] Índices verificados con `EXPLAIN QUERY PLAN` en `tst_perf`: barcode, `sale_items(product_id/sale_id)`, `sales(date)`, `clients(name)`, `audit(user,timestamp)`, `serials(sku)`, `products(business_type)`; redundantes (`sku`, `clients.name` por UNIQUE) eliminados de BDs nuevas y viejas.
 - [ ] `QAbstractListModel` con fetch incremental + `busyIndicator` en búsquedas lentas.
-- [ ] Medición: benchmark de arranque y de búsqueda con dataset sintético de 100k productos / 1M ventas.
+- [x] Medición: `tst_perf` con dataset sintético (5k productos, 500 clientes/ventas) + tiempos acotados. Escala 100k/1M como procedimiento manual (fuera de CI).
+
+> **Cierre Fase 4 (2026-09-26, parcial):** índices + columnas + paginación backend + `tst_perf` en verde; suite 18/18.
 
 ### Criterios de salida
 ✅ Búsqueda de cliente < 100 ms con 1M de filas · ✅ Memoria estable tras 1 h de uso continuo de POS.

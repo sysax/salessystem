@@ -201,6 +201,16 @@ class TstMgmt : public QObject
         QVERIFY(m_promoRepo->remove(found->id).ok());
     }
 
+    void clientsPaging()
+    {
+        // Fase 4: página servidor + total vía controlador.
+        m_clients->searchPaged(QStringLiteral(""), 0, 2);
+        QCOMPARE(m_clients->clients().size(), 2);
+        QVERIFY(m_clients->totalCount() >= 5); // fixture demo
+        m_clients->searchPaged(QStringLiteral("María"), 0, 10);
+        QCOMPARE(m_clients->totalCount(), 1);
+    }
+
     void promosValidity()
     {
         // Fase 3: ventana de vigencia (vacía = siempre vigente).

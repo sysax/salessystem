@@ -63,17 +63,27 @@ std::optional<Client> ClientRepository::findByName(const QString &name) const
 
 QList<Client> ClientRepository::search(const QString &text) const
 {
+    return searchPaged(text, -1, 0);
+}
+
+QList<Client> ClientRepository::searchPaged(const QString &text, int limit, int offset) const
+{
+    // Fase 4: paginación servidor (limit < 0 = sin límite, compatible).
+    const QString page = limit >= 0
+                             ? QStringLiteral(" LIMIT %1 OFFSET %2").arg(limit).arg(qMax(0, offset))
+                             : QString();
     const QString t = text.trimmed().toLower();
     QList<Client> out;
     QSqlQuery q(m_db);
     if (t.isEmpty()) {
-        if (q.exec(QStringLiteral("SELECT * FROM clients ORDER BY id")))
+        if (q.exec(QStringLiteral("SELECT * FROM clients ORDER BY id") + page))
             while (q.next())
                 out << rowToClient(q);
         return out;
     }
     q.prepare(QStringLiteral("SELECT * FROM clients WHERE lower(name) LIKE ? OR lower(nit) LIKE ? "
-                             "OR lower(email) LIKE ? ORDER BY id"));
+                             "OR lower(email) LIKE ? ORDER BY id")
+              + page);
     const QString like = u'%' + t + u'%';
     q.addBindValue(like);
     q.addBindValue(like);
@@ -83,6 +93,27 @@ QList<Client> ClientRepository::search(const QString &text) const
     while (q.next())
         out << rowToClient(q);
     return out;
+}
+
+int ClientRepository::countSearch(const QString &text) const
+{
+    // Fase 4: total para paginar (misma condición que searchPaged).
+    const QString t = text.trimmed().toLower();
+    QSqlQuery q(m_db);
+    if (t.isEmpty()) {
+        if (q.exec(QStringLiteral("SELECT COUNT(*) FROM clients")) && q.next())
+            return q.value(0).toInt();
+        return 0;
+    }
+    q.prepare(QStringLiteral("SELECT COUNT(*) FROM clients WHERE lower(name) LIKE ? OR lower(nit) "
+                             "LIKE ? OR lower(email) LIKE ?"));
+    const QString like = u'%' + t + u'%';
+    q.addBindValue(like);
+    q.addBindValue(like);
+    q.addBindValue(like);
+    if (!q.exec() || !q.next())
+        return 0;
+    return q.value(0).toInt();
 }
 
 Result<Client> ClientRepository::add(const Client &cin)

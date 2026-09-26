@@ -9,6 +9,9 @@ SerialRepository::SerialRepository(QSqlDatabase db, QObject *parent)
 {
 }
 
+// Fase 4: columnas explícitas en los SELECT (la tabla es nueva,
+// creada por schema/migrate con todas las columnas: sin legacy).
+
 SerialInfo SerialRepository::rowToSerial(const QSqlQuery &q)
 {
     SerialInfo s;
@@ -27,8 +30,8 @@ QList<SerialInfo> SerialRepository::inStock(const QString &sku) const
 {
     QList<SerialInfo> out;
     QSqlQuery q(m_db);
-    q.prepare(
-        QStringLiteral("SELECT * FROM serials WHERE sku=? AND status='in_stock' ORDER BY id"));
+    q.prepare(QStringLiteral("SELECT id, product_id, sku, serial, status, sale_id, imei2, notes "
+                             "FROM serials WHERE sku=? AND status='in_stock' ORDER BY id"));
     q.addBindValue(sku);
     if (!q.exec())
         return out;
@@ -49,7 +52,8 @@ QList<SerialInfo> SerialRepository::byStatus(const QString &status, int limit) c
 {
     QList<SerialInfo> out;
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("SELECT * FROM serials WHERE status=? ORDER BY id DESC LIMIT ?"));
+    q.prepare(QStringLiteral("SELECT id, product_id, sku, serial, status, sale_id, imei2, notes "
+                             "FROM serials WHERE status=? ORDER BY id DESC LIMIT ?"));
     q.addBindValue(status);
     q.addBindValue(limit > 0 ? limit : 200);
     if (!q.exec())
@@ -70,7 +74,8 @@ bool SerialRepository::hasSerials(const QString &sku) const
 std::optional<SerialInfo> SerialRepository::find(const QString &serial) const
 {
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("SELECT * FROM serials WHERE serial=?"));
+    q.prepare(QStringLiteral("SELECT id, product_id, sku, serial, status, sale_id, imei2, notes "
+                             "FROM serials WHERE serial=?"));
     q.addBindValue(serial.trimmed());
     if (q.exec() && q.next())
         return rowToSerial(q);

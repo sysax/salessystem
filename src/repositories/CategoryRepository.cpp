@@ -23,13 +23,19 @@ QList<Category> CategoryRepository::list(const QString &businessType) const
 {
     QList<Category> out;
     QSqlQuery q(m_db);
+    // Fase 4: columnas explícitas (tabla nueva, sin legacy que tolerar).
     if (businessType.trimmed().isEmpty()) {
-        q.exec(QStringLiteral("SELECT * FROM categories ORDER BY parent_id, sort_order, name"));
+        if (!q.exec(QStringLiteral(
+                "SELECT id, name, parent_id, business_type, sort_order FROM categories ORDER BY "
+                "parent_id, sort_order, name")))
+            return out;
     } else {
-        q.prepare(QStringLiteral("SELECT * FROM categories WHERE business_type IN ('',?) "
+        q.prepare(QStringLiteral("SELECT id, name, parent_id, business_type, sort_order FROM "
+                                 "categories WHERE business_type IN ('',?) "
                                  "ORDER BY parent_id, sort_order, name"));
         q.addBindValue(businessType.trimmed());
-        q.exec();
+        if (!q.exec())
+            return out;
     }
     while (q.next())
         out << rowToCategory(q);
@@ -49,7 +55,8 @@ QList<Category> CategoryRepository::childrenOf(int parentId, const QString &busi
 std::optional<Category> CategoryRepository::findById(int id) const
 {
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("SELECT * FROM categories WHERE id=?"));
+    q.prepare(QStringLiteral(
+        "SELECT id, name, parent_id, business_type, sort_order FROM categories WHERE id=?"));
     q.addBindValue(id);
     if (q.exec() && q.next())
         return rowToCategory(q);

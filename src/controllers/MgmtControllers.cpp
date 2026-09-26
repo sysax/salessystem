@@ -57,6 +57,21 @@ void ClientsController::search(const QString &text)
     m_clients.clear();
     for (const Client &c : m_repos->search(text))
         m_clients << toMap(c);
+    m_totalCount = m_clients.size();
+    emit clientsChanged();
+}
+
+void ClientsController::searchPaged(const QString &text, int page, int pageSize)
+{
+    // Fase 4: página servidor; pageSize <= 0 equivale a search().
+    m_totalCount = m_repos->countSearch(text);
+    if (pageSize <= 0) {
+        search(text);
+        return;
+    }
+    m_clients.clear();
+    for (const Client &c : m_repos->searchPaged(text, pageSize, qMax(0, page) * pageSize))
+        m_clients << toMap(c);
     emit clientsChanged();
 }
 

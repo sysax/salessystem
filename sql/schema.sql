@@ -95,7 +95,8 @@ CREATE TABLE IF NOT EXISTS payments_cxp (
 
 CREATE TABLE IF NOT EXISTS promos (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, type TEXT, value REAL, condition TEXT, code TEXT UNIQUE, active INTEGER, desc TEXT,
-    business_type TEXT DEFAULT '', valid_from TEXT DEFAULT '', valid_to TEXT DEFAULT ''
+    business_type TEXT DEFAULT '', valid_from TEXT DEFAULT '', valid_to TEXT DEFAULT '',
+    priority INTEGER DEFAULT 0, max_uses INTEGER DEFAULT 0, uses INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -106,6 +107,14 @@ CREATE TABLE IF NOT EXISTS caja (
     id INTEGER PRIMARY KEY CHECK (id=1), open INTEGER, opening_amount REAL, opening_ts TEXT, opening_user TEXT, sales_today_json TEXT, expected REAL
 );
 INSERT OR IGNORE INTO caja (id, open, opening_amount, sales_today_json, expected) VALUES (1, 0, 0, '[]', 0);
+
+-- Fase 3: movimientos de caja normalizados (el JSON queda como caché de
+-- presentación). tipo: apertura|venta|devolucion|cierre. turno = opening_ts.
+CREATE TABLE IF NOT EXISTS caja_movimientos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT, turno TEXT, tipo TEXT, monto REAL, metodo_pago TEXT,
+    sale_id TEXT, user_id TEXT
+);
 
 CREATE TABLE IF NOT EXISTS counters (
     name TEXT PRIMARY KEY, value INTEGER
@@ -154,9 +163,10 @@ CREATE TABLE IF NOT EXISTS recovery_tokens (
     used INTEGER DEFAULT 0
 );
 
--- Índices (9) — ver data/db.py::init_db
+-- Índices (verificados con EXPLAIN QUERY PLAN en tst_perf). UNIQUE ya
+-- indexa products.sku y clients.name (autoindex); barcode no es UNIQUE
+-- (el escáner POS lo consulta) y lleva índice propio.
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status);
-CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
 CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(cat);
 CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date);
@@ -164,6 +174,12 @@ CREATE INDEX IF NOT EXISTS idx_sales_client ON sales(client);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_clients_nit ON clients(nit);
 CREATE INDEX IF NOT EXISTS idx_inventory_movements_ts ON inventory_movements(ts);
+-- Fase 4: joins/agregados de reportes y listados.
+CREATE INDEX IF NOT EXISTS idx_sale_items_product ON sale_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user_ts ON audit_log(user, ts);
+CREATE INDEX IF NOT EXISTS idx_serials_sku ON serials(sku);
+CREATE INDEX IF NOT EXISTS idx_products_business_type ON products(business_type);
 
 -- Migraciones de columnas para DBs creadas por versiones antiguas (Python):
 -- users.active/failed_attempts/locked_until/created_at/last_login/totp_secret/totp_enabled/recovery_json/must_change_password

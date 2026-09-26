@@ -58,13 +58,30 @@ Sale SaleRepository::rowToSale(const QSqlQuery &q)
 
 QList<Sale> SaleRepository::list() const
 {
+    return listPaged(-1, 0);
+}
+
+QList<Sale> SaleRepository::listPaged(int limit, int offset) const
+{
+    // Fase 4: paginación servidor (limit < 0 = sin límite, compatible).
     QList<Sale> out;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral("SELECT * FROM sales ORDER BY date DESC, id DESC")))
+    const QString page = limit >= 0
+                             ? QStringLiteral(" LIMIT %1 OFFSET %2").arg(limit).arg(qMax(0, offset))
+                             : QString();
+    if (!q.exec(QStringLiteral("SELECT * FROM sales ORDER BY date DESC, id DESC") + page))
         return out;
     while (q.next())
         out << rowToSale(q);
     return out;
+}
+
+int SaleRepository::count() const
+{
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral("SELECT COUNT(*) FROM sales")) || !q.next())
+        return 0;
+    return q.value(0).toInt();
 }
 
 std::optional<Sale> SaleRepository::find(const QString &id) const
