@@ -72,7 +72,8 @@ Result<CajaStatus> CajaRepository::open(double amount, const QString &user)
     return Result<CajaStatus>::success(status());
 }
 
-Result<CajaCloseResult> CajaRepository::close(double counted, const QString &user)
+Result<CajaCloseResult> CajaRepository::close(double counted, const QString &user,
+                                               const QString &reason)
 {
     const CajaStatus st = status();
     if (!st.open)
@@ -83,14 +84,21 @@ Result<CajaCloseResult> CajaRepository::close(double counted, const QString &use
     r.diff = counted - st.expected;
     r.salesCount = st.salesToday.size();
     r.totalSales = st.totalSales;
+    // Fase 5: sobra/falta sin justificar no cierra.
+    if (qAbs(r.diff) > 1e-9 && reason.trimmed().isEmpty())
+        return Result<CajaCloseResult>::failure(
+            QStringLiteral("Diferencia de %1: indique el motivo").arg(r.diff, 0, 'f', 0));
     if (m_audit)
         m_audit->log(user, QStringLiteral("caja_cierre"),
-                     QStringLiteral("esperado $%1 contado $%2 diff %3%4 ventas %5")
+                     QStringLiteral("esperado $%1 contado $%2 diff %3%4 ventas %5%6")
                          .arg(r.expected, 0, 'f', 2)
                          .arg(counted, 0, 'f', 2)
                          .arg(r.diff >= 0 ? QStringLiteral("+") : QString())
                          .arg(r.diff, 0, 'f', 2)
-                         .arg(r.salesCount));
+                         .arg(r.salesCount)
+                         .arg(reason.trimmed().isEmpty()
+                                  ? QString()
+                                  : QStringLiteral(" motivo: ") + reason.trimmed()));
     // Fase 3: el arqueo queda en movimientos ANTES de resetear el turno
     // (logMovement toma el turno actual).
     if (!logMovement(QStringLiteral("cierre"), counted, QStringLiteral("arqueo"), QString(), user))

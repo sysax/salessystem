@@ -62,7 +62,8 @@ ApplicationWindow {
             "users": {"label": "Usuarios", "icon": "👤", "section": "Sistema"},
             "settings": {"label": "Configuración", "icon": "⚙️", "section": "Sistema"},
             "lots": {"label": "Lotes y vencimientos", "icon": "📅", "section": "Catálogo"},
-            "serials": {"label": "Seriales y garantías", "icon": "🔧", "section": "Catálogo"}
+            "serials": {"label": "Seriales y garantías", "icon": "🔧", "section": "Catálogo"},
+            "audit": {"label": "Bitácora", "icon": "📜", "section": "Sistema"}
         };
         return map[key] || {"label": key, "icon": "•", "section": ""};
     }
@@ -129,6 +130,8 @@ ApplicationWindow {
             return lotsPage;
         case "serials":
             return serialsPage;
+        case "audit":
+            return auditPage;
         default:
             return dashboardPage;
         }
@@ -331,6 +334,10 @@ ApplicationWindow {
     }
     SerialsPage {
         id: serialsPage
+        visible: false
+    }
+    AuditPage {
+        id: auditPage
         visible: false
     }
 

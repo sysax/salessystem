@@ -243,4 +243,10 @@ struct AuditEntry
     QString user;
     QString action;
     QString detail;
+    // Fase 5: entidad afectada + antes/después (JSON) para responder
+    // "¿quién cambió este precio y cuándo?".
+    QString entity;
+    QString entityId;
+    QString beforeJson = QStringLiteral("{}");
+    QString afterJson = QStringLiteral("{}");
 };

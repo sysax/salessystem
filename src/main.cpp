@@ -8,6 +8,7 @@
 #include <QUrl>
 
 #include "controllers/AuthController.h"
+#include "controllers/AuditController.h"
 #include "controllers/CatalogController.h"
 #include "controllers/DashboardController.h"
 #include "controllers/MgmtControllers.h"
@@ -98,6 +99,7 @@ int main(int argc, char *argv[])
     PayablesController cxpCtl(&cxpSvc);
     PromosController promosCtl(&promos, &settingsSvc);
     UsersController usersCtl(&auth);
+    AuditController auditCtl(&audit);
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("db"), &db);
@@ -118,6 +120,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("cxpCtl"), &cxpCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("promosCtl"), &promosCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("usersCtl"), &usersCtl);
+    engine.rootContext()->setContextProperty(QStringLiteral("auditCtl"), &auditCtl);
 
     // loadFromModule existe desde Qt 6.5; el CI usa Qt 6.4 (sin él).
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)

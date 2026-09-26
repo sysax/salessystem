@@ -237,6 +237,37 @@ ScrollView {
             }
         }
 
+        GroupBox {
+            title: qsTr("Respaldos (Fase 5)")
+            Layout.fillWidth: true
+            visible: settingsCtl.canEdit()
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: Theme.spacingSmall
+                Label {
+                    text: qsTr("Copia consistente en caliente. Se conservan los 7 más recientes.")
+                    font.pixelSize: Theme.fontS
+                    opacity: 0.7
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+                RowLayout {
+                    Button {
+                        text: qsTr("Respaldar ahora")
+                        onClicked: {
+                            var r = db.backup("", 7);
+                            backupMsg.text = r.ok ? qsTr("Respaldo: %1").arg(r.path) : r.error;
+                        }
+                    }
+                    Label {
+                        id: backupMsg
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+        }
+
         RowLayout {
             Button {
                 text: qsTr("Recargar")

@@ -212,9 +212,43 @@ class TstRepositories : public QObject
         QCOMPARE(movExpected, 1300.0);
         QCOMPARE(m_caja->expectedFromMovements(), 1300.0);
         QCOMPARE(m_caja->movements(turno).size(), 4); // apertura + 2 ventas + devolución
-        QVERIFY(m_caja->close(1300, QStringLiteral("cajero")).ok());
+        // El JSON aún cuenta VM1 (sin reverseSale): el cierre justifica la diff.
+        QVERIFY(!m_caja->close(1300, QStringLiteral("cajero")).ok());
+        QVERIFY(m_caja->close(1300, QStringLiteral("cajero"), QStringLiteral("prueba")).ok());
         QCOMPARE(m_caja->expectedFromMovements(), 0.0); // sin turno abierto
         QCOMPARE(m_caja->movements(turno).size(), 5);   // + cierre auditado
+    }
+
+    void cajaCloseNeedsReason()
+    {
+        // Fase 5: sobra/falta sin motivo no cierra; con motivo sí.
+        QVERIFY(m_caja->open(100, QStringLiteral("cajero")).ok());
+        QVERIFY(!m_caja->close(90, QStringLiteral("cajero")).ok());
+        QVERIFY(m_caja->close(90, QStringLiteral("cajero"), QStringLiteral("faltante")).ok());
+        QVERIFY(!m_caja->close(100, QStringLiteral("cajero")).ok()); // ya cerrada
+    }
+
+    void auditTrailsPriceChange()
+    {
+        // Fase 5: "¿quién cambió este precio y cuándo?" (antes/después).
+        auto cur = m_products->findBySku(QStringLiteral("P001"));
+        QVERIFY(cur.has_value());
+        Product upd = *cur;
+        upd.price = cur->price + 5000.0;
+        upd.priceBuy = cur->priceBuy;
+        QVERIFY(m_products->update(QStringLiteral("P001"), upd, QStringLiteral("admin")).ok());
+        const auto hits = m_audit->search(QStringLiteral("P001"), QStringLiteral("admin"),
+                                          QStringLiteral("producto_actualizado"), 10);
+        QVERIFY(!hits.isEmpty());
+        const auto e = hits.first();
+        QCOMPARE(e.entity, QStringLiteral("product"));
+        QVERIFY(e.beforeJson.contains(QString::number((int)cur->price)));
+        QVERIFY(e.afterJson.contains(QString::number((int)upd.price)));
+        // Sin usuario no se audita (compat legacy).
+        QVERIFY(m_audit
+                    ->search(QStringLiteral("P001"), QStringLiteral("nadie"),
+                             QStringLiteral("producto_actualizado"), 10)
+                    .isEmpty());
     }
 
     void salesSearchPaging()

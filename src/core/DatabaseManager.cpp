@@ -186,9 +186,13 @@ bool DatabaseManager::migrateLegacyColumns()
         {"promos", "valid_from", "valid_from TEXT DEFAULT ''"}, // Fase 3: vigencia
         {"promos", "valid_to", "valid_to TEXT DEFAULT ''"},
         {"promos", "priority", "priority INTEGER DEFAULT 0"}, // Fase 3: prioridad
-        {"promos", "max_uses", "max_uses INTEGER DEFAULT 0"},  // 0 = ilimitada
+        {"promos", "max_uses", "max_uses INTEGER DEFAULT 0"}, // 0 = ilimitada
         {"promos", "uses", "uses INTEGER DEFAULT 0"},
         {"products", "stock_reserved", "stock_reserved REAL DEFAULT 0"}, // Fase 3: apartados
+        {"audit_log", "entity", "entity TEXT DEFAULT ''"}, // Fase 5: auditoría estructurada
+        {"audit_log", "entity_id", "entity_id TEXT DEFAULT ''"},
+        {"audit_log", "before_json", "before_json TEXT DEFAULT ''"},
+        {"audit_log", "after_json", "after_json TEXT DEFAULT ''"},
         {"sale_items", "attrs_json", "attrs_json TEXT DEFAULT '{}'"},
         {"sale_items", "serial", "serial TEXT DEFAULT ''"},
     };

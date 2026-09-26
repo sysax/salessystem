@@ -28,6 +28,7 @@ ColumnLayout {
         { "key": "reports", "label": "Reportes", "icon": "📈", "sc": "Ctrl+6" },
         { "key": "promos", "label": "Promociones", "icon": "🎟️", "sc": "" },
         { "key": "users", "label": "Usuarios", "icon": "👤", "sc": "" },
+        { "key": "audit", "label": "Bitácora", "icon": "📜", "sc": "" },
         { "key": "settings", "label": "Configuración", "icon": "⚙️", "sc": "" },
         // Fase 4: módulos por vertical (verticals vacío = todas).
         { "key": "lots", "label": "Lotes y vencimientos", "icon": "📅", "sc": "",

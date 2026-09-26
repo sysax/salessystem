@@ -30,6 +30,7 @@ add_qt_test(tst_catalog tst_catalog.cpp)
 add_qt_test(tst_vertical tst_vertical.cpp)
 add_qt_test(tst_perf tst_perf.cpp)
 add_qt_test(tst_pagedmodel tst_pagedmodel.cpp)
+add_qt_test(tst_backup tst_backup.cpp)
 
 add_executable(tst_sidebar tst_sidebar.cpp)
 target_link_libraries(

@@ -19,7 +19,9 @@ class CajaRepository : public QObject
 
     CajaStatus status() const;
     Result<CajaStatus> open(double amount, const QString &user);
-    Result<CajaCloseResult> close(double counted, const QString &user);
+    // Fase 5: con diferencia (sobra/falta) el motivo es obligatorio.
+    Result<CajaCloseResult> close(double counted, const QString &user,
+                                  const QString &reason = {});
 
     // Agrega {id,total} a sales_today_json y recalcula expected (solo si abierta)
     bool recordSale(const QString &saleId, double total);

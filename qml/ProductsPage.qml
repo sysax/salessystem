@@ -550,7 +550,7 @@ ColumnLayout {
                 fields.sku = "P" + Date.now().toString().slice(-6);
                 r = catalog.add(fields);
             } else {
-                r = catalog.update(editDialog.sku, fields);
+                r = catalog.update(editDialog.sku, fields, auth.currentUser);
             }
             if (!r.ok) {
                 editErr.text = r.error;

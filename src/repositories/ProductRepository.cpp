@@ -409,6 +409,28 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p)
     q.addBindValue(sku);
     if (!q.exec())
         return Result<Product>::failure(q.lastError().text());
+    // Fase 5: auditar cambios relevantes (antes/después) para responder
+    // "¿quién cambió este precio y cuándo?".
+    if (!user.trimmed().isEmpty() && m_audit) {
+        QJsonObject before, after;
+        auto put = [&](const QString &k, const QVariant &a, const QVariant &b) {
+            if (a != b) {
+                before[k] = QJsonValue::fromVariant(a);
+                after[k] = QJsonValue::fromVariant(b);
+            }
+        };
+        put(QStringLiteral("price"), cur->price, p.price);
+        put(QStringLiteral("priceBuy"), cur->priceBuy, p.priceBuy);
+        put(QStringLiteral("priceWholesale"), cur->priceWholesale, p.priceWholesale);
+        put(QStringLiteral("stock"), cur->stock, p.stock);
+        put(QStringLiteral("cat"), cur->cat, p.cat);
+        put(QStringLiteral("name"), cur->name, p.name);
+        if (!before.isEmpty())
+            m_audit->logChange(
+                user.trimmed(), QStringLiteral("producto_actualizado"), QStringLiteral("product"),
+                sku, QString::fromUtf8(QJsonDocument(before).toJson(QJsonDocument::Compact)),
+                QString::fromUtf8(QJsonDocument(after).toJson(QJsonDocument::Compact)));
+    }
     return Result<Product>::success(*findBySku(sku));
 }
 

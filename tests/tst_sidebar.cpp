@@ -65,11 +65,11 @@ class TstSidebar : public QObject
         // Sin sesión: vacío
         QCOMPARE(menu->property("count").toInt(), 0);
 
-        // Login como admin → 16 entradas (acceso total, incluye Configuración,
-        // Lotes y Seriales de Fase 4; sin settingsCtl se muestra todo)
+        // Login como admin → 17 entradas (acceso total, incluye Configuración,
+        // Bitácora, Lotes y Seriales; sin settingsCtl se muestra todo)
         const QVariantMap r = auth.login(QStringLiteral("admin"), QStringLiteral("admin123"));
         QVERIFY(r["ok"].toBool());
-        QTRY_COMPARE(menu->property("count").toInt(), 16);
+        QTRY_COMPARE(menu->property("count").toInt(), 17);
 
         // Logout → vacío de nuevo
         auth.logout();
@@ -101,16 +101,16 @@ class TstSidebar : public QObject
         QVERIFY(auth.login(QStringLiteral("admin"), QStringLiteral("admin123"))["ok"].toBool());
         settings.setBusinessType(QStringLiteral("farmacia"));
         QMetaObject::invokeMethod(root, "refresh", Qt::DirectConnection);
-        QTRY_COMPARE(menu->property("count").toInt(), 15); // 14 + lots
+        QTRY_COMPARE(menu->property("count").toInt(), 16); // 15 + lots
 
         settings.setBusinessType(QStringLiteral("celulares"));
         QMetaObject::invokeMethod(root, "refresh", Qt::DirectConnection);
-        QTRY_COMPARE(menu->property("count").toInt(), 15); // 14 + serials
+        QTRY_COMPARE(menu->property("count").toInt(), 16); // 15 + serials
 
         settings.setBusinessType(QStringLiteral("miscelanea"));
         QMetaObject::invokeMethod(root, "refresh", Qt::DirectConnection);
         // Multitienda: 'miscelanea' = modo mixto intencional, ve todo (14 + lots + serials).
-        QTRY_COMPARE(menu->property("count").toInt(), 16);
+        QTRY_COMPARE(menu->property("count").toInt(), 17);
     }
 };
 

@@ -531,17 +531,26 @@ RowLayout {
                         implicitHeight: root.touchH
                         implicitWidth: 100
                         onClicked: {
-                            var r = pos.caja.open ? pos.closeCaja(parseFloat(cajaField.text) || 0, auth.currentUser) : pos.openCaja(parseFloat(cajaField.text) || 0, auth.currentUser);
+                            var r = pos.caja.open ? pos.closeCaja(parseFloat(cajaField.text) || 0, auth.currentUser, cajaReason.text) : pos.openCaja(parseFloat(cajaField.text) || 0, auth.currentUser);
                             if (r.ok) {
                                 if (r.diff !== undefined)
                                     Utils.showToast("warning", "Diferencia: " + money(r.diff), 3000);
                                 else
                                     Utils.showToast("success", "Caja abierta", 2500);
+                                cajaReason.text = "";
                             } else {
                                 Utils.showToast("error", r.error, 4000);
                             }
                         }
                     }
+                }
+                // Fase 5: motivo obligatorio si hay sobra/falta al cerrar.
+                TextField {
+                    id: cajaReason
+                    visible: pos.caja.open
+                    placeholderText: qsTr("Motivo (si hay diferencia al cerrar)")
+                    Layout.fillWidth: true
+                    implicitHeight: root.touchH
                 }
             }
         }

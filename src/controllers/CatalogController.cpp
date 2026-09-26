@@ -214,7 +214,7 @@ QVariantMap CatalogController::update(const QString &sku, const QVariantMap &fie
         return {{"ok", false}, {"error", err}};
     if (const QString verr = checkVertical(m_cats, m_settings, p); !verr.isEmpty())
         return {{"ok", false}, {"error", verr}};
-    const auto r = m_repos->update(sku, p);
+    const auto r = m_repos->update(sku, p, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     reloadProducts();

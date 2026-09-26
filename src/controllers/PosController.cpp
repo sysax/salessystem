@@ -349,9 +349,9 @@ QVariantMap PosController::openCaja(double amount, const QString &user)
     return {{"ok", true}};
 }
 
-QVariantMap PosController::closeCaja(double counted, const QString &user)
+QVariantMap PosController::closeCaja(double counted, const QString &user, const QString &reason)
 {
-    const auto r = m_caja->close(counted, user);
+    const auto r = m_caja->close(counted, user, reason);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     refreshCaja();

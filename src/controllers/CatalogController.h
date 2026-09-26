@@ -50,7 +50,8 @@ class CatalogController : public QObject
                                     bool sortAsc = true);
     Q_INVOKABLE void fetchMoreProducts();
     Q_INVOKABLE QVariantMap add(const QVariantMap &fields);
-    Q_INVOKABLE QVariantMap update(const QString &sku, const QVariantMap &fields);
+    Q_INVOKABLE QVariantMap update(const QString &sku, const QVariantMap &fields,
+                                   const QString &user = {});
     Q_INVOKABLE QVariantMap remove(const QString &sku);
 
     // Fase 2: diccionario de categorías (businessType '' = todas).

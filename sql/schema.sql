@@ -100,7 +100,9 @@ CREATE TABLE IF NOT EXISTS promos (
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, user TEXT, action TEXT, detail TEXT
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, user TEXT, action TEXT, detail TEXT,
+    entity TEXT DEFAULT '', entity_id TEXT DEFAULT '',
+    before_json TEXT DEFAULT '', after_json TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS caja (

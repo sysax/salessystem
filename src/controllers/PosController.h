@@ -58,7 +58,8 @@ class PosController : public QObject
                                      const QString &role = {});
 
     Q_INVOKABLE QVariantMap openCaja(double amount, const QString &user);
-    Q_INVOKABLE QVariantMap closeCaja(double counted, const QString &user);
+    Q_INVOKABLE QVariantMap closeCaja(double counted, const QString &user,
+                                      const QString &reason = {});
     Q_INVOKABLE void refreshCaja();
 
   signals:
