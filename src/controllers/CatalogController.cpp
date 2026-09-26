@@ -204,7 +204,8 @@ QVariantMap CatalogController::add(const QVariantMap &fields)
     return {{"ok", true}};
 }
 
-QVariantMap CatalogController::update(const QString &sku, const QVariantMap &fields)
+QVariantMap CatalogController::update(const QString &sku, const QVariantMap &fields,
+                                      const QString &user)
 {
     const auto cur = m_repos->findBySku(sku);
     if (!cur)

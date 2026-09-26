@@ -36,8 +36,9 @@ class ProductRepository : public QObject
 
     Result<Product> add(const Product &p);
     // Reemplazo de campos editables (los vacíos/nulos no se tocan,
-    // igual que update_product con updates dict).
-    Result<Product> update(const QString &sku, const Product &p);
+    // igual que update_product con updates dict). Con user: audita
+    // cambios de precio/stock/categoría (antes/después).
+    Result<Product> update(const QString &sku, const Product &p, const QString &user = {});
     StatusResult remove(const QString &sku);
 
     // Primitivas de stock para los servicios (no validan negocio).

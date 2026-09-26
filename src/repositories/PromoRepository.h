@@ -46,6 +46,8 @@ class PromoRepository : public QObject
     Result<Promo> add(const Promo &p);
     Result<Promo> update(int id, const Promo &p);
     StatusResult remove(int id);
+    // Fase 3: cuenta un uso de la promo (solo tras venta exitosa).
+    bool registerUse(const QString &code);
 
     // Descuento en COP para un carrito; código vacío → 0 sin error.
     Result<PromoDiscount> evaluate(const QList<CartLine> &cart, const QString &code) const;

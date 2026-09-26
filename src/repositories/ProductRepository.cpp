@@ -215,7 +215,7 @@ QList<Product> ProductRepository::searchPaged(const QString &text, const QString
     q.prepare(
         QStringLiteral("SELECT * FROM products WHERE (lower(name) LIKE ? OR lower(sku) LIKE ? "
                        "OR lower(barcode) LIKE ? OR lower(cat) LIKE ?)")
-        + btClause + QStringLiteral(" ORDER BY id"));
+        + btClause + order + pageClause);
     const QString like = u'%' + t + u'%';
     q.addBindValue(like);
     q.addBindValue(like);
@@ -357,7 +357,7 @@ Result<Product> ProductRepository::add(const Product &pin)
     return Result<Product>::success(*findBySku(p.sku));
 }
 
-Result<Product> ProductRepository::update(const QString &sku, const Product &p)
+Result<Product> ProductRepository::update(const QString &sku, const Product &p, const QString &user)
 {
     const auto cur = findBySku(sku);
     if (!cur)
