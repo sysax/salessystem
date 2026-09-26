@@ -54,6 +54,8 @@ Client ClientsController::fromMap(const QVariantMap &m, const Client &base)
 
 void ClientsController::search(const QString &text)
 {
+    m_lastText = text;
+    m_pagedActive = false;
     m_clients.clear();
     for (const Client &c : m_repos->search(text))
         m_clients << toMap(c);
@@ -64,6 +66,10 @@ void ClientsController::search(const QString &text)
 void ClientsController::searchPaged(const QString &text, int page, int pageSize)
 {
     // Fase 4: página servidor; pageSize <= 0 equivale a search().
+    m_lastText = text;
+    m_lastPage = page;
+    m_lastSize = pageSize;
+    m_pagedActive = true;
     m_totalCount = m_repos->countSearch(text);
     if (pageSize <= 0) {
         search(text);
@@ -75,12 +81,20 @@ void ClientsController::searchPaged(const QString &text, int page, int pageSize)
     emit clientsChanged();
 }
 
+void ClientsController::reloadClients()
+{
+    if (m_pagedActive)
+        searchPaged(m_lastText, m_lastPage, m_lastSize);
+    else
+        search(m_lastText);
+}
+
 QVariantMap ClientsController::add(const QVariantMap &fields)
 {
     const auto r = m_repos->add(fromMap(fields));
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    search({});
+    reloadClients();
     return {{"ok", true}};
 }
 
@@ -92,7 +106,7 @@ QVariantMap ClientsController::update(int id, const QVariantMap &fields)
     const auto r = m_repos->update(id, fromMap(fields, *cur));
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    search({});
+    reloadClients();
     return {{"ok", true}};
 }
 
@@ -101,7 +115,7 @@ QVariantMap ClientsController::remove(int id)
     const auto r = m_repos->remove(id);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    search({});
+    reloadClients();
     return {{"ok", true}};
 }
 

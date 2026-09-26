@@ -54,6 +54,10 @@ class SaleRepository : public QObject
     // Fase 4: paginación servidor (limit < 0 = sin límite) + total.
     QList<Sale> listPaged(int limit, int offset) const;
     int count() const;
+    // Fase 4: filtro texto + orden servidor (whitelist) + página + total.
+    QList<Sale> searchPaged(const QString &text, const QString &sortKey, bool sortAsc, int limit,
+                            int offset) const;
+    int countSearch(const QString &text) const;
     std::optional<Sale> find(const QString &id) const;
     QList<SaleItem> itemsFor(const QString &saleId) const;
 

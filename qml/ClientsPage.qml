@@ -9,16 +9,28 @@ ColumnLayout {
     id: root
     spacing: Theme.spacingSmall
 
+    property int page: 0
+    property int pageSize: 20
+    property int totalRows: 0
+    property int pageCount: 1
+    property bool loading: false
+
     RowLayout {
         TextField {
             id: searchField
             placeholderText: qsTr("Buscar cliente…")
             Layout.fillWidth: true
-            onAccepted: clientsCtl.search(text)
+            onAccepted: { root.page = 0; root.requestSearch(); }
         }
         Button {
             text: qsTr("Buscar")
-            onClicked: clientsCtl.search(searchField.text)
+            onClicked: { root.page = 0; root.requestSearch(); }
+        }
+        BusyIndicator {
+            visible: root.loading
+            running: root.loading
+            Layout.preferredWidth: 32
+            Layout.preferredHeight: 32
         }
         Button {
             text: qsTr("Nuevo")
@@ -53,7 +65,7 @@ ColumnLayout {
     EmptyState {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        visible: (clientsCtl.clients || []).length === 0
+        visible: (clientsCtl.clients || []).length === 0 && !root.loading
         icon: "👥"
         title: qsTr("Sin clientes")
         hint: qsTr("Registra el primero con “Nuevo” para asignar ventas y crédito.")
@@ -63,6 +75,20 @@ ColumnLayout {
             editDialog.fields = {};
             editDialog.open();
         }
+    }
+    // Fase 4: paginación servidor.
+    Pager {
+        Layout.fillWidth: true
+        visible: root.totalRows > root.pageSize
+        page: root.page
+        pageCount: root.pageCount
+        total: root.totalRows
+        pageSize: root.pageSize
+        onFirst: { root.page = 0; root.requestSearch(); }
+        onPrev: { if (root.page > 0) { root.page--; root.requestSearch(); } }
+        onNext: { if (root.page < root.pageCount - 1) { root.page++; root.requestSearch(); } }
+        onLast: { root.page = root.pageCount - 1; root.requestSearch(); }
+        onSizeChanged: function(size) { root.pageSize = size; root.page = 0; root.requestSearch(); }
     }
     Label {
         id: stmtLabel
@@ -186,4 +212,35 @@ ColumnLayout {
     function money(v) {
         return ApplicationWindow.window.money(v);
     }
+
+    // Fase 4: búsqueda paginada en servidor (deferred para pintar el BusyIndicator).
+    function requestSearch() {
+        root.loading = true;
+        queryTimer.restart();
+    }
+    function doSearch() {
+        clientsCtl.searchPaged(searchField.text, root.page, root.pageSize);
+        root.loading = false;
+    }
+    function syncView() {
+        root.totalRows = clientsCtl.totalCount;
+        root.pageCount = Math.max(1, Math.ceil(root.totalRows / root.pageSize));
+        if (root.page >= root.pageCount)
+            root.page = root.pageCount - 1;
+        if (root.page < 0)
+            root.page = 0;
+    }
+
+    Timer {
+        id: queryTimer
+        interval: 5
+        repeat: false
+        onTriggered: root.doSearch()
+    }
+    Connections {
+        target: clientsCtl
+        function onClientsChanged() { root.syncView(); }
+    }
+    Component.onCompleted: root.requestSearch()
+    onVisibleChanged: if (visible) root.requestSearch()
 }

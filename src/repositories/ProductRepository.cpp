@@ -4,6 +4,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
 #include <QSqlError>
 #include <QSqlQuery>
 
@@ -166,6 +167,13 @@ QList<Product> ProductRepository::search(const QString &text, const QString &bus
 QList<Product> ProductRepository::searchPaged(const QString &text, const QString &businessType,
                                               int limit, int offset) const
 {
+    return searchPaged(text, businessType, limit, offset, {}, true);
+}
+
+QList<Product> ProductRepository::searchPaged(const QString &text, const QString &businessType,
+                                              int limit, int offset, const QString &sortKey,
+                                              bool sortAsc) const
+{
     const QString bt = businessType.trimmed();
     // 'miscelanea' = modo mixto intencional: ve todo (incluye legacy '').
     const bool filterBt = !bt.isEmpty() && bt != QLatin1String("miscelanea");
@@ -173,18 +181,31 @@ QList<Product> ProductRepository::searchPaged(const QString &text, const QString
         = filterBt ? QStringLiteral(
                          " AND (business_type IS NULL OR business_type='' OR business_type=?)")
                    : QString();
+    // Fase 4: orden servidor con whitelist (sin inyección por nombre).
+    static const QSet<QString> kSort
+        = {QStringLiteral("id"), QStringLiteral("sku"), QStringLiteral("name"),
+           QStringLiteral("price"), QStringLiteral("stock")};
+    const QString sk = kSort.contains(sortKey.trimmed().toLower()) ? sortKey.trimmed().toLower()
+                                                                   : QStringLiteral("id");
+    const QString order = QStringLiteral(" ORDER BY ") + sk
+                          + (sortAsc ? QStringLiteral(" ASC") : QStringLiteral(" DESC"));
+    // Fase 4: paginación servidor (limit < 0 = sin límite, compatible).
+    const QString pageClause
+        = limit >= 0 ? QStringLiteral(" LIMIT %1 OFFSET %2").arg(limit).arg(qMax(0, offset))
+                     : QString();
     const QString t = text.trimmed().toLower();
     QList<Product> out;
     QSqlQuery q(m_db);
     if (t.isEmpty()) {
         if (!filterBt) {
-            if (q.exec(QStringLiteral("SELECT * FROM products ORDER BY id")))
+            if (q.exec(QStringLiteral("SELECT * FROM products") + order + pageClause))
                 while (q.next())
                     out << rowToProduct(q);
             return out;
         }
         q.prepare(QStringLiteral("SELECT * FROM products WHERE (business_type IS NULL OR "
-                                 "business_type='' OR business_type=?) ORDER BY id"));
+                                 "business_type='' OR business_type=?)")
+                  + order + pageClause);
         q.addBindValue(bt);
         if (q.exec())
             while (q.next())

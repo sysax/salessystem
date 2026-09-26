@@ -84,6 +84,66 @@ int SaleRepository::count() const
     return q.value(0).toInt();
 }
 
+QList<Sale> SaleRepository::searchPaged(const QString &text, const QString &sortKey, bool sortAsc,
+                                        int limit, int offset) const
+{
+    // Fase 4: filtro texto (folio/cliente/estado/documento) + orden servidor
+    // con whitelist + página. limit < 0 = sin límite.
+    static const QSet<QString> kSort
+        = {QStringLiteral("id"), QStringLiteral("date"), QStringLiteral("client"),
+           QStringLiteral("total"), QStringLiteral("status")};
+    const QString sk = kSort.contains(sortKey.trimmed().toLower()) ? sortKey.trimmed().toLower()
+                                                                   : QStringLiteral("id");
+    const QString order = QStringLiteral(" ORDER BY ") + sk
+                          + (sortAsc ? QStringLiteral(" ASC") : QStringLiteral(" DESC"));
+    const QString page = limit >= 0
+                             ? QStringLiteral(" LIMIT %1 OFFSET %2").arg(limit).arg(qMax(0, offset))
+                             : QString();
+    const QString t = text.trimmed().toLower();
+    QList<Sale> out;
+    QSqlQuery q(m_db);
+    if (t.isEmpty()) {
+        if (!q.exec(QStringLiteral("SELECT * FROM sales") + order + page))
+            return out;
+    } else {
+        q.prepare(
+            QStringLiteral("SELECT * FROM sales WHERE (lower(id) LIKE ? OR lower(client) LIKE "
+                           "? OR lower(status) LIKE ? OR lower(doc_type) LIKE ?)")
+            + order + page);
+        const QString like = u'%' + t + u'%';
+        q.addBindValue(like);
+        q.addBindValue(like);
+        q.addBindValue(like);
+        q.addBindValue(like);
+        if (!q.exec())
+            return out;
+    }
+    while (q.next())
+        out << rowToSale(q);
+    return out;
+}
+
+int SaleRepository::countSearch(const QString &text) const
+{
+    const QString t = text.trimmed().toLower();
+    QSqlQuery q(m_db);
+    if (t.isEmpty()) {
+        if (q.exec(QStringLiteral("SELECT COUNT(*) FROM sales")) && q.next())
+            return q.value(0).toInt();
+        return 0;
+    }
+    q.prepare(QStringLiteral("SELECT COUNT(*) FROM sales WHERE (lower(id) LIKE ? OR lower(client) "
+                             "LIKE ? OR lower(status) LIKE ? OR lower(doc_type) LIKE ?)"));
+    const QString like = u'%' + t + u'%';
+    q.addBindValue(like);
+    q.addBindValue(like);
+    q.addBindValue(like);
+    q.addBindValue(like);
+    if (!q.exec() || !q.next())
+        return 0;
+    return q.value(0).toInt();
+}
+
 std::optional<Sale> SaleRepository::find(const QString &id) const
 {
     QSqlQuery q(m_db);

@@ -33,6 +33,7 @@ QVariantMap SalesController::toMap(const Sale &s)
 
 void SalesController::refresh()
 {
+    m_pagedActive = false;
     m_sales.clear();
     for (const Sale &s : m_repos->list())
         m_sales << toMap(s);
@@ -52,6 +53,34 @@ void SalesController::refreshPaged(int page, int pageSize)
     for (const Sale &s : m_repos->listPaged(pageSize, qMax(0, page) * pageSize))
         m_sales << toMap(s);
     emit salesChanged();
+}
+
+void SalesController::searchPaged(const QString &text, const QString &sortKey, bool sortAsc,
+                                  int page, int pageSize)
+{
+    // Fase 4: filtro + orden + página en servidor.
+    m_lastText = text;
+    m_lastSortKey = sortKey;
+    m_lastSortAsc = sortAsc;
+    m_lastPage = page;
+    m_lastSize = pageSize;
+    m_pagedActive = true;
+    m_totalCount = m_repos->countSearch(text);
+    if (pageSize <= 0)
+        pageSize = m_totalCount;
+    m_sales.clear();
+    for (const Sale &s :
+         m_repos->searchPaged(text, sortKey, sortAsc, pageSize, qMax(0, page) * pageSize))
+        m_sales << toMap(s);
+    emit salesChanged();
+}
+
+void SalesController::reloadSales()
+{
+    if (m_pagedActive)
+        searchPaged(m_lastText, m_lastSortKey, m_lastSortAsc, m_lastPage, m_lastSize);
+    else
+        refresh();
 }
 
 QVariantMap SalesController::detail(const QString &id) const
@@ -80,7 +109,7 @@ QVariantMap SalesController::advance(const QString &id, const QString &status, c
     const auto r = m_repos->advanceStatus(id, status, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    refresh();
+    reloadSales();
     return {{"ok", true}};
 }
 
@@ -90,7 +119,7 @@ QVariantMap SalesController::cancel(const QString &id, const QString &reason, co
     const auto r = m_service->cancel(id, reason, user, role);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    refresh();
+    reloadSales();
     return {{"ok", true}};
 }
 
@@ -100,7 +129,7 @@ QVariantMap SalesController::createDoc(const QString &type, const QString &clien
     const auto r = m_repos->createDocument(type, client, total, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    refresh();
+    reloadSales();
     return {{"ok", true}, {"id", r.value().id}};
 }
 
@@ -110,7 +139,7 @@ QVariantMap SalesController::creditNote(const QString &id, double amount, const 
     const auto r = m_repos->createCreditNote(id, amount, reason, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    refresh();
+    reloadSales();
     return {{"ok", true}, {"id", r.value().id}};
 }
 
@@ -120,7 +149,7 @@ QVariantMap SalesController::debitNote(const QString &id, double amount, const Q
     const auto r = m_repos->createDebitNote(id, amount, reason, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    refresh();
+    reloadSales();
     return {{"ok", true}, {"id", r.value().id}};
 }
 

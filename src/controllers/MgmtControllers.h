@@ -44,10 +44,17 @@ class ClientsController : public QObject
     void clientsChanged();
 
   private:
+    // Fase 4: re-ejecuta la última consulta tras mutar.
+    void reloadClients();
+
     ClientRepository *m_repos = nullptr;
     ReceivablesService *m_cxc = nullptr;
     QVariantList m_clients;
     int m_totalCount = 0;
+    QString m_lastText;
+    int m_lastPage = 0;
+    int m_lastSize = 0;
+    bool m_pagedActive = false;
 };
 
 // Proveedores (antes SuppliersScreen): CRUD.

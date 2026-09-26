@@ -18,6 +18,7 @@ ColumnLayout {
     property var viewRows: []
     property int totalRows: 0
     property int pageCount: 1
+    property bool loading: false
 
     // Fase 1: nombres de tasas desde Configuración (sin SQL en QML).
     function taxNames() {
@@ -52,12 +53,18 @@ ColumnLayout {
             placeholderText: qsTr("Buscar… (servidor)")
             Layout.fillWidth: true
             implicitHeight: 48
-            onAccepted: { root.page = 0; catalog.search(text); }
+            onAccepted: { root.page = 0; root.requestView(); }
         }
         Button {
             text: qsTr("Buscar")
             implicitHeight: 48
-            onClicked: { root.page = 0; catalog.search(searchField.text); }
+            onClicked: { root.page = 0; root.requestView(); }
+        }
+        BusyIndicator {
+            visible: root.loading
+            running: root.loading
+            Layout.preferredWidth: 32
+            Layout.preferredHeight: 32
         }
         Button {
             text: qsTr("Nuevo")
@@ -73,10 +80,10 @@ ColumnLayout {
     RowLayout {
         TextField {
             id: filterField
-            placeholderText: qsTr("Filtrar en vista (nombre, SKU, categoría)…")
+            placeholderText: qsTr("Filtrar en servidor (nombre, SKU, categoría)…")
             Layout.fillWidth: true
             implicitHeight: 40
-            onTextChanged: { root.page = 0; root.refreshView(); }
+            onTextChanged: { root.page = 0; root.requestView(); }
         }
         Label {
             text: qsTr("%1 ítems").arg(root.totalRows)
@@ -161,11 +168,11 @@ ColumnLayout {
     EmptyState {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        visible: root.viewRows.length === 0
+        visible: root.viewRows.length === 0 && !root.loading
         icon: "📦"
-        title: (catalog.products || []).length === 0 ? qsTr("Sin productos") : qsTr("Sin resultados")
-        hint: (catalog.products || []).length === 0 ? qsTr("Crea el primero con “Nuevo”, importa desde Compras o inicializa el catálogo del rubro en Configuración.") : qsTr("Ajusta el filtro o la búsqueda.")
-        actionText: (catalog.products || []).length === 0 ? qsTr("Nuevo producto") : ""
+        title: root.totalRows === 0 ? qsTr("Sin productos") : qsTr("Sin resultados")
+        hint: root.totalRows === 0 ? qsTr("Crea el primero con “Nuevo”, importa desde Compras o inicializa el catálogo del rubro en Configuración.") : qsTr("Ajusta el filtro o la búsqueda.")
+        actionText: root.totalRows === 0 ? qsTr("Nuevo producto") : ""
         onAction: {
             editDialog.sku = "";
             editDialog.fields = {};
@@ -178,11 +185,11 @@ ColumnLayout {
         pageCount: root.pageCount
         total: root.totalRows
         pageSize: root.pageSize
-        onFirst: { root.page = 0; root.refreshView(); }
-        onPrev: { if (root.page > 0) { root.page--; root.refreshView(); } }
-        onNext: { if (root.page < root.pageCount - 1) { root.page++; root.refreshView(); } }
-        onLast: { root.page = root.pageCount - 1; root.refreshView(); }
-        onSizeChanged: function(size) { root.pageSize = size; root.page = 0; root.refreshView(); }
+        onFirst: { root.page = 0; root.requestView(); }
+        onPrev: { if (root.page > 0) { root.page--; root.requestView(); } }
+        onNext: { if (root.page < root.pageCount - 1) { root.page++; root.requestView(); } }
+        onLast: { root.page = root.pageCount - 1; root.requestView(); }
+        onSizeChanged: function(size) { root.pageSize = size; root.page = 0; root.requestView(); }
     }
 
     // Multitienda: el rubro activo decide qué campos verticales se muestran.
@@ -249,67 +256,50 @@ ColumnLayout {
             root.sortAsc = true;
         }
         root.page = 0;
-        root.refreshView();
+        root.requestView();
     }
 
-    function valOf(m, key) {
-        if (key === "sku")
-            return String(m.sku || "");
-        if (key === "name")
-            return String(m.name || "");
-        if (key === "price")
-            return Number(m.price) || 0;
-        return Number(m.stock) || 0;
+    // Fase 4: consulta única a servidor (texto + orden + página).
+    function queryText() {
+        return filterField.text !== "" ? filterField.text : searchField.text;
     }
-
-    function refreshView() {
-        var f = filterField.text.toLowerCase();
-        var base = [];
-        var src = catalog.products || [];
-        for (var i = 0; i < src.length; ++i) {
-            var m = src[i];
-            if (f !== "") {
-                var hay = String(m.sku || "").toLowerCase() + " " + String(m.name || "").toLowerCase() + " " + String(m.cat || "").toLowerCase();
-                if (hay.indexOf(f) < 0)
-                    continue;
-            }
-            base.push(m);
-        }
-        var k = root.sortKey;
-        var asc = root.sortAsc;
-        base.sort(function(a, b) {
-            var va = root.valOf(a, k);
-            var vb = root.valOf(b, k);
-            if (va < vb)
-                return asc ? -1 : 1;
-            if (va > vb)
-                return asc ? 1 : -1;
-            return 0;
-        });
-        root.totalRows = base.length;
-        root.pageCount = Math.max(1, Math.ceil(base.length / root.pageSize));
+    function requestView() {
+        root.loading = true;
+        queryTimer.restart();
+    }
+    function doView() {
+        catalog.searchPaged(root.queryText(), "", root.page, root.pageSize, root.sortKey,
+                            root.sortAsc);
+        root.loading = false;
+    }
+    function syncView() {
+        root.viewRows = catalog.products || [];
+        root.totalRows = catalog.totalCount;
+        root.pageCount = Math.max(1, Math.ceil(root.totalRows / root.pageSize));
         if (root.page >= root.pageCount)
             root.page = root.pageCount - 1;
         if (root.page < 0)
             root.page = 0;
-        var out = [];
-        var start = root.page * root.pageSize;
-        var end = Math.min(start + root.pageSize, base.length);
-        for (var j = start; j < end; ++j)
-            out.push(base[j]);
-        root.viewRows = out;
     }
 
-    Component.onCompleted: { refreshView(); reloadCats(); }
+    Timer {
+        id: queryTimer
+        interval: 5
+        repeat: false
+        onTriggered: root.doView()
+    }
+
+    Component.onCompleted: { root.requestView(); reloadCats(); }
+    onVisibleChanged: if (visible) root.requestView()
 
     Connections {
         target: catalog
-        function onProductsChanged() { root.refreshView(); }
-        function onCategoriesChanged() { root.refreshView(); }
+        function onProductsChanged() { root.syncView(); }
+        function onCategoriesChanged() { root.syncView(); }
     }
     Connections {
         target: settingsCtl
-        function onSettingsChanged() { root.reloadCats(); catalog.search(""); }
+        function onSettingsChanged() { root.reloadCats(); root.page = 0; root.requestView(); }
     }
 
     Dialog {

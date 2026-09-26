@@ -18,6 +18,7 @@ ColumnLayout {
     property var viewRows: []
     property int totalRows: 0
     property int pageCount: 1
+    property bool loading: false
 
     RowLayout {
         Label {
@@ -26,19 +27,25 @@ ColumnLayout {
             font.bold: true
             Layout.fillWidth: true
         }
+        BusyIndicator {
+            visible: root.loading
+            running: root.loading
+            Layout.preferredWidth: 32
+            Layout.preferredHeight: 32
+        }
         Button {
             text: qsTr("Actualizar")
             implicitHeight: 48
-            onClicked: salesCtl.refresh()
+            onClicked: root.requestView()
         }
     }
     RowLayout {
         TextField {
             id: filterField
-            placeholderText: qsTr("Filtrar (cliente, folio, estado, documento)…")
+            placeholderText: qsTr("Filtrar en servidor (folio, cliente, estado)…")
             Layout.fillWidth: true
             implicitHeight: 40
-            onTextChanged: { root.page = 0; root.refreshView(); }
+            onTextChanged: { root.page = 0; root.requestView(); }
         }
         Label {
             text: qsTr("%1 ítems").arg(root.totalRows)
@@ -156,11 +163,11 @@ ColumnLayout {
     EmptyState {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        visible: root.viewRows.length === 0
+        visible: root.viewRows.length === 0 && !root.loading
         icon: "🧾"
-        title: (salesCtl.sales || []).length === 0 ? qsTr("Sin ventas aún") : qsTr("Sin resultados")
-        hint: (salesCtl.sales || []).length === 0 ? qsTr("Las ventas cobradas en el POS aparecerán aquí.") : qsTr("Ajusta el filtro.")
-        actionText: (salesCtl.sales || []).length === 0 ? qsTr("Ir al POS") : ""
+        title: root.totalRows === 0 ? qsTr("Sin ventas aún") : qsTr("Sin resultados")
+        hint: root.totalRows === 0 ? qsTr("Las ventas cobradas en el POS aparecerán aquí.") : qsTr("Ajusta el filtro.")
+        actionText: root.totalRows === 0 ? qsTr("Ir al POS") : ""
         onAction: root.go("pos")
     }
     Pager {
@@ -169,11 +176,11 @@ ColumnLayout {
         pageCount: root.pageCount
         total: root.totalRows
         pageSize: root.pageSize
-        onFirst: { root.page = 0; root.refreshView(); }
-        onPrev: { if (root.page > 0) { root.page--; root.refreshView(); } }
-        onNext: { if (root.page < root.pageCount - 1) { root.page++; root.refreshView(); } }
-        onLast: { root.page = root.pageCount - 1; root.refreshView(); }
-        onSizeChanged: function(size) { root.pageSize = size; root.page = 0; root.refreshView(); }
+        onFirst: { root.page = 0; root.requestView(); }
+        onPrev: { if (root.page > 0) { root.page--; root.requestView(); } }
+        onNext: { if (root.page < root.pageCount - 1) { root.page++; root.requestView(); } }
+        onLast: { root.page = root.pageCount - 1; root.requestView(); }
+        onSizeChanged: function(size) { root.pageSize = size; root.page = 0; root.requestView(); }
     }
 
     function setSort(key) {
@@ -184,62 +191,42 @@ ColumnLayout {
             root.sortAsc = key === "client" || key === "status";
         }
         root.page = 0;
-        root.refreshView();
+        root.requestView();
     }
 
-    function valOf(m, key) {
-        if (key === "client")
-            return String(m.client || "");
-        if (key === "status")
-            return String(m.status || "");
-        if (key === "total")
-            return Number(m.total) || 0;
-        return String(m.id || "");
+    // Fase 4: filtro + orden + página en servidor (deferred para el BusyIndicator).
+    function requestView() {
+        root.loading = true;
+        queryTimer.restart();
     }
-
-    function refreshView() {
-        var f = filterField.text.toLowerCase();
-        var base = [];
-        var src = salesCtl.sales || [];
-        for (var i = 0; i < src.length; ++i) {
-            var m = src[i];
-            if (f !== "") {
-                var hay = String(m.id || "").toLowerCase() + " " + String(m.client || "").toLowerCase() + " " + String(m.status || "").toLowerCase() + " " + String(m.docType || "").toLowerCase();
-                if (hay.indexOf(f) < 0)
-                    continue;
-            }
-            base.push(m);
-        }
-        var k = root.sortKey;
-        var asc = root.sortAsc;
-        base.sort(function(a, b) {
-            var va = root.valOf(a, k);
-            var vb = root.valOf(b, k);
-            if (va < vb)
-                return asc ? -1 : 1;
-            if (va > vb)
-                return asc ? 1 : -1;
-            return 0;
-        });
-        root.totalRows = base.length;
-        root.pageCount = Math.max(1, Math.ceil(base.length / root.pageSize));
+    function doView() {
+        salesCtl.searchPaged(filterField.text, root.sortKey, root.sortAsc, root.page,
+                             root.pageSize);
+        root.loading = false;
+    }
+    function syncView() {
+        root.viewRows = salesCtl.sales || [];
+        root.totalRows = salesCtl.totalCount;
+        root.pageCount = Math.max(1, Math.ceil(root.totalRows / root.pageSize));
         if (root.page >= root.pageCount)
             root.page = root.pageCount - 1;
         if (root.page < 0)
             root.page = 0;
-        var out = [];
-        var start = root.page * root.pageSize;
-        var end = Math.min(start + root.pageSize, base.length);
-        for (var j = start; j < end; ++j)
-            out.push(base[j]);
-        root.viewRows = out;
     }
 
-    Component.onCompleted: refreshView()
+    Timer {
+        id: queryTimer
+        interval: 5
+        repeat: false
+        onTriggered: root.doView()
+    }
+
+    Component.onCompleted: root.requestView()
+    onVisibleChanged: if (visible) root.requestView()
 
     Connections {
         target: salesCtl
-        function onSalesChanged() { root.refreshView(); }
+        function onSalesChanged() { root.syncView(); }
     }
 
     Dialog {

@@ -38,7 +38,7 @@ class CatalogController : public QObject
     Q_INVOKABLE void search(const QString &text, const QString &businessType = {});
     // Fase 4: página servidor (page 0-based; pageSize <= 0 = todo).
     Q_INVOKABLE void searchPaged(const QString &text, const QString &businessType, int page,
-                                 int pageSize);
+                                 int pageSize, const QString &sortKey = {}, bool sortAsc = true);
     Q_INVOKABLE QVariantMap add(const QVariantMap &fields);
     Q_INVOKABLE QVariantMap update(const QString &sku, const QVariantMap &fields);
     Q_INVOKABLE QVariantMap remove(const QString &sku);
@@ -62,6 +62,9 @@ class CatalogController : public QObject
     void categoriesChanged();
 
   private:
+    // Fase 4: re-ejecuta la última consulta (paginada o no) tras mutar.
+    void reloadProducts();
+
     ProductRepository *m_repos = nullptr;
     CategoryRepository *m_cats = nullptr;
     SettingsService *m_settings = nullptr;
@@ -69,4 +72,12 @@ class CatalogController : public QObject
     QVariantList m_products;
     QVariantList m_categories;
     int m_totalCount = 0;
+    // Última consulta de productos (sticky para add/update/remove).
+    QString m_lastText;
+    QString m_lastBt;
+    int m_lastPage = 0;
+    int m_lastSize = 0;
+    QString m_lastSortKey;
+    bool m_lastSortAsc = true;
+    bool m_pagedActive = false;
 };

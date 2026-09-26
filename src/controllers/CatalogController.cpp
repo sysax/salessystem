@@ -143,15 +143,17 @@ void CatalogController::search(const QString &text, const QString &businessType)
         bt = m_settings->businessType().trimmed();
     if (bt == QLatin1String("miscelanea"))
         bt.clear();
+    m_lastText = text;
+    m_lastBt = businessType;
+    m_pagedActive = false;
     m_products.clear();
     for (const Product &p : m_repos->search(text, bt))
         m_products << toMap(p);
     m_totalCount = m_products.size();
     emit productsChanged();
 }
-
 void CatalogController::searchPaged(const QString &text, const QString &businessType, int page,
-                                    int pageSize)
+                                    int pageSize, const QString &sortKey, bool sortAsc)
 {
     // Fase 4: página servidor; pageSize <= 0 equivale a search().
     QString bt = businessType.trimmed();
@@ -160,12 +162,20 @@ void CatalogController::searchPaged(const QString &text, const QString &business
     if (bt == QLatin1String("miscelanea"))
         bt.clear();
     m_totalCount = m_repos->countSearch(text, bt);
+    m_lastText = text;
+    m_lastBt = businessType;
+    m_lastPage = page;
+    m_lastSize = pageSize;
+    m_lastSortKey = sortKey;
+    m_lastSortAsc = sortAsc;
+    m_pagedActive = true;
     if (pageSize <= 0) {
         search(text, businessType);
         return;
     }
     m_products.clear();
-    for (const Product &p : m_repos->searchPaged(text, bt, pageSize, qMax(0, page) * pageSize))
+    for (const Product &p :
+         m_repos->searchPaged(text, bt, pageSize, qMax(0, page) * pageSize, sortKey, sortAsc))
         m_products << toMap(p);
     emit productsChanged();
 }
@@ -186,7 +196,7 @@ QVariantMap CatalogController::add(const QVariantMap &fields)
     const auto r = m_repos->add(p);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    search({});
+    reloadProducts();
     return {{"ok", true}};
 }
 
@@ -203,7 +213,7 @@ QVariantMap CatalogController::update(const QString &sku, const QVariantMap &fie
     const auto r = m_repos->update(sku, p);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    search({});
+    reloadProducts();
     return {{"ok", true}};
 }
 
@@ -212,8 +222,16 @@ QVariantMap CatalogController::remove(const QString &sku)
     const auto r = m_repos->remove(sku);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    search({});
+    reloadProducts();
     return {{"ok", true}};
+}
+
+void CatalogController::reloadProducts()
+{
+    if (m_pagedActive)
+        searchPaged(m_lastText, m_lastBt, m_lastPage, m_lastSize, m_lastSortKey, m_lastSortAsc);
+    else
+        search(m_lastText, m_lastBt);
 }
 
 QVariantMap CatalogController::categoryToMap(const Category &c)

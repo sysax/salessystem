@@ -27,8 +27,11 @@ class ProductRepository : public QObject
     // si no, (business_type='' OR business_type=bt). '' = legacy visible en todos.
     QList<Product> search(const QString &text, const QString &businessType) const;
     // Fase 4: paginación servidor (limit < 0 = sin límite) + total.
+    // sortKey con whitelist (id|sku|name|price|stock) para orden servidor.
     QList<Product> searchPaged(const QString &text, const QString &businessType, int limit,
                                int offset) const;
+    QList<Product> searchPaged(const QString &text, const QString &businessType, int limit,
+                               int offset, const QString &sortKey, bool sortAsc) const;
     int countSearch(const QString &text, const QString &businessType = {}) const;
 
     Result<Product> add(const Product &p);

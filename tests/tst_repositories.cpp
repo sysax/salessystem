@@ -217,6 +217,35 @@ class TstRepositories : public QObject
         QCOMPARE(m_caja->movements(turno).size(), 5);   // + cierre auditado
     }
 
+    void salesSearchPaging()
+    {
+        // Fase 4: filtro texto + orden servidor + páginas (clientes únicos).
+        QVERIFY(m_sales
+                    ->createDocument(QStringLiteral("Remisión"), QStringLiteral("QTest Zeta"),
+                                     300.0, QStringLiteral("tester"))
+                    .ok());
+        QVERIFY(m_sales
+                    ->createDocument(QStringLiteral("Remisión"), QStringLiteral("QTest Alfa"),
+                                     100.0, QStringLiteral("tester"))
+                    .ok());
+        QVERIFY(m_sales
+                    ->createDocument(QStringLiteral("Remisión"), QStringLiteral("QTest Media"),
+                                     200.0, QStringLiteral("tester"))
+                    .ok());
+        QCOMPARE(m_sales->countSearch(QStringLiteral("qtest")), 3);
+        QCOMPARE(m_sales->countSearch(QStringLiteral("QTest Zeta")), 1);
+        // Orden por total descendente: 300, 200, 100.
+        const auto desc
+            = m_sales->searchPaged(QStringLiteral("qtest"), QStringLiteral("total"), false, 10, 0);
+        QCOMPARE(desc.size(), 3);
+        QCOMPARE(desc[0].total, 300.0);
+        QCOMPARE(desc[2].total, 100.0);
+        // Página 2 de a 2 con filtro: 1 resto.
+        const auto p2
+            = m_sales->searchPaged(QStringLiteral("qtest"), QStringLiteral("id"), true, 2, 2);
+        QCOMPARE(p2.size(), 1);
+    }
+
     void purchaseFlow()
     {
         PurchaseService svc(m_dbm->database(), m_purchases, m_products, m_suppliers, m_inventory,
