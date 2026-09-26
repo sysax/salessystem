@@ -135,6 +135,32 @@ class TstInventoryService : public QObject
         QVERIFY(!m_inventory->belowMin().isEmpty());
     }
 
+    void reserveFlow()
+    {
+        // Fase 3: apartar bloquea disponible sin tocar el físico.
+        Product p;
+        p.sku = QStringLiteral("RSV1");
+        p.name = QStringLiteral("Reservable");
+        p.price = 1000;
+        p.stock = 10;
+        QVERIFY(m_products->add(p).ok());
+        auto r = m_svc->reserveStock(QStringLiteral("RSV1"), 4, QStringLiteral("apartado"),
+                                     QStringLiteral("tester"));
+        QVERIFY(r.ok());
+        QCOMPARE(r.value().reserved, 4.0);
+        QCOMPARE(r.value().available, 6.0);
+        QCOMPARE(m_products->findBySku(QStringLiteral("RSV1"))->stock, 10.0); // físico intacto
+        QVERIFY(!m_svc
+                     ->reserveStock(QStringLiteral("RSV1"), 7, QStringLiteral("exceso"),
+                                    QStringLiteral("tester"))
+                     .ok()); // disponible 6
+        QVERIFY(!m_svc->reserveStock(QStringLiteral("RSV1"), 1, QString(), QStringLiteral("tester"))
+                     .ok()); // motivo obligatorio
+        auto rel = m_svc->releaseStock(QStringLiteral("RSV1"), 1, QStringLiteral("tester"));
+        QVERIFY(rel.ok());
+        QCOMPARE(m_products->findBySku(QStringLiteral("RSV1"))->reserved, 3.0);
+    }
+
   private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_dbm = nullptr;

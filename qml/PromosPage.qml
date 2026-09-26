@@ -55,6 +55,8 @@ ColumnLayout {
                 text: modelData.code + "  ·  " + modelData.name + "  ·  " + modelData.type + " " + modelData.value
                       + (modelData.businessType ? "  ·  " + modelData.businessType : "")
                       + ((modelData.validFrom || modelData.validTo) ? "  ·  " + (modelData.validFrom || "…") + " → " + (modelData.validTo || "…") : "")
+                      + ((modelData.priority || 0) > 0 ? "  ·  P" + modelData.priority : "")
+                      + ((modelData.maxUses || 0) > 0 ? "  ·  " + modelData.uses + "/" + modelData.maxUses : "")
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
@@ -107,6 +109,23 @@ ColumnLayout {
                 id: pCond
                 placeholderText: qsTr("Condición (categoría, SKU o min N)")
             }
+            // Fase 3: prioridad (mayor primero) y tope de usos (vacío = ilimitada).
+            RowLayout {
+                TextField {
+                    id: pPriority
+                    placeholderText: qsTr("Prioridad (0)")
+                    maximumLength: 3
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    Layout.fillWidth: true
+                }
+                TextField {
+                    id: pMaxUses
+                    placeholderText: qsTr("Usos máx. (vacío = ∞)")
+                    maximumLength: 6
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    Layout.fillWidth: true
+                }
+            }
             // Fase 3: vigencia opcional (vacía = siempre vigente).
             RowLayout {
                 TextField {
@@ -138,6 +157,8 @@ ColumnLayout {
                 "condition": pCond.text,
                 "validFrom": (from === "----" || from === "--" || from === "") ? "" : from,
                 "validTo": (to === "----" || to === "--" || to === "") ? "" : to,
+                "priority": parseInt(pPriority.text) || 0,
+                "maxUses": parseInt(pMaxUses.text) || 0,
                 "active": true
             });
             if (!r.ok) {

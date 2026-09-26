@@ -148,7 +148,8 @@ ColumnLayout {
                 }
                 Label {
                     text: Utils.formatQty(modelData.stock) + (modelData.unit ? " " + modelData.unit : "")
-                    Layout.preferredWidth: 110
+                          + ((modelData.reserved || 0) > 0 ? " · disp " + Utils.formatQty((modelData.available !== undefined ? modelData.available : modelData.stock)) : "")
+                    Layout.preferredWidth: 140
                     horizontalAlignment: Text.AlignRight
                     color: modelData.stock <= 0 ? "red" : palette.text
                     font.bold: modelData.stock <= 0

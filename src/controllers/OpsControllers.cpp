@@ -64,6 +64,25 @@ QVariantMap InventoryController::valuation() const
     return {{"totalValue", v.totalValue}, {"productsCount", v.productsCount}};
 }
 
+QVariantMap InventoryController::reserve(const QString &sku, double qty, const QString &reason,
+                                         const QString &user)
+{
+    const auto r = m_service->reserveStock(sku, qty, reason, user);
+    if (!r.ok())
+        return {{"ok", false}, {"error", r.error()}};
+    refresh();
+    return {{"ok", true}, {"reserved", r.value().reserved}, {"available", r.value().available}};
+}
+
+QVariantMap InventoryController::release(const QString &sku, double qty, const QString &user)
+{
+    const auto r = m_service->releaseStock(sku, qty, user);
+    if (!r.ok())
+        return {{"ok", false}, {"error", r.error()}};
+    refresh();
+    return {{"ok", true}, {"reserved", r.value().reserved}, {"available", r.value().available}};
+}
+
 // ── Purchases ─────────────────────────────────────────────────────────────
 
 PurchasesController::PurchasesController(PurchaseService *service, PurchaseRepository *repos,
@@ -189,6 +208,9 @@ QVariantMap PromosController::toMap(const Promo &p)
             {"businessType", p.businessType},
             {"validFrom", p.validFrom},
             {"validTo", p.validTo},
+            {"priority", p.priority},
+            {"maxUses", p.maxUses},
+            {"uses", p.uses},
             {"desc", p.desc}};
 }
 
@@ -221,6 +243,11 @@ QVariantMap PromosController::add(const QVariantMap &fields)
     p.validTo = fields.value(QStringLiteral("validTo")).toString().trimmed();
     if (p.validTo.isEmpty())
         p.validTo = fields.value(QStringLiteral("valid_to")).toString().trimmed();
+    // Fase 3: prioridad y tope de usos (0 = ilimitada).
+    p.priority = fields.value(QStringLiteral("priority")).toInt();
+    p.maxUses = qMax(0, fields.value(QStringLiteral("maxUses")).toInt());
+    if (fields.contains(QStringLiteral("max_uses")))
+        p.maxUses = qMax(0, fields.value(QStringLiteral("max_uses")).toInt());
     p.businessType = fields.value(QStringLiteral("businessType")).toString().trimmed();
     if (p.businessType.isEmpty())
         p.businessType = fields.value(QStringLiteral("business_type")).toString().trimmed();

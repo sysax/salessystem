@@ -1,5 +1,7 @@
 #include "InventoryService.h"
 
+#include <QSqlQuery>
+
 #include "../core/EventBus.h"
 
 InventoryService::InventoryService(QSqlDatabase db, ProductRepository *products,
@@ -151,4 +153,105 @@ InventoryService::Valuation InventoryService::valuation() const
 QList<InventoryMovement> InventoryService::movementsBySku(const QString &sku) const
 {
     return m_inventory->movementsBySku(sku);
+}
+
+namespace
+{
+// Transacción inline (BEGIN/COMMIT/ROLLBACK explícitos): no depende de
+// Transaction.h de Fase 1; reserva + movimiento quedan atómicos.
+struct InlineTx
+{
+    explicit InlineTx(QSqlDatabase &db) : m_db(db)
+    {
+        QSqlQuery q(m_db);
+        m_ok = q.exec(QStringLiteral("BEGIN IMMEDIATE"));
+    }
+    ~InlineTx()
+    {
+        if (m_ok && !m_done) {
+            QSqlQuery q(m_db);
+            q.exec(QStringLiteral("ROLLBACK"));
+        }
+    }
+    bool commit()
+    {
+        QSqlQuery q(m_db);
+        m_done = q.exec(QStringLiteral("COMMIT"));
+        return m_done;
+    }
+    bool valid() const
+    {
+        return m_ok;
+    }
+    QSqlDatabase m_db;
+    bool m_ok = false;
+    bool m_done = false;
+};
+} // namespace
+
+Result<InventoryService::ReserveResult> InventoryService::reserveStock(const QString &sku,
+                                                                       double qty,
+                                                                       const QString &reason,
+                                                                       const QString &user)
+{
+    if (qty <= 0)
+        return Result<ReserveResult>::failure(QStringLiteral("Cantidad >0"));
+    if (reason.trimmed().isEmpty())
+        return Result<ReserveResult>::failure(QStringLiteral("Justificación requerida"));
+    const auto p = m_products->findBySku(sku);
+    if (!p)
+        return Result<ReserveResult>::failure(QStringLiteral("SKU %1 no encontrado").arg(sku));
+    InlineTx resTx(m_db);
+    if (!resTx.valid())
+        return Result<ReserveResult>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+    if (!m_products->reserveAtomic(p->id, qty))
+        return Result<ReserveResult>::failure(
+            QStringLiteral("Sin disponible para apartar (disponible %1)").arg(p->available()));
+    const auto cur = m_products->findBySku(sku);
+    if (!cur)
+        return Result<ReserveResult>::failure(QStringLiteral("SKU %1 no encontrado").arg(sku));
+    if (!m_inventory->record(sku, p->name, QStringLiteral("Apartado"), -qty, p->available(),
+                             cur->available(), reason, user))
+        return Result<ReserveResult>::failure(QStringLiteral("No se pudo registrar el movimiento"));
+    if (!resTx.commit())
+        return Result<ReserveResult>::failure(QStringLiteral("No se pudo confirmar el apartado"));
+    if (m_bus)
+        m_bus->publish(EventBus::InventoryUpdated,
+                       {{"product_id", p->id}, {"quantity_change", 0.0}});
+    ReserveResult r;
+    r.sku = sku;
+    r.reserved = cur->reserved;
+    r.available = cur->available();
+    return Result<ReserveResult>::success(r);
+}
+
+Result<InventoryService::ReserveResult>
+InventoryService::releaseStock(const QString &sku, double qty, const QString &user)
+{
+    if (qty <= 0)
+        return Result<ReserveResult>::failure(QStringLiteral("Cantidad >0"));
+    const auto p = m_products->findBySku(sku);
+    if (!p)
+        return Result<ReserveResult>::failure(QStringLiteral("SKU %1 no encontrado").arg(sku));
+    InlineTx relTx(m_db);
+    if (!relTx.valid())
+        return Result<ReserveResult>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+    if (!m_products->releaseAtomic(p->id, qty))
+        return Result<ReserveResult>::failure(QStringLiteral("No se pudo liberar %1").arg(sku));
+    const auto cur = m_products->findBySku(sku);
+    if (!cur)
+        return Result<ReserveResult>::failure(QStringLiteral("SKU %1 no encontrado").arg(sku));
+    if (!m_inventory->record(sku, p->name, QStringLiteral("Liberado"), qty, p->available(),
+                             cur->available(), QStringLiteral("liberación manual"), user))
+        return Result<ReserveResult>::failure(QStringLiteral("No se pudo registrar el movimiento"));
+    if (!relTx.commit())
+        return Result<ReserveResult>::failure(QStringLiteral("No se pudo confirmar"));
+    if (m_bus)
+        m_bus->publish(EventBus::InventoryUpdated,
+                       {{"product_id", p->id}, {"quantity_change", 0.0}});
+    ReserveResult r;
+    r.sku = sku;
+    r.reserved = cur->reserved;
+    r.available = cur->available();
+    return Result<ReserveResult>::success(r);
 }

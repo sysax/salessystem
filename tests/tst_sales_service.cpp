@@ -165,6 +165,25 @@ class TstSalesService : public QObject
                     .ok());
     }
 
+    void reserveBlocksSale()
+    {
+        // Fase 3: con todo apartado no sale ni 1 unidad; al liberar, sí.
+        const auto p2 = m_products->findBySku(QStringLiteral("P002"));
+        QVERIFY(p2.has_value());
+        const double avail = p2->available();
+        QVERIFY(avail > 0);
+        QVERIFY(m_products->reserveAtomic(p2->id, avail));
+        QVERIFY(!m_svc
+                     ->create({SI{.productId = 2, .qty = 1.0}}, QStringLiteral("Mostrador"), {},
+                              QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"))
+                     .ok());
+        QVERIFY(m_products->releaseAtomic(p2->id, avail));
+        QVERIFY(m_svc
+                    ->create({SI{.productId = 2, .qty = 1.0}}, QStringLiteral("Mostrador"), {},
+                             QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"))
+                    .ok());
+    }
+
     void cancelRevertsStock()
     {
         auto r = m_svc->create({SI{.productId = 6, .qty = 3}}, QStringLiteral("Juan Pérez"), {},

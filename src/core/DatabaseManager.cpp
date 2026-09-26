@@ -185,6 +185,10 @@ bool DatabaseManager::migrateLegacyColumns()
          "business_type TEXT DEFAULT ''"}, // Multitienda: promos por rubro ('' = todas)
         {"promos", "valid_from", "valid_from TEXT DEFAULT ''"}, // Fase 3: vigencia
         {"promos", "valid_to", "valid_to TEXT DEFAULT ''"},
+        {"promos", "priority", "priority INTEGER DEFAULT 0"}, // Fase 3: prioridad
+        {"promos", "max_uses", "max_uses INTEGER DEFAULT 0"},  // 0 = ilimitada
+        {"promos", "uses", "uses INTEGER DEFAULT 0"},
+        {"products", "stock_reserved", "stock_reserved REAL DEFAULT 0"}, // Fase 3: apartados
         {"sale_items", "attrs_json", "attrs_json TEXT DEFAULT '{}'"},
         {"sale_items", "serial", "serial TEXT DEFAULT ''"},
     };
@@ -192,6 +196,15 @@ bool DatabaseManager::migrateLegacyColumns()
         if (!ensureColumn(QString::fromLatin1(c.table), QString::fromLatin1(c.name),
                           QString::fromLatin1(c.definition)))
             return false;
+    }
+    // Fase 3: movimientos de caja normalizados (tabla aditiva).
+    QSqlQuery mv(m_db);
+    if (!mv.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS caja_movimientos (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "ts TEXT, turno TEXT, tipo TEXT, monto REAL, metodo_pago TEXT, sale_id TEXT, user_id "
+            "TEXT)"))) {
+        m_status = QStringLiteral("migrate: ") + mv.lastError().text();
+        return false;
     }
     return true;
 }

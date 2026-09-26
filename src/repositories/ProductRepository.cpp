@@ -71,6 +71,8 @@ Product ProductRepository::rowToProduct(const QSqlQuery &q)
     p.tax = q.value(QStringLiteral("tax")).toString();
     p.unit = q.value(QStringLiteral("unit")).toString();
     p.stock = q.value(QStringLiteral("stock")).toDouble();
+    // Fase 3: apartados (columna aditiva; legacy → 0).
+    p.reserved = q.value(QStringLiteral("stock_reserved")).toDouble();
     p.stockMin = q.value(QStringLiteral("stock_min")).toDouble();
     p.stockMax = q.value(QStringLiteral("stock_max")).toDouble();
     p.location = q.value(QStringLiteral("location")).toString();
@@ -373,6 +375,29 @@ bool ProductRepository::setStockBySku(const QString &sku, double stock)
     q.addBindValue(stock);
     q.addBindValue(sku);
     return q.exec() && q.numRowsAffected() > 0;
+}
+
+bool ProductRepository::reserveAtomic(int id, double qty)
+{
+    // Fase 3: aparta sin tocar el físico; falla si no hay disponible.
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("UPDATE products SET stock_reserved = stock_reserved + ? WHERE id = ? "
+                             "AND stock - stock_reserved >= ?"));
+    q.addBindValue(qty);
+    q.addBindValue(id);
+    q.addBindValue(qty);
+    return q.exec() && q.numRowsAffected() == 1;
+}
+
+bool ProductRepository::releaseAtomic(int id, double qty)
+{
+    // Fase 3: libera apartados (con tope en 0, sin fallar).
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("UPDATE products SET stock_reserved = MAX(0, stock_reserved - ?) "
+                             "WHERE id = ?"));
+    q.addBindValue(qty);
+    q.addBindValue(id);
+    return q.exec() && q.numRowsAffected() == 1;
 }
 
 QList<Product> ProductRepository::kits() const

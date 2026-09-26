@@ -25,6 +25,8 @@ struct Product
     QString unit = QStringLiteral("unidad");
     // Fase 2: cantidades decimales (granel). SQLite guarda REAL sin ALTER.
     double stock = 0.0;
+    // Fase 3: apartados (reservado no disponible para vender).
+    double reserved = 0.0;
     double stockMin = 5.0;
     double stockMax = 50.0;
     QString location;
@@ -39,6 +41,11 @@ struct Product
     QString attrsJson = QStringLiteral("{}");
     bool isKit = false;
     QString kitJson = QStringLiteral("[]");
+    // Fase 3: disponible para vender (físico menos apartados).
+    double available() const
+    {
+        return stock - reserved;
+    }
 };
 
 struct KitComponent
@@ -154,6 +161,10 @@ struct Promo
     // Fase 3: vigencia AAAA-MM-DD ('' = sin límite).
     QString validFrom;
     QString validTo;
+    // Fase 3: prioridad (mayor primero) y límite de usos (0 = ilimitada).
+    int priority = 0;
+    int maxUses = 0;
+    int uses = 0;
 };
 
 struct CajaSale

@@ -191,6 +191,32 @@ class TstRepositories : public QObject
         QVERIFY(!m_caja->close(0, QStringLiteral("cajero")).ok()); // cerrada
     }
 
+    void cajaMovements()
+    {
+        // Fase 3: el JSON cuadra con los movimientos normalizados.
+        QVERIFY(m_caja->open(1000, QStringLiteral("cajero")).ok());
+        const QString turno = m_caja->currentTurno();
+        QVERIFY(!turno.isEmpty());
+        QVERIFY(m_caja->recordSale(QStringLiteral("VM1"), 500));
+        QVERIFY(m_caja->recordSale(QStringLiteral("VM2"), 300));
+        // Devolución directa (el hook en reverseSale vive con Fase 1).
+        QVERIFY(m_caja->logMovement(QStringLiteral("devolucion"), -500, QString(),
+                                    QStringLiteral("VM1"), QStringLiteral("cajero")));
+        // JSON manual: 1000 + 500 + 300 − 500 = 1300. El repo no reescribe el
+        // JSON en logMovement, así que se compara contra movimientos.
+        double movExpected = 0.0;
+        for (const auto &m : m_caja->movements(turno)) {
+            if (m.type != QLatin1String("cierre"))
+                movExpected += m.amount;
+        }
+        QCOMPARE(movExpected, 1300.0);
+        QCOMPARE(m_caja->expectedFromMovements(), 1300.0);
+        QCOMPARE(m_caja->movements(turno).size(), 4); // apertura + 2 ventas + devolución
+        QVERIFY(m_caja->close(1300, QStringLiteral("cajero")).ok());
+        QCOMPARE(m_caja->expectedFromMovements(), 0.0); // sin turno abierto
+        QCOMPARE(m_caja->movements(turno).size(), 5);   // + cierre auditado
+    }
+
     void purchaseFlow()
     {
         PurchaseService svc(m_dbm->database(), m_purchases, m_products, m_suppliers, m_inventory,

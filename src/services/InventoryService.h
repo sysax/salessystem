@@ -47,6 +47,17 @@ class InventoryService : public QObject
     // Cambio de ubicación (sin mover unidades)
     StatusResult transfer(const QString &sku, double qty, const QString &toLocation,
                           const QString &reason, const QString &user);
+    // Fase 3: apartar/liberar stock (no tocan el físico; el POS vende
+    // contra disponible = físico − reservado).
+    struct ReserveResult
+    {
+        QString sku;
+        double reserved = 0.0;
+        double available = 0.0;
+    };
+    Result<ReserveResult> reserveStock(const QString &sku, double qty, const QString &reason,
+                                       const QString &user);
+    Result<ReserveResult> releaseStock(const QString &sku, double qty, const QString &user);
 
     QList<Product> lowStock(double multiplier = 1.0) const;
     Valuation valuation() const;

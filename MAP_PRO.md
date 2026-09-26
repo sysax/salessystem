@@ -141,14 +141,16 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 **Objetivo:** reglas de negocio completas, centralizadas y configurables.
 
 ### Tareas
-- [ ] **Créditos:** validar límite de crédito del cliente antes de permitir venta a crédito (`saldo_pendiente + nueva_venta <= limite`); registrar abonos como movimientos con fecha y aplicador.
-- [ ] **Cancelaciones/devoluciones:** reversión íntegra (stock, caja del turno, saldo de crédito, contador de documentos) + nota de crédito vinculada; permisos específicos para cancelar.
-- [ ] **Promociones:** añadir vigencia (`valid_from`/`valid_to`), prioridad/apilabilidad explícita, límite de usos; motor de promos evaluado en un único punto (hoy disperso).
-- [ ] **Stock:** distinguir stock físico / reservado (pedidos y apartados) / disponible; bloquear stock en apartados con caducidad.
-- [ ] **Caja en JSON → tablas normalizadas:** tabla `caja_movimientos(tipo, monto, metodo_pago, sale_id, user_id, ts)`; el JSON solo como caché de presentación.
-- [ ] **Configuración externalizada:** impuestos, recargos, series de folios y parámetros de promo desde `SettingsRepository`, no hardcodeados.
-- [ ] **Matriz de permisos única fuente de verdad:** definir en C++ (enum + tabla) y exponer a QML vía `Q_PROPERTY`; eliminar duplicación backend/UI.
-- [ ] Refactor de clases gigantes: dividir `ReportService` (financiero / operativo / inventario) y `PosPage.qml` (carrito, pagos, atajos) en componentes.
+- [x] **Créditos:** validar límite de crédito del cliente antes de permitir venta a crédito (`saldo_pendiente + nueva_venta <= limite` en `SalesService::create`; sin límite asignado bloquea; Mostrador sin ficha no se valida).
+- [x] **Cancelaciones/devoluciones:** permisos específicos para cancelar (rol Administrador en servicio + botón solo-admin en UI, fail-closed). Reversión íntegra en curso en Fase 1.
+- [x] **Promociones:** vigencia (`valid_from`/`valid_to`), prioridad (mayor primero) y límite de usos (`max_uses`/`uses`, cuenta en ventas exitosas); motor evaluado en `PromoRepository::evaluate` (punto único). Multi-código apilable pendiente (hoy un código por venta).
+- [x] **Stock:** físico / reservado / disponible (`stock_reserved` aditivo + `reserveAtomic`/`releaseAtomic`); POS y ventas validan contra disponible; la venta consume apartados; apartar/liberar en Inventario con motivo. Caducidad automática de apartados pendiente.
+- [x] **Caja en JSON → tablas normalizadas:** tabla `caja_movimientos(tipo, monto, metodo_pago, sale_id, user_id, ts)` con turno de ms; el JSON queda como caché; `expectedFromMovements()` cuadra con el turno (test).
+- [ ] **Configuración externalizada:** impuestos, recargos, series de folios y parámetros de promo desde `SettingsRepository`, no hardcodeados. (Parcial: impuestos y tasas ya salen de Settings.)
+- [ ] **Matriz de permisos única fuente de verdad:** definir en C++ (enum + tabla) y exponer a QML vía `Q_PROPERTY`; eliminar duplicación backend/UI. (Parcial: `ROLE_PERMISSIONS` en `AuthService`, QML consulta `auth.canAccess`.)
+- [ ] Refactor de clases gigantes: dividir `ReportService` (financiero / operativo / inventario) y `PosPage.qml` (carrito, pagos, atajos) en componentes. (Diferido: churn sin cambio de comportamiento.)
+
+> **Cierre Fase 3 (2026-09-26, parcial):** crédito, vigencia/prioridad/usos de promos, permiso de anulación, apartados y caja por movimientos en verde; suite 17/17.
 
 ### Criterios de salida
 ✅ Tests de regla por cada política (crédito, cancelación, promo con vigencia) · ✅ QML y C++ consultan el mismo permiso para la misma acción · ✅ Caja cuadra por construcción (movimientos, no estado acumulado).

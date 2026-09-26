@@ -28,6 +28,10 @@ Promo PromoRepository::rowToPromo(const QSqlQuery &q)
     // Fase 3: vigencia aditiva ('' = sin límite).
     p.validFrom = q.value(QStringLiteral("valid_from")).toString().trimmed();
     p.validTo = q.value(QStringLiteral("valid_to")).toString().trimmed();
+    // Fase 3: prioridad y usos (columnas aditivas; ausentes en legacy → 0).
+    p.priority = q.value(QStringLiteral("priority")).toInt();
+    p.maxUses = q.value(QStringLiteral("max_uses")).toInt();
+    p.uses = q.value(QStringLiteral("uses")).toInt();
     return p;
 }
 
@@ -35,7 +39,8 @@ QList<Promo> PromoRepository::list() const
 {
     QList<Promo> out;
     QSqlQuery q(m_db);
-    if (!q.exec(QStringLiteral("SELECT * FROM promos ORDER BY id")))
+    // Fase 3: mayor prioridad primero (a igual prioridad, por id).
+    if (!q.exec(QStringLiteral("SELECT * FROM promos ORDER BY priority DESC, id")))
         return out;
     while (q.next())
         out << rowToPromo(q);
@@ -50,13 +55,22 @@ QList<Promo> PromoRepository::list(const QString &businessType) const
     QList<Promo> out;
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("SELECT * FROM promos WHERE (business_type IS NULL OR "
-                             "business_type='' OR business_type=?) ORDER BY id"));
+                             "business_type='' OR business_type=?) ORDER BY priority DESC, id"));
     q.addBindValue(bt);
     if (!q.exec())
         return out;
     while (q.next())
         out << rowToPromo(q);
     return out;
+}
+
+bool PromoRepository::registerUse(const QString &code)
+{
+    // Fase 3: cuenta un uso (solo ventas exitosas lo llaman).
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("UPDATE promos SET uses = uses + 1 WHERE lower(code)=lower(?)"));
+    q.addBindValue(code.trimmed());
+    return q.exec() && q.numRowsAffected() == 1;
 }
 
 std::optional<Promo> PromoRepository::findById(int id) const
@@ -105,7 +119,8 @@ Result<Promo> PromoRepository::add(const Promo &pin)
     QSqlQuery q(m_db);
     q.prepare(
         QStringLiteral("INSERT INTO promos (name, type, value, condition, code, active, desc, "
-                       "business_type, valid_from, valid_to) VALUES (?,?,?,?,?,?,?,?,?,?)"));
+                       "business_type, valid_from, valid_to, priority, max_uses, uses) "
+                       "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(p.name);
     q.addBindValue(p.type);
     q.addBindValue(p.value);
@@ -116,6 +131,9 @@ Result<Promo> PromoRepository::add(const Promo &pin)
     q.addBindValue(p.businessType.trimmed());
     q.addBindValue(p.validFrom.trimmed());
     q.addBindValue(p.validTo.trimmed());
+    q.addBindValue(p.priority);
+    q.addBindValue(p.maxUses > 0 ? p.maxUses : 0);
+    q.addBindValue(0); // uses arranca en 0
     if (!q.exec())
         return Result<Promo>::failure(q.lastError().text());
     return Result<Promo>::success(*findActiveByCode(p.code));
@@ -132,7 +150,7 @@ Result<Promo> PromoRepository::update(int id, const Promo &p)
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
         "UPDATE promos SET name=?, type=?, value=?, condition=?, code=?, active=?, desc=?, "
-        "business_type=?, valid_from=?, valid_to=? WHERE id=?"));
+        "business_type=?, valid_from=?, valid_to=?, priority=?, max_uses=? WHERE id=?"));
     q.addBindValue(p.name);
     q.addBindValue(p.type);
     q.addBindValue(p.value);
@@ -143,6 +161,8 @@ Result<Promo> PromoRepository::update(int id, const Promo &p)
     q.addBindValue(p.businessType.trimmed());
     q.addBindValue(p.validFrom.trimmed());
     q.addBindValue(p.validTo.trimmed());
+    q.addBindValue(p.priority);
+    q.addBindValue(p.maxUses > 0 ? p.maxUses : 0);
     q.addBindValue(id);
     if (!q.exec())
         return Result<Promo>::failure(q.lastError().text());
@@ -192,6 +212,10 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart, con
     if (to.isValid() && today > to)
         return Result<PromoDiscount>::failure(
             QStringLiteral("Promo %1 vencida (%2)").arg(promo->code, promo->validTo));
+    // Fase 3: límite de usos (max_uses 0 = ilimitada).
+    if (promo->maxUses > 0 && promo->uses >= promo->maxUses)
+        return Result<PromoDiscount>::failure(
+            QStringLiteral("Promo %1 agotó sus %2 usos").arg(promo->code).arg(promo->maxUses));
 
     double subtotal = 0.0;
     double qtyTotal = 0.0;

@@ -37,6 +37,10 @@ class ProductRepository : public QObject
     // Fase 2: double (granel).
     bool setStockById(int id, double stock);
     bool setStockBySku(const QString &sku, double stock);
+    // Fase 3: apartados (no tocan el físico). reserve falla sin disponible;
+    // release topa en 0. Deben llamarse dentro de una Transaction.
+    bool reserveAtomic(int id, double qty);
+    bool releaseAtomic(int id, double qty);
 
     // Kits: stock virtual = mín(floor(stock/qty) componentes)
     QList<Product> kits() const;

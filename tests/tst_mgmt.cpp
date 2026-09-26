@@ -245,6 +245,28 @@ class TstMgmt : public QObject
         }
     }
 
+    void promosUseLimit()
+    {
+        // Fase 3: max_uses agota la promo (0 = ilimitada); cada venta cuenta.
+        Promo u;
+        u.code = QStringLiteral("USEQML");
+        u.name = QStringLiteral("Dos usos");
+        u.type = QStringLiteral("monto_fijo");
+        u.value = 1000.0;
+        u.maxUses = 2;
+        QVERIFY(m_promoRepo->add(u).ok());
+        QVERIFY(m_promoRepo->evaluate({}, QStringLiteral("USEQML")).ok());
+        QVERIFY(m_promoRepo->registerUse(QStringLiteral("USEQML")));
+        QVERIFY(m_promoRepo->evaluate({}, QStringLiteral("USEQML")).ok());
+        QVERIFY(m_promoRepo->registerUse(QStringLiteral("USEQML")));
+        QVERIFY(!m_promoRepo->evaluate({}, QStringLiteral("USEQML")).ok()); // agotada
+        QVERIFY(!m_promoRepo->registerUse(QStringLiteral("NOPE")));
+        const auto fd = m_promoRepo->findActiveByCode(QStringLiteral("USEQML"));
+        QVERIFY(fd.has_value());
+        QCOMPARE(fd->uses, 2);
+        QVERIFY(m_promoRepo->remove(fd->id).ok());
+    }
+
     void usersFlow()
     {
         QCOMPARE(m_users->users().size(), 5);

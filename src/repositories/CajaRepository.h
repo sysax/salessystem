@@ -24,6 +24,30 @@ class CajaRepository : public QObject
     // Agrega {id,total} a sales_today_json y recalcula expected (solo si abierta)
     bool recordSale(const QString &saleId, double total);
 
+    // Fase 3: movimiento normalizado (tipo: apertura|venta|devolucion|cierre).
+    // Sin transacción propia: se suma a la del llamador (atómico con la
+    // operación que lo genera). ts/turno automáticos del turno actual.
+    struct Movement
+    {
+        int id = 0;
+        QString ts;
+        QString turno;
+        QString type;
+        double amount = 0.0;
+        QString method;
+        QString saleId;
+        QString user;
+    };
+    bool logMovement(const QString &type, double amount, const QString &method,
+                     const QString &saleId, const QString &user);
+    // Movimientos del turno actual (turno vacío = todos). El JSON de caja
+    // queda como caché de presentación.
+    QList<Movement> movements(const QString &turno = {}) const;
+    QString currentTurno() const;
+    // Esperado calculado desde movimientos (cuadra por construcción con
+    // status().expected; el test lo verifica).
+    double expectedFromMovements() const;
+
   private:
     QSqlDatabase m_db;
     AuditRepository *m_audit = nullptr;

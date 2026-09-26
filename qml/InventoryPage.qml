@@ -32,6 +32,14 @@ ColumnLayout {
             text: qsTr("Merma")
             onClicked: wasteDialog.open()
         }
+        Button {
+            text: qsTr("Apartar")
+            onClicked: reserveDialog.open()
+        }
+        Button {
+            text: qsTr("Liberar")
+            onClicked: releaseDialog.open()
+        }
     }
     Label {
         text: qsTr("Stock bajo / agotados")
@@ -182,6 +190,82 @@ ColumnLayout {
                 wSku.text = "";
                 wQty.text = "";
                 wReason.text = "";
+                catalog.search("");
+            }
+        }
+    }
+    // Fase 3: apartados (bloquean disponible en POS sin tocar el físico).
+    Dialog {
+        id: reserveDialog
+        onOpened: rSku.forceActiveFocus()
+        title: qsTr("Apartar stock")
+        modal: true
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        ColumnLayout {
+            TextField {
+                id: rSku
+                placeholderText: qsTr("SKU")
+            }
+            TextField {
+                id: rQty
+                placeholderText: qsTr("Cantidad (admite decimales)")
+                validator: DoubleValidator { bottom: 0.001; decimals: 3 }
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+            }
+            TextField {
+                id: rReason
+                placeholderText: qsTr("Motivo (obligatorio)")
+            }
+            Label {
+                id: rErr
+                color: Theme.error
+            }
+        }
+        onAccepted: {
+            var r = inventoryCtl.reserve(rSku.text, parseFloat(rQty.text) || 0, rReason.text, auth.currentUser);
+            if (!r.ok) {
+                rErr.text = r.error;
+                open();
+            } else {
+                Utils.showToast("success", qsTr("Apartado. Disponible: %1").arg(r.available), 2500);
+                rSku.text = "";
+                rQty.text = "";
+                rReason.text = "";
+                catalog.search("");
+            }
+        }
+    }
+    Dialog {
+        id: releaseDialog
+        onOpened: relSku.forceActiveFocus()
+        title: qsTr("Liberar apartado")
+        modal: true
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        ColumnLayout {
+            TextField {
+                id: relSku
+                placeholderText: qsTr("SKU")
+            }
+            TextField {
+                id: relQty
+                placeholderText: qsTr("Cantidad (admite decimales)")
+                validator: DoubleValidator { bottom: 0.001; decimals: 3 }
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+            }
+            Label {
+                id: relErr
+                color: Theme.error
+            }
+        }
+        onAccepted: {
+            var r = inventoryCtl.release(relSku.text, parseFloat(relQty.text) || 0, auth.currentUser);
+            if (!r.ok) {
+                relErr.text = r.error;
+                open();
+            } else {
+                relSku.text = "";
+                relQty.text = "";
+                catalog.search("");
             }
         }
     }

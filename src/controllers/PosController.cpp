@@ -40,9 +40,9 @@ QVariantMap PosController::addToCart(int productId, double qty)
         if (m_serials && m_serials->inStockCount(p->sku) <= cartSerialLines(productId))
             return {{"ok", false},
                     {"error", QStringLiteral("Sin seriales disponibles para '%1'").arg(p->name)}};
-        if (p->stock < cartQtyFor(productId) + 1.0 - 1e-9)
+        if (p->available() < cartQtyFor(productId) + 1.0 - 1e-9)
             return {{"ok", false},
-                    {"error", QStringLiteral("Stock insuficiente: %1").arg(p->stock)}};
+                    {"error", QStringLiteral("Stock insuficiente: %1").arg(p->available())}};
         m_cart << QVariantMap{{"productId", p->id},   {"sku", p->sku},       {"name", p->name},
                               {"price", p->price},    {"unit", p->unit},     {"qty", 1.0},
                               {"subtotal", p->price}, {"serial", QString()}, {"receta", QString()}};
@@ -56,9 +56,9 @@ QVariantMap PosController::addToCart(int productId, double qty)
         QVariantMap line = v.toMap();
         if (line["productId"].toInt() == productId) {
             const double q = line["qty"].toDouble() + qty;
-            if (p->stock < q - 1e-9)
+            if (p->available() < q - 1e-9)
                 return {{"ok", false},
-                        {"error", QStringLiteral("Stock insuficiente: %1").arg(p->stock)}};
+                        {"error", QStringLiteral("Stock insuficiente: %1").arg(p->available())}};
             line["qty"] = q;
             line["subtotal"] = p->price * q;
             v = line;
@@ -66,8 +66,9 @@ QVariantMap PosController::addToCart(int productId, double qty)
             return {{"ok", true}};
         }
     }
-    if (p->stock < qty - 1e-9)
-        return {{"ok", false}, {"error", QStringLiteral("Stock insuficiente: %1").arg(p->stock)}};
+    if (p->available() < qty - 1e-9)
+        return {{"ok", false},
+                {"error", QStringLiteral("Stock insuficiente: %1").arg(p->available())}};
     m_cart << QVariantMap{
         {"productId", p->id},         {"sku", p->sku},       {"name", p->name},
         {"price", p->price},          {"unit", p->unit},     {"qty", qty},

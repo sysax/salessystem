@@ -43,6 +43,10 @@ class InventoryController : public QObject
     // Fase 4: registrar merma (abarrotes).
     Q_INVOKABLE QVariantMap waste(const QString &sku, double qty, const QString &reason,
                                   const QString &user);
+    // Fase 3: apartar/liberar stock (el POS vende contra disponible).
+    Q_INVOKABLE QVariantMap reserve(const QString &sku, double qty, const QString &reason,
+                                    const QString &user);
+    Q_INVOKABLE QVariantMap release(const QString &sku, double qty, const QString &user);
     Q_INVOKABLE QVariantMap valuation() const;
 
   signals:

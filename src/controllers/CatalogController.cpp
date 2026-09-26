@@ -76,6 +76,8 @@ QVariantMap CatalogController::toMap(const Product &p)
             {"vencimiento", p.vencimiento},
             {"attrsJson", p.attrsJson},
             {"stock", p.stock},
+            {"reserved", p.reserved},
+            {"available", p.available()},
             {"stockMin", p.stockMin},
             {"stockMax", p.stockMax},
             {"location", p.location},

@@ -200,10 +200,11 @@ Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> 
                 return Result<Totals>::failure(error);
             }
         }
-        if (p->stock < it.qty - 1e-9) {
+        // Fase 3: se vende contra disponible (físico menos apartados).
+        if (p->available() < it.qty - 1e-9) {
             error = QStringLiteral("Stock insuficiente para '%1'. Disponible: %2, Solicitado: %3")
                         .arg(p->name)
-                        .arg(p->stock)
+                        .arg(p->available())
                         .arg(it.qty);
             return Result<Totals>::failure(error);
         }
@@ -432,6 +433,15 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
     if (!created.ok())
         return Result<CreatedSale>::failure(created.error());
     const Sale &s = created.value();
+    // Fase 3: la promo usada cuenta un uso (solo en ventas exitosas).
+    // Best-effort: la venta ya quedó firme; si el conteo falla se audita.
+    if (!promoUsed.isEmpty() && m_promos && !m_promos->registerUse(promoUsed) && m_audit)
+        m_audit->log(ns.vendedor, QStringLiteral("promo_uso_no_contado"), promoUsed);
+    // Fase 3: lo vendido consume apartados primero (sin fugas de reserva).
+    if (m_products) {
+        for (const LineTotal &l : totals.value().lines)
+            m_products->releaseAtomic(l.productId, l.qty);
+    }
 
     // Fase 3: marcar seriales como vendidos. Si alguno falla (carrera), se
     // cancela la venta completa para no dejar stock/serial inconsistente.
