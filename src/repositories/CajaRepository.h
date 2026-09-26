@@ -20,11 +20,13 @@ class CajaRepository : public QObject
     CajaStatus status() const;
     Result<CajaStatus> open(double amount, const QString &user);
     // Fase 5: con diferencia (sobra/falta) el motivo es obligatorio.
-    Result<CajaCloseResult> close(double counted, const QString &user,
-                                  const QString &reason = {});
+    Result<CajaCloseResult> close(double counted, const QString &user, const QString &reason = {});
 
     // Agrega {id,total} a sales_today_json y recalcula expected (solo si abierta)
     bool recordSale(const QString &saleId, double total);
+    // Fase 1: retira {saleId} del JSON y recalcula expected (cancelación).
+    // Si la caja está cerrada o no contiene la venta, no-op (true).
+    bool reverseSale(const QString &saleId);
 
     // Fase 3: movimiento normalizado (tipo: apertura|venta|devolucion|cierre).
     // Sin transacción propia: se suma a la del llamador (atómico con la

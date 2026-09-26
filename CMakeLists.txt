@@ -45,6 +45,8 @@ add_library(
     sales_core STATIC
     src/core/DatabaseManager.h
     src/core/DatabaseManager.cpp
+    src/core/Transaction.h
+    src/core/Transaction.cpp
     src/core/EventBus.h
     src/core/EventBus.cpp
     src/core/Money.h

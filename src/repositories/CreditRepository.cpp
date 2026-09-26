@@ -4,6 +4,7 @@
 #include <QSqlError>
 #include <QSqlQuery>
 
+#include "../core/Transaction.h"
 #include "ClientRepository.h"
 
 double ReceivablesRepository::MoraRate = 0.02;
@@ -77,6 +78,12 @@ Result<Sale> ReceivablesRepository::addPayment(const QString &saleId, double amo
     const double newBal = s->balance - amount;
     const bool settled = newBal <= 0.01;
     const QString newStatus = settled ? QStringLiteral("Pagada") : s->status;
+    // Fase 1: saldo + abono + crédito del cliente en una transacción
+    // (antes, el INSERT en payments_cxc se ejecutaba sin verificar y
+    // fuera de transacción: el abono podía perderse en silencio).
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<Sale>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("UPDATE sales SET paid=?, balance=?, status=?, estado=? WHERE id=?"));
     q.addBindValue(s->paid + amount);
@@ -88,7 +95,9 @@ Result<Sale> ReceivablesRepository::addPayment(const QString &saleId, double amo
         return Result<Sale>::failure(q.lastError().text());
     if (settled) {
         ClientRepository clients(m_db);
-        clients.payCredit(s->client, amount);
+        if (!clients.payCredit(s->client, amount))
+            return Result<Sale>::failure(
+                QStringLiteral("No se pudo descargar el crédito del cliente"));
     }
     QSqlQuery ins(m_db);
     ins.prepare(QStringLiteral(
@@ -98,7 +107,8 @@ Result<Sale> ReceivablesRepository::addPayment(const QString &saleId, double amo
     ins.addBindValue(amount);
     ins.addBindValue(method);
     ins.addBindValue(user);
-    ins.exec();
+    if (!ins.exec())
+        return Result<Sale>::failure(QStringLiteral("Abono: ") + ins.lastError().text());
     if (m_audit)
         m_audit->log(user, QStringLiteral("cxc_abono"),
                      QStringLiteral("%1 $%2 %3 bal %4")
@@ -106,6 +116,8 @@ Result<Sale> ReceivablesRepository::addPayment(const QString &saleId, double amo
                          .arg(amount, 0, 'f', 0)
                          .arg(method)
                          .arg(settled ? 0.0 : newBal, 0, 'f', 2));
+    if (!tx.commit())
+        return Result<Sale>::failure(QStringLiteral("No se pudo confirmar el abono"));
     return Result<Sale>::success(*m_sales->find(saleId));
 }
 
@@ -200,6 +212,11 @@ Result<PayablesRepository::PaymentResult> PayablesRepository::addPayment(const Q
     const double newBal = p->balance - amount;
     const bool settled = newBal <= 0.01;
     const QString newStatus = settled ? QStringLiteral("Pagada") : p->status;
+    // Fase 1: saldo + pago en una transacción (el INSERT antes no se
+    // verificaba: el pago podía perderse con el saldo ya descontado).
+    Transaction payTx(m_db);
+    if (!payTx.isValid())
+        return Result<PaymentResult>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("UPDATE payables SET paid=?, balance=?, status=? WHERE id=?"));
     q.addBindValue(p->paid + amount);
@@ -216,7 +233,8 @@ Result<PayablesRepository::PaymentResult> PayablesRepository::addPayment(const Q
     ins.addBindValue(amount);
     ins.addBindValue(method);
     ins.addBindValue(user);
-    ins.exec();
+    if (!ins.exec())
+        return Result<PaymentResult>::failure(QStringLiteral("Pago: ") + ins.lastError().text());
     // Descuento pronto pago (antes del vencimiento)
     double disc = 0.0;
     const QDate due = QDate::fromString(p->due, Qt::ISODate);
@@ -231,7 +249,13 @@ Result<PayablesRepository::PaymentResult> PayablesRepository::addPayment(const Q
                          .arg(settled ? 0.0 : newBal, 0, 'f', 2)
                          .arg(disc, 0, 'f', 2));
     PaymentResult r;
-    r.payable = *find(payableId);
+    const auto updated = find(payableId);
+    if (!updated)
+        return Result<PaymentResult>::failure(
+            QStringLiteral("CxP %1 desapareció a mitad del pago").arg(payableId));
+    r.payable = *updated;
     r.earlyDiscount = disc;
+    if (!payTx.commit())
+        return Result<PaymentResult>::failure(QStringLiteral("No se pudo confirmar el pago"));
     return Result<PaymentResult>::success(r);
 }

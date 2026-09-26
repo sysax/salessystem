@@ -2,6 +2,7 @@
 
 #include <QDate>
 
+#include "../core/Transaction.h"
 #include "../repositories/Counters.h"
 
 PurchaseService::PurchaseService(QSqlDatabase db, PurchaseRepository *purchases,
@@ -56,16 +57,31 @@ Result<Purchase> PurchaseService::receive(const QString &folio, const QString &u
     if (po->status == QLatin1String("Cancelada"))
         return Result<Purchase>::failure(QStringLiteral("Orden %1 cancelada").arg(folio));
 
+    // Fase 1: recepción parcial o total + movimientos + CxP en una sola
+    // transacción (antes, un fallo entre setStatus y CxP dejaba la orden
+    // Recibida sin cuenta por pagar).
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<Purchase>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     for (const PurchaseItem &it : po->items) {
         const auto prod = m_products->findBySku(it.sku);
         if (!prod)
-            continue;
+            return Result<Purchase>::failure(
+                QStringLiteral("SKU %1 de la orden ya no existe").arg(it.sku));
         const double before = prod->stock;
-        m_products->setStockBySku(it.sku, before + it.qty);
-        m_inventory->record(it.sku, prod->name, QStringLiteral("Entrada"), it.qty, before,
-                            before + it.qty, QStringLiteral("Recepción %1").arg(folio), user);
+        if (!m_products->setStockBySku(it.sku, before + it.qty))
+            return Result<Purchase>::failure(
+                QStringLiteral("No se pudo actualizar el stock de %1").arg(it.sku));
+        if (!m_inventory->record(it.sku, prod->name, QStringLiteral("Entrada"), it.qty, before,
+                                 before + it.qty, QStringLiteral("Recepción %1").arg(folio),
+                                 user)) {
+            return Result<Purchase>::failure(
+                QStringLiteral("No se pudo registrar el movimiento de %1").arg(it.sku));
+        }
     }
-    m_purchases->setStatus(folio, QStringLiteral("Recibida"));
+    if (!m_purchases->setStatus(folio, QStringLiteral("Recibida")))
+        return Result<Purchase>::failure(
+            QStringLiteral("No se pudo marcar la orden %1 como recibida").arg(folio));
 
     // CxP automática a 30 días (2 % pronto pago con TecnoMayorista)
     Payable cxp;
@@ -77,12 +93,16 @@ Result<Purchase> PurchaseService::receive(const QString &folio, const QString &u
     cxp.balance = po->total;
     cxp.discountEarly = po->supplier.contains(QLatin1String("TecnoMayorista")) ? 2.0 : 0.0;
     cxp.status = QStringLiteral("Pendiente");
-    m_payables->create(cxp);
+    if (!m_payables->create(cxp).ok())
+        return Result<Purchase>::failure(
+            QStringLiteral("No se pudo crear la cuenta por pagar de %1").arg(folio));
 
     if (m_audit)
         m_audit->log(
             user, QStringLiteral("compra_recibida"),
             QStringLiteral("%1 %2 $%3").arg(folio, po->supplier).arg(po->total, 0, 'f', 0));
+    if (!tx.commit())
+        return Result<Purchase>::failure(QStringLiteral("No se pudo confirmar la recepción"));
     return Result<Purchase>::success(*m_purchases->find(folio));
 }
 

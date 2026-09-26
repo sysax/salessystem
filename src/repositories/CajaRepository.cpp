@@ -7,6 +7,8 @@
 #include <QSqlError>
 #include <QSqlQuery>
 
+#include "../core/Transaction.h"
+
 CajaRepository::CajaRepository(QSqlDatabase db, AuditRepository *audit, QObject *parent)
     : QObject(parent), m_db(std::move(db)), m_audit(audit)
 {
@@ -47,9 +49,14 @@ CajaStatus CajaRepository::status() const
 Result<CajaStatus> CajaRepository::open(double amount, const QString &user)
 {
     QSqlQuery q(m_db);
-    q.exec(QStringLiteral("SELECT open FROM caja WHERE id=1"));
+    if (!q.exec(QStringLiteral("SELECT open FROM caja WHERE id=1")))
+        return Result<CajaStatus>::failure(q.lastError().text());
     if (q.next() && q.value(0).toInt() != 0)
         return Result<CajaStatus>::failure(QStringLiteral("Caja ya abierta"));
+    // Fase 1: apertura + auditoría en una transacción.
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<CajaStatus>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     QSqlQuery up(m_db);
     up.prepare(
         QStringLiteral("UPDATE caja SET open=1, opening_amount=?, opening_ts=?, opening_user=?, "
@@ -69,11 +76,13 @@ Result<CajaStatus> CajaRepository::open(double amount, const QString &user)
     if (m_audit)
         m_audit->log(user, QStringLiteral("caja_apertura"),
                      QStringLiteral("$%1").arg(amount, 0, 'f', 2));
+    if (!tx.commit())
+        return Result<CajaStatus>::failure(QStringLiteral("No se pudo confirmar la apertura"));
     return Result<CajaStatus>::success(status());
 }
 
 Result<CajaCloseResult> CajaRepository::close(double counted, const QString &user,
-                                               const QString &reason)
+                                              const QString &reason)
 {
     const CajaStatus st = status();
     if (!st.open)
@@ -88,6 +97,13 @@ Result<CajaCloseResult> CajaRepository::close(double counted, const QString &use
     if (qAbs(r.diff) > 1e-9 && reason.trimmed().isEmpty())
         return Result<CajaCloseResult>::failure(
             QStringLiteral("Diferencia de %1: indique el motivo").arg(r.diff, 0, 'f', 0));
+    // Fase 1: auditoría + reseteo del turno en una transacción (el
+    // UPDATE antes se ejecutaba sin verificar: un fallo dejaba la caja
+    // abierta con arqueo ya reportado).
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<CajaCloseResult>::failure(
+            QStringLiteral("No se pudo iniciar la transacción"));
     if (m_audit)
         m_audit->log(user, QStringLiteral("caja_cierre"),
                      QStringLiteral("esperado $%1 contado $%2 diff %3%4 ventas %5%6")
@@ -99,15 +115,18 @@ Result<CajaCloseResult> CajaRepository::close(double counted, const QString &use
                          .arg(reason.trimmed().isEmpty()
                                   ? QString()
                                   : QStringLiteral(" motivo: ") + reason.trimmed()));
+    QSqlQuery up(m_db);
     // Fase 3: el arqueo queda en movimientos ANTES de resetear el turno
     // (logMovement toma el turno actual).
     if (!logMovement(QStringLiteral("cierre"), counted, QStringLiteral("arqueo"), QString(), user))
-        return Result<CajaCloseResult>::failure(
-            QStringLiteral("No se pudo registrar el cierre"));
-    QSqlQuery up(m_db);
-    up.exec(QStringLiteral(
+        return Result<CajaCloseResult>::failure(QStringLiteral("No se pudo registrar el cierre"));
+    up.prepare(QStringLiteral(
         "UPDATE caja SET open=0, opening_amount=0, opening_ts=NULL, opening_user=NULL, "
         "sales_today_json='[]', expected=0 WHERE id=1"));
+    if (!up.exec())
+        return Result<CajaCloseResult>::failure(up.lastError().text());
+    if (!tx.commit())
+        return Result<CajaCloseResult>::failure(QStringLiteral("No se pudo confirmar el cierre"));
     return Result<CajaCloseResult>::success(r);
 }
 
@@ -146,6 +165,39 @@ bool CajaRepository::recordSale(const QString &saleId, double total)
                       .join(u'+');
     }
     return logMovement(QStringLiteral("venta"), total, method, saleId, st.openingUser);
+}
+
+bool CajaRepository::reverseSale(const QString &saleId)
+{
+    const CajaStatus st = status();
+    if (!st.open)
+        return true; // turno cerrado: nada que retirar del turno actual
+    bool found = false;
+    double removed = 0.0;
+    QJsonArray arr;
+    double total = 0.0;
+    for (const CajaSale &s : st.salesToday) {
+        if (s.id == saleId) {
+            found = true;
+            removed = s.total;
+            continue;
+        }
+        QJsonObject o;
+        o[QStringLiteral("id")] = s.id;
+        o[QStringLiteral("total")] = s.total;
+        arr << o;
+        total += s.total;
+    }
+    if (!found)
+        return true;
+    QSqlQuery up(m_db);
+    up.prepare(QStringLiteral("UPDATE caja SET sales_today_json=?, expected=? WHERE id=1"));
+    up.addBindValue(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
+    up.addBindValue(st.openingAmount + total);
+    if (!up.exec())
+        return false;
+    // Fase 3: la devolución queda en movimientos (monto negativo).
+    return logMovement(QStringLiteral("devolucion"), -removed, QString(), saleId, st.openingUser);
 }
 
 bool CajaRepository::logMovement(const QString &type, double amount, const QString &method,

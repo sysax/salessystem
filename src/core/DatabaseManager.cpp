@@ -1,14 +1,15 @@
 #include "DatabaseManager.h"
 
 #include <QDateTime>
-#include <QFileInfo>
-
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QStandardPaths>
+
+#include "Transaction.h"
 
 DatabaseManager::DatabaseManager(QObject *parent) : QObject(parent)
 {
@@ -37,8 +38,29 @@ bool DatabaseManager::initialize(const QString &customPath)
         return false;
     }
 
+    // Fase 1 (MAP_PRO.md): integridad transaccional de SQLite.
+    // foreign_keys evita huérfanos, WAL permite lector+escritor
+    // concurrente (caja vendiendo + reporte leyendo) y busy_timeout
+    // hace que los escritores esperen en vez de fallar con SQLITE_BUSY.
+    {
+        QSqlQuery pragma(m_db);
+        const char *kPragmas[] = {
+            "PRAGMA foreign_keys = ON",
+            "PRAGMA journal_mode = WAL",
+            "PRAGMA synchronous = NORMAL",
+            "PRAGMA busy_timeout = 5000",
+        };
+        for (const char *p : kPragmas) {
+            if (!pragma.exec(QString::fromLatin1(p))) {
+                m_status = QStringLiteral("pragma: ") + pragma.lastError().text();
+                emit openChanged();
+                return false;
+            }
+        }
+    }
+
     if (!applySqlFile(QStringLiteral(":/sql/schema.sql"), QStringLiteral("sql/schema.sql"))
-        || !migrateLegacyColumns() || !ensureSeeded()) {
+        || !migrateLegacyColumns() || !migrateCategoriesFk() || !ensureSeeded()) {
         emit openChanged();
         return false;
     }
@@ -78,8 +100,9 @@ int DatabaseManager::tableRowCount(const QString &table) const
     if (!kAllowed.contains(table))
         return -1;
     QSqlQuery q(m_db);
-    q.exec(QStringLiteral("SELECT COUNT(*) FROM \"%1\"").arg(table));
-    return q.next() ? q.value(0).toInt() : -1;
+    if (!q.exec(QStringLiteral("SELECT COUNT(*) FROM \"%1\"").arg(table)) || !q.next())
+        return -1;
+    return q.value(0).toInt();
 }
 
 bool DatabaseManager::applySqlFile(const QString &resourcePath, const QString &diskFallback)
@@ -218,8 +241,8 @@ bool DatabaseManager::migrateLegacyColumns()
     // Fase 4: soltar índices redundantes (el UNIQUE ya crea autoindex).
     // barcode se conserva: no es UNIQUE y el escáner POS lo consulta.
     QSqlQuery drop(m_db);
-    for (const QString &idx : {QStringLiteral("idx_products_sku"),
-                               QStringLiteral("idx_clients_name")}) {
+    for (const QString &idx :
+         {QStringLiteral("idx_products_sku"), QStringLiteral("idx_clients_name")}) {
         if (!drop.exec(QStringLiteral("DROP INDEX IF EXISTS %1").arg(idx))) {
             m_status = QStringLiteral("migrate: ") + drop.lastError().text();
             return false;
@@ -228,11 +251,54 @@ bool DatabaseManager::migrateLegacyColumns()
     return true;
 }
 
+bool DatabaseManager::migrateCategoriesFk()
+{
+    // Fase 1: el schema histórico declaraba
+    // `parent_id INTEGER REFERENCES categories(id)`, incompatible con la
+    // convención 0=raíz (con foreign_keys=ON, insertar raíces falla con
+    // "FOREIGN KEY constraint failed"). CREATE TABLE IF NOT EXISTS no
+    // toca tablas ya creadas: si la tabla existente trae esa cláusula,
+    // se reconstruye idéntica pero sin el REFERENCES (datos intactos).
+    bool hasFk = false;
+    {
+        // Alcance propio: el PRAGMA debe finalizarse antes del ALTER
+        // (una lectura abierta sobre la tabla bloquea el RENAME con
+        // SQLITE_LOCKED en la misma conexión).
+        QSqlQuery fk(m_db);
+        if (!fk.exec(QStringLiteral("PRAGMA foreign_key_list(categories)")))
+            return false;
+        hasFk = fk.next();
+    }
+    if (!hasFk)
+        return true; // esquema nuevo o sin FK: nada que migrar
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return false;
+    static constexpr const char *kSteps[] = {
+        "ALTER TABLE categories RENAME TO categories_legacy_fase1",
+        "CREATE TABLE categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, "
+        "parent_id INTEGER DEFAULT 0, business_type TEXT DEFAULT '', sort_order INTEGER DEFAULT "
+        "0, UNIQUE(name, parent_id))",
+        "INSERT INTO categories (id, name, parent_id, business_type, sort_order) SELECT id, name, "
+        "parent_id, business_type, sort_order FROM categories_legacy_fase1",
+        "DROP TABLE categories_legacy_fase1",
+    };
+    QSqlQuery q(m_db);
+    for (const char *step : kSteps) {
+        if (!q.exec(QString::fromLatin1(step))) {
+            m_status = QStringLiteral("migrate categories: ") + q.lastError().text();
+            return false;
+        }
+    }
+    return tx.commit();
+}
+
 bool DatabaseManager::ensureColumn(const QString &table, const QString &column,
                                    const QString &definition)
 {
     QSqlQuery pragma(m_db);
-    pragma.exec(QStringLiteral("PRAGMA table_info(\"%1\")").arg(table));
+    if (!pragma.exec(QStringLiteral("PRAGMA table_info(\"%1\")").arg(table)))
+        return false;
     while (pragma.next()) {
         if (pragma.value(1).toString() == column)
             return true; // ya existe

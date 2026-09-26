@@ -193,28 +193,31 @@ StatusResult ClientRepository::remove(int id)
 
 bool ClientRepository::addCredit(const QString &name, double amount)
 {
-    const auto c = findByName(name);
-    if (!c)
-        return false;
+    // Fase 1: incremento atómico (sin leer-luego-escribir: dos ventas
+    // a crédito concurrentes del mismo cliente no se pisan).
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("UPDATE clients SET credit=?, balance=? WHERE lower(name)=lower(?)"));
-    q.addBindValue(c->credit + amount);
-    q.addBindValue(c->balance + amount);
+    q.prepare(QStringLiteral("UPDATE clients SET credit = credit + ?, balance = balance + ? "
+                             "WHERE lower(name)=lower(?)"));
+    q.addBindValue(amount);
+    q.addBindValue(amount);
     q.addBindValue(name.trimmed());
-    return q.exec();
+    return q.exec() && q.numRowsAffected() > 0;
 }
 
 bool ClientRepository::payCredit(const QString &name, double amount)
 {
-    const auto c = findByName(name);
-    if (!c)
-        return false;
+    // Fase 1: decremento atómico con piso en 0.
     QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("UPDATE clients SET credit=?, balance=? WHERE lower(name)=lower(?)"));
-    q.addBindValue(std::max(0.0, c->credit - amount));
-    q.addBindValue(std::max(0.0, c->balance - amount));
+    q.prepare(QStringLiteral(
+        "UPDATE clients SET credit = CASE WHEN credit - ? < 0 THEN 0 ELSE credit - ? END, "
+        "balance = CASE WHEN balance - ? < 0 THEN 0 ELSE balance - ? END "
+        "WHERE lower(name)=lower(?)"));
+    q.addBindValue(amount);
+    q.addBindValue(amount);
+    q.addBindValue(amount);
+    q.addBindValue(amount);
     q.addBindValue(name.trimmed());
-    return q.exec();
+    return q.exec() && q.numRowsAffected() > 0;
 }
 
 // ── Suppliers ─────────────────────────────────────────────────────────────

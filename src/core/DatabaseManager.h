@@ -55,6 +55,9 @@ class DatabaseManager : public QObject
   private:
     bool applySqlFile(const QString &resourcePath, const QString &diskFallback);
     bool migrateLegacyColumns();
+    // Fase 1: reconstruye categories sin el REFERENCES autorreferencial
+    // (incompatible con parent_id=0 raíz bajo foreign_keys=ON).
+    bool migrateCategoriesFk();
     bool ensureSeeded(); // aplica sql/seed.sql solo si users está vacía
     bool ensureColumn(const QString &table, const QString &column, const QString &definition);
 

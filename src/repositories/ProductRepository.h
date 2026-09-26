@@ -45,6 +45,13 @@ class ProductRepository : public QObject
     // Fase 2: double (granel).
     bool setStockById(int id, double stock);
     bool setStockBySku(const QString &sku, double stock);
+    // Fase 1 (MAP_PRO.md): decremento atómico. Elimina el patrón
+    // TOCTOU leer-luego-escribir: 0 filas afectadas => stock
+    // insuficiente (otro hilo/caja vendió primero). Seguro bajo
+    // concurrencia; debe llamarse dentro de una Transaction.
+    bool decrementStockAtomic(int id, double qty);
+    // Incremento atómico (cancelaciones/devoluciones/recepciones).
+    bool incrementStockAtomic(int id, double qty);
     // Fase 3: apartados (no tocan el físico). reserve falla sin disponible;
     // release topa en 0. Deben llamarse dentro de una Transaction.
     bool reserveAtomic(int id, double qty);

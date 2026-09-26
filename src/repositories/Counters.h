@@ -3,9 +3,15 @@
 // Folios consecutivos — réplica de data/db.py::next_counter.
 // Formato: prefijo + valor con ceros (V007, COT002, OC006). Misma
 // semántica no-atómica que Python (lectura + reemplazo).
+//
+// Fase 1: debe llamarse dentro de una Transaction del flujo que lo usa
+// (venta, compra, documento). El INSERT OR REPLACE queda cubierto por
+// la transacción externa: si la venta se revierte, el folio también.
 #include <QSqlDatabase>
+#include <QSqlError>
 #include <QSqlQuery>
 #include <QString>
+#include <QtLogging> // qWarning
 
 namespace Counters
 {
@@ -21,7 +27,8 @@ inline QString next(QSqlDatabase db, const QString &name, const QString &prefix,
     up.prepare(QStringLiteral("INSERT OR REPLACE INTO counters (name, value) VALUES (?,?)"));
     up.addBindValue(name);
     up.addBindValue(val + 1);
-    up.exec();
+    if (!up.exec())
+        qWarning() << "Counters::next: no se pudo avanzar" << name << up.lastError().text();
     return prefix + QString::number(val).rightJustified(width, u'0');
 }
 

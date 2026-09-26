@@ -2,6 +2,7 @@
 
 #include "../core/EventBus.h"
 #include "../core/Money.h"
+#include "../core/Transaction.h"
 #include "../domain/Attrs.h"
 
 #include <QDate>
@@ -369,8 +370,9 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
     // (Mostrador sin ficha) no se valida: no hay límite contra qué.
     if (m_clients) {
         const double creditPart = payments.value(QStringLiteral("credito"), 0.0);
-        const bool toCredit = creditPart > 0
-            || (payments.isEmpty() && paymentMethod.trimmed() == QLatin1String("Credito"));
+        const bool toCredit
+            = creditPart > 0
+              || (payments.isEmpty() && paymentMethod.trimmed() == QLatin1String("Credito"));
         if (toCredit) {
             const double newCredit = payments.isEmpty() ? total : creditPart;
             if (const auto c = m_clients->findByName(clientName.trimmed())) {
@@ -380,8 +382,9 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
                 }
                 if (c->balance + newCredit > c->creditLimit + 1e-9) {
                     return Result<CreatedSale>::failure(
-                        QStringLiteral("Límite de crédito excedido para '%1' (saldo %2 + venta %3 > "
-                                       "límite %4)")
+                        QStringLiteral(
+                            "Límite de crédito excedido para '%1' (saldo %2 + venta %3 > "
+                            "límite %4)")
                             .arg(c->name)
                             .arg(c->balance, 0, 'f', 0)
                             .arg(newCredit, 0, 'f', 0)
@@ -390,6 +393,13 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
             }
         }
     }
+
+    // Fase 1: la venta completa (cabecera + líneas + stock + crédito +
+    // caja + seriales + movimientos) es una sola transacción. Cualquier
+    // fallo revierte TODO: sin ventas a medias ni seriales colgados.
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<CreatedSale>::failure(QStringLiteral("No se pudo iniciar la transacción"));
 
     SaleRepository::NewSale ns;
     ns.clientName = clientName;
@@ -437,22 +447,22 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
     // Best-effort: la venta ya quedó firme; si el conteo falla se audita.
     if (!promoUsed.isEmpty() && m_promos && !m_promos->registerUse(promoUsed) && m_audit)
         m_audit->log(ns.vendedor, QStringLiteral("promo_uso_no_contado"), promoUsed);
+
     // Fase 3: lo vendido consume apartados primero (sin fugas de reserva).
     if (m_products) {
         for (const LineTotal &l : totals.value().lines)
             m_products->releaseAtomic(l.productId, l.qty);
     }
-
-    // Fase 3: marcar seriales como vendidos. Si alguno falla (carrera), se
-    // cancela la venta completa para no dejar stock/serial inconsistente.
+    // Fase 3: marcar seriales como vendidos. Si alguno falla (carrera),
+    // la transacción externa revierte la venta completa: no hace falta
+    // compensación manual (el cancel() anterior dejaba ventana parcial).
     if (m_serials) {
         for (const LineTotal &l : totals.value().lines) {
             if (l.serial.isEmpty())
                 continue;
             if (!m_serials->sell(l.serial, s.id).ok()) {
-                cancel(s.id, QStringLiteral("reserva de serial fallida"), ns.vendedor);
                 return Result<CreatedSale>::failure(
-                    QStringLiteral("Serial %1 ya no disponible; venta cancelada").arg(l.serial));
+                    QStringLiteral("Serial %1 ya no disponible; venta revertida").arg(l.serial));
             }
         }
     }
@@ -466,19 +476,32 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
     }
 
     // Descontar inventario + movimientos "Salida" tipo sale.
-    // (SaleRepository::create ya decrementó el stock; aquí solo se registra
-    // el movimiento con before/after derivados. Fase 2: double con epsilon.)
+    // (SaleRepository::create ya decrementó el stock de forma atómica;
+    // aquí solo se registra el movimiento con before/after derivados.
+    // Fase 2: double con epsilon.) El movimiento es parte de la
+    // transacción: si no se puede registrar, la venta se revierte.
+    // Los eventos se publican DESPUÉS del commit: publicar antes
+    // notificaría a la UI de una venta que aún puede revertirse.
+    QList<QVariantMap> invEvents;
     for (const LineTotal &l : totals.value().lines) {
         const auto p = m_products->findById(l.productId);
         if (!p)
-            continue;
+            return Result<CreatedSale>::failure(
+                QStringLiteral("Producto ID %1 desapareció a mitad de venta").arg(l.productId));
         const double after = p->stock;
         const double before = after + l.qty;
-        m_inventory->record(p->sku, p->name, QStringLiteral("Salida"), -l.qty, before, after,
-                            QStringLiteral("Venta %1").arg(s.id), ns.vendedor);
-        if (m_bus)
-            m_bus->publish(EventBus::InventoryUpdated,
-                           {{"product_id", l.productId}, {"quantity_change", -l.qty}});
+        if (!m_inventory->record(p->sku, p->name, QStringLiteral("Salida"), -l.qty, before, after,
+                                 QStringLiteral("Venta %1").arg(s.id), ns.vendedor)) {
+            return Result<CreatedSale>::failure(
+                QStringLiteral("No se pudo registrar el movimiento de inventario"));
+        }
+        invEvents << QVariantMap{{"product_id", l.productId}, {"quantity_change", -l.qty}};
+    }
+    if (!tx.commit())
+        return Result<CreatedSale>::failure(QStringLiteral("No se pudo confirmar la venta"));
+    if (m_bus) {
+        for (const QVariantMap &e : invEvents)
+            m_bus->publish(EventBus::InventoryUpdated, e);
     }
     if (m_bus)
         m_bus->publish(EventBus::SaleCreated,
@@ -509,23 +532,49 @@ Result<SalesService::CreatedSale> SalesService::cancel(const QString &saleId, co
         return Result<CreatedSale>::failure(
             QStringLiteral("Venta %1 ya está cancelada").arg(saleId));
 
-    // Revertir inventario por línea
+    // Fase 1: la cancelación revierte EXACTAMENTE todas las escrituras
+    // de la venta (stock, seriales, estado) en una sola transacción.
+    Transaction cancelTx(m_db);
+    if (!cancelTx.isValid())
+        return Result<CreatedSale>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+
+    // Revertir inventario por línea (incremento atómico dentro de la tx)
     for (const SaleItem &it : m_sales->itemsFor(saleId)) {
+        if (!m_products->incrementStockAtomic(it.productId, it.qty)) {
+            return Result<CreatedSale>::failure(
+                QStringLiteral("No se pudo revertir el stock (producto ID %1)").arg(it.productId));
+        }
         const auto p = m_products->findById(it.productId);
         if (!p)
-            continue;
-        const double before = p->stock;
-        m_products->setStockById(it.productId, before + it.qty);
-        m_inventory->record(p->sku, p->name, QStringLiteral("Devolución"), it.qty, before,
-                            before + it.qty, QStringLiteral("Cancelación venta %1").arg(saleId),
-                            user);
+            return Result<CreatedSale>::failure(
+                QStringLiteral("Producto ID %1 no existe").arg(it.productId));
+        const double after = p->stock;
+        if (!m_inventory->record(p->sku, p->name, QStringLiteral("Devolución"), it.qty,
+                                 after - it.qty, after,
+                                 QStringLiteral("Cancelación venta %1").arg(saleId), user)) {
+            return Result<CreatedSale>::failure(
+                QStringLiteral("No se pudo registrar la devolución de inventario"));
+        }
     }
     // Fase 3: devolver seriales a in_stock.
-    if (m_serials)
-        m_serials->revertSale(saleId);
+    if (m_serials && m_serials->revertSale(saleId) < 0)
+        return Result<CreatedSale>::failure(QStringLiteral("No se pudieron revertir los seriales"));
+    // Fase 1: revertir el crédito cargado al crear la venta (si la venta
+    // quedó Pendiente con saldo, ese saldo se restaura al cliente).
+    // Debe ir ANTES de advanceStatus, que pone balance=0.
+    if (m_clients && s->status == QLatin1String("Pendiente") && s->balance > 0
+        && !m_clients->payCredit(s->client, s->balance)) {
+        return Result<CreatedSale>::failure(
+            QStringLiteral("No se pudo revertir el crédito del cliente"));
+    }
+    // Fase 1: retirar la venta del turno de caja abierto.
+    if (m_caja && !m_caja->reverseSale(saleId))
+        return Result<CreatedSale>::failure(QStringLiteral("No se pudo revertir la caja"));
     auto adv = m_sales->advanceStatus(saleId, QStringLiteral("Cancelada"), user);
     if (!adv.ok())
         return Result<CreatedSale>::failure(adv.error());
+    if (!cancelTx.commit())
+        return Result<CreatedSale>::failure(QStringLiteral("No se pudo confirmar la cancelación"));
     CreatedSale out;
     out.id = adv.value().id;
     out.total = adv.value().total;

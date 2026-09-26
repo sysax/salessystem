@@ -3,6 +3,7 @@
 #include <QSqlQuery>
 
 #include "../core/EventBus.h"
+#include "../core/Transaction.h"
 
 InventoryService::InventoryService(QSqlDatabase db, ProductRepository *products,
                                    InventoryRepository *inventory, EventBus *bus, QObject *parent)
@@ -22,17 +23,28 @@ InventoryService::registerPurchase(int productId, double qty, double cost, const
 
     const double newStock = p->stock + qty;
     const double newCost = (p->stock * p->priceBuy + qty * cost) / (newStock > 0 ? newStock : 1);
+    // Fase 1: costo + stock + movimiento en una transacción.
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<StockResult>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     Product upd = *p;
     upd.stock = newStock;
     upd.priceBuy = newCost;
-    m_products->update(p->sku, upd);
-    m_inventory->record(p->sku, p->name, QStringLiteral("Entrada"), qty, p->stock, newStock,
-                        QStringLiteral("Compra %1 uds a $%2 (%3)%4")
-                            .arg(qty)
-                            .arg(cost, 0, 'f', 0)
-                            .arg(supplier)
-                            .arg(invoice.isEmpty() ? QString() : QStringLiteral(" ") + invoice),
-                        user);
+    if (!m_products->update(p->sku, upd).ok())
+        return Result<StockResult>::failure(
+            QStringLiteral("No se pudo actualizar el producto %1").arg(p->sku));
+    if (!m_inventory->record(
+            p->sku, p->name, QStringLiteral("Entrada"), qty, p->stock, newStock,
+            QStringLiteral("Compra %1 uds a $%2 (%3)%4")
+                .arg(qty)
+                .arg(cost, 0, 'f', 0)
+                .arg(supplier)
+                .arg(invoice.isEmpty() ? QString() : QStringLiteral(" ") + invoice),
+            user)) {
+        return Result<StockResult>::failure(QStringLiteral("No se pudo registrar el movimiento"));
+    }
+    if (!tx.commit())
+        return Result<StockResult>::failure(QStringLiteral("No se pudo confirmar la entrada"));
     if (m_bus)
         m_bus->publish(EventBus::InventoryUpdated,
                        {{"product_id", productId}, {"quantity_change", qty}});
@@ -62,9 +74,18 @@ Result<InventoryService::StockResult> InventoryService::registerAdjustment(const
                            "Resultaría en stock negativo.")
                 .arg(p->stock)
                 .arg(delta));
-    m_products->setStockBySku(sku, newStock);
+    // Fase 1: ajuste + movimiento en una transacción.
+    Transaction adjTx(m_db);
+    if (!adjTx.isValid())
+        return Result<StockResult>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+    if (!m_products->setStockBySku(sku, newStock))
+        return Result<StockResult>::failure(
+            QStringLiteral("No se pudo ajustar el stock de %1").arg(sku));
     const QString type = delta > 0 ? QStringLiteral("Entrada") : QStringLiteral("Salida");
-    m_inventory->record(sku, p->name, type, delta, p->stock, newStock, reason, user);
+    if (!m_inventory->record(sku, p->name, type, delta, p->stock, newStock, reason, user))
+        return Result<StockResult>::failure(QStringLiteral("No se pudo registrar el movimiento"));
+    if (!adjTx.commit())
+        return Result<StockResult>::failure(QStringLiteral("No se pudo confirmar el ajuste"));
     if (m_bus)
         m_bus->publish(EventBus::InventoryUpdated,
                        {{"product_id", p->id}, {"quantity_change", delta}});
@@ -89,11 +110,21 @@ Result<InventoryService::StockResult> InventoryService::registerWaste(const QStr
     if (p->stock < qty - 1e-9)
         return Result<StockResult>::failure(
             QStringLiteral("Merma mayor al stock (%1)").arg(p->stock));
+    // Fase 1: merma + movimiento en una transacción.
+    Transaction wasteTx(m_db);
+    if (!wasteTx.isValid())
+        return Result<StockResult>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     const double newStock = p->stock - qty;
-    m_products->setStockBySku(sku, newStock);
+    if (!m_products->setStockBySku(sku, newStock))
+        return Result<StockResult>::failure(
+            QStringLiteral("No se pudo descontar la merma de %1").arg(sku));
     const QString detail = reason.trimmed().isEmpty() ? QStringLiteral("merma") : reason.trimmed();
-    m_inventory->record(sku, p->name, QStringLiteral("Merma"), -qty, p->stock, newStock, detail,
-                        user);
+    if (!m_inventory->record(sku, p->name, QStringLiteral("Merma"), -qty, p->stock, newStock,
+                             detail, user)) {
+        return Result<StockResult>::failure(QStringLiteral("No se pudo registrar el movimiento"));
+    }
+    if (!wasteTx.commit())
+        return Result<StockResult>::failure(QStringLiteral("No se pudo confirmar la merma"));
     if (m_bus)
         m_bus->publish(EventBus::InventoryUpdated,
                        {{"product_id", p->id}, {"quantity_change", -qty}});
@@ -116,15 +147,23 @@ StatusResult InventoryService::transfer(const QString &sku, double qty, const QS
         return StatusResult::failure(QStringLiteral("Motivo requerido"));
     if (qty <= 0 || qty > p->stock)
         return StatusResult::failure(QStringLiteral("Cantidad inválida: stock %1").arg(p->stock));
+    // Fase 1: cambio de ubicación + movimiento en una transacción.
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return StatusResult::failure(QStringLiteral("No se pudo iniciar la transacción"));
     Product upd = *p;
     upd.location = toLocation.trimmed();
     auto r = m_products->update(sku, upd);
     if (!r.ok())
         return StatusResult::failure(r.error());
-    m_inventory->record(sku, p->name, QStringLiteral("Transferencia"), qty, p->stock, p->stock,
-                        QStringLiteral("%1->%2 %3")
-                            .arg(p->location, toLocation.trimmed(), reason.trimmed().left(30)),
-                        user);
+    if (!m_inventory->record(sku, p->name, QStringLiteral("Transferencia"), qty, p->stock, p->stock,
+                             QStringLiteral("%1->%2 %3")
+                                 .arg(p->location, toLocation.trimmed(), reason.trimmed().left(30)),
+                             user)) {
+        return StatusResult::failure(QStringLiteral("No se pudo registrar el movimiento"));
+    }
+    if (!tx.commit())
+        return StatusResult::failure(QStringLiteral("No se pudo confirmar la transferencia"));
     return StatusResult::success({});
 }
 

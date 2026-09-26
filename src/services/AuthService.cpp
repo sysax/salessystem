@@ -1,6 +1,7 @@
 #include "AuthService.h"
 #include "Totp.h"
 #include "../core/EventBus.h"
+#include "../core/Transaction.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -185,7 +186,10 @@ void AuthService::audit(const QString &user, const QString &action, const QStrin
     q.addBindValue(user);
     q.addBindValue(action);
     q.addBindValue(detail);
-    q.exec();
+    // Best-effort (igual que AuditRepository::log): nunca tumba el login,
+    // pero el fallo queda registrado (Fase 1: exec verificado).
+    if (!q.exec())
+        qWarning() << "AuthService::audit:" << action << q.lastError().text();
 }
 
 Result<AuthService::LoginResult> AuthService::login(const QString &username,
@@ -215,7 +219,10 @@ Result<AuthService::LoginResult> AuthService::login(const QString &username,
         reset.prepare(QStringLiteral(
             "UPDATE users SET failed_attempts=0, locked_until=NULL WHERE username=?"));
         reset.addBindValue(username);
-        reset.exec();
+        // Best-effort: el login sigue su curso, pero el fallo se reporta
+        // (sin este reset el usuario podría quedar bloqueado de más).
+        if (!reset.exec())
+            qWarning() << "AuthService::login reset:" << reset.lastError().text();
     }
 
     if (verifyPassword(stored, password)) {
@@ -233,7 +240,12 @@ Result<AuthService::LoginResult> AuthService::login(const QString &username,
         }
         up.addBindValue(nowIso());
         up.addBindValue(username);
-        up.exec();
+        // Fase 1: fail-closed. Si no se puede persistir el reseteo de
+        // intentos ni el last_login, el login se deniega en vez de dejar
+        // el estado de seguridad a medias.
+        if (!up.exec())
+            return Result<LoginResult>::failure(
+                QStringLiteral("No se pudo registrar el acceso — intente de nuevo"));
 
         r.ok = true;
         r.username = username;
@@ -261,7 +273,10 @@ Result<AuthService::LoginResult> AuthService::login(const QString &username,
     fail.addBindValue(attempts);
     fail.addBindValue(lockedUntil.isEmpty() ? QVariant() : QVariant(lockedUntil));
     fail.addBindValue(username);
-    fail.exec();
+    // El login ya falló; si el contador no persiste, el bloqueo se
+    // retrasa pero no hay acceso indebido. Se reporta (Fase 2 endurece).
+    if (!fail.exec())
+        qWarning() << "AuthService::login fail:" << fail.lastError().text();
     if (m_bus)
         m_bus->publish(EventBus::UserLoginFailed, {{"username", username}});
     return Result<LoginResult>::failure(QStringLiteral("Usuario o clave inválidos"));
@@ -286,9 +301,10 @@ QList<AuthService::UserInfo> AuthService::listUsers() const
 {
     QList<UserInfo> out;
     QSqlQuery q(m_db);
-    q.exec(
-        QStringLiteral("SELECT username, role, active, failed_attempts, locked_until, created_at, "
-                       "last_login, totp_enabled FROM users ORDER BY username"));
+    if (!q.exec(QStringLiteral(
+            "SELECT username, role, active, failed_attempts, locked_until, created_at, "
+            "last_login, totp_enabled FROM users ORDER BY username")))
+        return out;
     while (q.next()) {
         UserInfo u;
         u.username = q.value(0).toString();
@@ -487,7 +503,11 @@ Result<QStringList> AuthService::confirm2fa(const QString &username, const QStri
     up.prepare(QStringLiteral("UPDATE users SET totp_enabled=1, recovery_json=? WHERE username=?"));
     up.addBindValue(QString::fromUtf8(QJsonDocument(hashed).toJson(QJsonDocument::Compact)));
     up.addBindValue(username);
-    up.exec();
+    // Fase 1: si la activación no persiste, reportar éxito dejaría al
+    // usuario creyendo que el 2FA lo protege sin estar activo.
+    if (!up.exec())
+        return Result<QStringList>::failure(QStringLiteral("No se pudo activar 2FA: ")
+                                            + up.lastError().text());
     audit(username, QStringLiteral("2fa_activado"), {});
     return Result<QStringList>::success(codes);
 }
@@ -513,7 +533,10 @@ bool AuthService::verify2fa(const QString &username, const QString &code)
             up.prepare(QStringLiteral("UPDATE users SET recovery_json=? WHERE username=?"));
             up.addBindValue(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
             up.addBindValue(username);
-            up.exec();
+            // Fase 1: si el consumo no persiste, el código sería
+            // reutilizable (un solo uso). Fail-closed: denegar.
+            if (!up.exec())
+                return false;
             audit(username, QStringLiteral("2fa_recovery_usado"),
                   QStringLiteral("quedan %1").arg(arr.size()));
             return true;
@@ -546,7 +569,11 @@ Result<QStringList> AuthService::regenerateRecoveryCodes(const QString &username
     q.prepare(QStringLiteral("UPDATE users SET recovery_json=? WHERE username=?"));
     q.addBindValue(QString::fromUtf8(QJsonDocument(hashed).toJson(QJsonDocument::Compact)));
     q.addBindValue(username);
-    q.exec();
+    // Fase 1: entregar códigos que no quedaron guardados dejaría al
+    // usuario sin recuperación real.
+    if (!q.exec())
+        return Result<QStringList>::failure(QStringLiteral("No se pudieron guardar los códigos: ")
+                                            + q.lastError().text());
     audit(username, QStringLiteral("2fa_recovery_regenerado"), {});
     return Result<QStringList>::success(codes);
 }
@@ -608,15 +635,25 @@ StatusResult AuthService::redeemRecovery(const QString &username, const QString 
         return StatusResult::failure(QStringLiteral("Token expirado (30 min)"));
     QSqlQuery up(m_db);
     // El usuario eligió su propia clave vía token: ya no hay cambio pendiente.
+    // Fase 1: cambio de clave + quema del token en una transacción (si la
+    // clave no persiste pero el token se quema, el usuario queda fuera;
+    // si el token no se quema, queda reutilizable).
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return StatusResult::failure(QStringLiteral("No se pudo iniciar la transacción"));
     up.prepare(QStringLiteral("UPDATE users SET password=?, failed_attempts=0, locked_until=NULL, "
                               "must_change_password=0 WHERE username=?"));
     up.addBindValue(hashPassword(newPassword));
     up.addBindValue(username);
-    up.exec();
+    if (!up.exec() || up.numRowsAffected() == 0)
+        return StatusResult::failure(QStringLiteral("No se pudo actualizar la contraseña"));
     QSqlQuery used(m_db);
     used.prepare(QStringLiteral("UPDATE recovery_tokens SET used=1 WHERE token=?"));
     used.addBindValue(clean);
-    used.exec();
+    if (!used.exec())
+        return StatusResult::failure(QStringLiteral("No se pudo invalidar el token"));
+    if (!tx.commit())
+        return StatusResult::failure(QStringLiteral("No se pudo confirmar la recuperación"));
     audit(username, QStringLiteral("recovery_completado"), {});
     return StatusResult::success({});
 }

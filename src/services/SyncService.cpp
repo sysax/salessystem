@@ -41,7 +41,13 @@ int SyncService::queueOperation(const QString &opType, const QVariantMap &data,
     q.addBindValue(opType);
     q.addBindValue(key);
     q.addBindValue(QString::fromUtf8(QJsonDocument::fromVariant(data).toJson()));
-    q.exec();
+    // Fase 1: si el evento no queda en el outbox, la venta nunca se
+    // sincronizará. -1 = no encolado (el llamador ya consumó la venta
+    // local; el sync es best-effort con reintento visible en UI).
+    if (!q.exec()) {
+        qWarning() << "SyncService::queueOperation:" << q.lastError().text();
+        return -1;
+    }
     // Fase 6: seq = rowid (secuencia por dispositivo) + device_id.
     // INSERT OR IGNORE: si la clave ya existía, se conserva la fila original.
     if (q.numRowsAffected() == 1) {
@@ -82,9 +88,9 @@ QString SyncService::deviceId()
 QString SyncService::conflictStrategy(const QString &opType)
 {
     // Fase 6: catálogo = LWW; movimientos = solo-agrega (append-only).
-    static const QStringList kAdditive = {QStringLiteral("sale"), QStringLiteral("payment"),
-                                          QStringLiteral("inventory"), QStringLiteral("cxc"),
-                                          QStringLiteral("cxp")};
+    static const QStringList kAdditive
+        = {QStringLiteral("sale"), QStringLiteral("payment"), QStringLiteral("inventory"),
+           QStringLiteral("cxc"), QStringLiteral("cxp")};
     return kAdditive.contains(opType.trimmed().toLower()) ? QStringLiteral("additive")
                                                           : QStringLiteral("lww");
 }
@@ -92,7 +98,8 @@ QString SyncService::conflictStrategy(const QString &opType)
 int SyncService::pendingCount() const
 {
     QSqlQuery q(m_db);
-    q.exec(QStringLiteral("SELECT COUNT(*) FROM outbox WHERE status='pending'"));
+    if (!q.exec(QStringLiteral("SELECT COUNT(*) FROM outbox WHERE status='pending'")))
+        return 0;
     return (q.next() ? q.value(0).toInt() : 0);
 }
 
@@ -107,11 +114,10 @@ QVariantList SyncService::pendingList(int limit) const
     if (!q.exec())
         return out;
     while (q.next()) {
-        out << QVariantMap{{"id", q.value(0).toInt()},       {"created", q.value(1).toString()},
-                           {"op", q.value(2).toString()},    {"key", q.value(3).toString()},
-                           {"attempts", q.value(4).toInt()}, {"error", q.value(5).toString()},
-                           {"device", q.value(6).toString()},
-                           {"seq", q.value(7).toLongLong()}};
+        out << QVariantMap{{"id", q.value(0).toInt()},        {"created", q.value(1).toString()},
+                           {"op", q.value(2).toString()},     {"key", q.value(3).toString()},
+                           {"attempts", q.value(4).toInt()},  {"error", q.value(5).toString()},
+                           {"device", q.value(6).toString()}, {"seq", q.value(7).toLongLong()}};
     }
     return out;
 }
@@ -186,9 +192,11 @@ QVariantMap SyncService::syncNow(bool force)
             f.prepare(QStringLiteral("UPDATE outbox SET status='failed', last_error=? WHERE id=?"));
             f.addBindValue(QStringLiteral("max intentos"));
             f.addBindValue(it.id);
-            f.exec();
+            if (!f.exec())
+                recordFailure(f.lastError().text());
+            else
+                recordFailure(QStringLiteral("max intentos"));
             ++failed;
-            recordFailure(QStringLiteral("max intentos"));
             continue;
         }
         // Remoto simulado: idempotente por clave, siempre OK (provider simulado)
@@ -222,7 +230,8 @@ void SyncService::purgeSynced(int olderThanDays)
     q.prepare(QStringLiteral(
         "DELETE FROM outbox WHERE status='synced' AND synced_ts < datetime('now', ?)"));
     q.addBindValue(QStringLiteral("-%1 days").arg(olderThanDays));
-    q.exec();
+    if (!q.exec())
+        qWarning() << "SyncService::purgeSynced:" << q.lastError().text();
     emit queueChanged();
 }
 

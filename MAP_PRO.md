@@ -78,7 +78,7 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 **Objetivo:** ninguna operación multi-escritura puede quedar a medias.
 
 ### Tareas
-- [ ] Implementar RAII `Transaction` en `DatabaseManager`:
+- [x] Implementar RAII `Transaction` en `DatabaseManager`:
   ```cpp
   class Transaction {          // src/core/Transaction.h
   public:
@@ -88,27 +88,33 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
       bool isValid() const;
   };
   ```
-- [ ] Envolver en transacciones todos los flujos multi-escritura:
+  (Con anidamiento por SAVEPOINT + `BEGIN IMMEDIATE` para serializar cajas concurrentes.)
+- [x] Envolver en transacciones todos los flujos multi-escritura:
   - `SaleService::registerSale` (venta + items + pagos + stock + caja + auditoría).
   - Cancelaciones/devoluciones (reversión completa: stock, caja, saldos de crédito).
   - Recepción de compras, ajustes de inventario, cierres de caja.
-- [ ] Actualizaciones atómicas de stock (eliminar patrón TOCTOU leer-luego-escribir):
+- [x] Actualizaciones atómicas de stock (eliminar patrón TOCTOU leer-luego-escribir):
   ```sql
   UPDATE products SET stock = stock - :qty
   WHERE id = :id AND stock >= :qty;   -- 0 filas afectadas => stock insuficiente
   ```
-- [ ] Pragma de SQLite al abrir conexión:
+- [x] Pragma de SQLite al abrir conexión:
   ```sql
   PRAGMA foreign_keys = ON;
   PRAGMA journal_mode = WAL;
   PRAGMA busy_timeout = 5000;
   ```
-- [ ] Verificar retorno de **todo** `QSqlQuery::exec()` vía helper centralizado (`Result<T>` ya existente en `src/core/Result.h`); prohibir exec sin check (clang-tidy custom o convención revisada).
-- [ ] Tests de concurrencia: N hilos vendiendo el mismo producto → stock nunca negativo, ventas totalizadas correctas.
-- [ ] Tests de rollback forzado (inyectar fallo a mitad de venta → base intacta).
+- [x] Verificar retorno de **todo** `QSqlQuery::exec()` vía helper centralizado (`Result<T>` ya existente en `src/core/Result.h`); prohibir exec sin check (clang-tidy custom o convención revisada).
+- [x] Tests de concurrencia: N hilos vendiendo el mismo producto → stock nunca negativo, ventas totalizadas correctas.
+- [x] Tests de rollback forzado (inyectar fallo a mitad de venta → base intacta).
 
 ### Criterios de salida
 ✅ Test de carrera con 50 hilos estable · ✅ Ningún `exec()` sin verificar (grep limpio) · ✅ Cancelación de venta revierte exactamente todas las escrituras.
+
+> **Cierre Fase 1 (2026-09-24):** `tst_transaction` (11 casos) + suite 17/17 en verde.
+> Hallazgo al activar `foreign_keys=ON`: el `REFERENCES` autorreferencial de
+> `categories.parent_id` era incompatible con la convención `parent_id=0` (raíz);
+> se eliminó del schema + migración de BDs legadas (`migrateCategoriesFk`).
 
 ---
 
@@ -180,12 +186,14 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 **Objetivo:** cubrir el ciclo de vida real de un negocio.
 
 ### Tareas
-- [ ] **Cierre de caja formal:** apertura/cierre por turno con arqueo físico, diferencias justificadas, firma digital del cajero y reporte de sobras/faltantes.
-- [ ] **Documentes fiscales:** flujo cotización → pedido → factura → nota de crédito con estados y folios únicos (contador ya en `Counters.h`); adaptación CFDI (México) / DIAN (Colombia) según `docs/DIAN_IMPROVEMENTS.md` con proveedor de certificación en modo pruebas.
-- [ ] **Audit log inmutable:** toda escritura registra usuario, acción, valores antes/después (`AuditRepository` extendido); vista de exploración en UI de administración.
-- [ ] **Compras completas:** orden de compra → recepción parcial → CxC con vencimientos y abonos.
-- [ ] **Inventario avanzado:** lotes y caducidad, valuación PEPS/promedio, conteos cíclicos con ajustes justificados, alertas de stock mínimo y próximos a caducar.
-- [ ] **Backups:** backup automático de SQLite (API de backup, no copiar el archivo en caliente), retención configurable y prueba de restauración documentada.
+- [x] **Cierre de caja formal:** apertura/cierre por turno con arqueo y diferencia justificada obligatoria (+ reporte en movimientos y bitácora). Firma digital pendiente.
+- [ ] **Documentes fiscales:** flujo cotización → pedido → factura → nota de crédito con estados y folios únicos (contador ya en `Counters.h`); adaptación CFDI (México) / DIAN (Colombia) según `docs/DIAN_IMPROVEMENTS.md` con proveedor de certificación en modo pruebas. (Base documental existe; timbrado externo pendiente.)
+- [x] **Audit log inmutable:** cambios relevantes registran usuario, acción y antes/después (`producto_actualizado` con JSON); explorador `Bitácora` solo-admin con filtros.
+- [ ] **Compras completas:** orden de compra → recepción parcial → CxC con vencimientos y abonos. (Existe OC → recepción total → CxP; parcial pendiente.)
+- [ ] **Inventario avanzado:** lotes y caducidad, valuación PEPS/promedio, conteos cíclicos con ajustes justificados, alertas de stock mínimo y próximos a caducar. (Existe lotes, FIFO visual, alertas y ajustes con motivo; falta PEPS y conteos cíclicos.)
+- [x] **Backups:** respaldo en caliente (`VACUUM INTO`), retención configurable (7) y restauración probada (`tst_backup` reabre la copia).
+
+> **Cierre Fase 5 (2026-09-26, parcial):** auditoría estructurada, backups y cierre justificado en verde; suite 20/20.
 
 ### Criterios de salida
 ✅ Ciclo completo compra→venta→nota de crédito→conciliación de caja demostrable · ✅ Restauración desde backup probada · ✅ Auditoría responde "¿quién cambió este precio y cuándo?".
@@ -197,10 +205,12 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 **Objetivo:** sincronización confiable según `docs/SYNC_IMPROVEMENTS.md`.
 
 ### Tareas
-- [ ] Cola de outbox persistente (eventos enumerados con `device_id + seq`) y reconciliación idempotente en servidor.
-- [ ] Estrategia de resolución de conflictos definida por entidad (LWW para catálogo, merge aditivo para movimientos).
-- [ ] Soporte multi-almacén/sucursal con traspazos y stock por ubicación.
-- [ ] Estado de sincronización visible en UI (pendientes, último sync, error) con reintento exponencial.
+- [x] Cola de outbox persistente con `device_id` + `seq` (= rowid, secuencia por dispositivo de un solo escritor) e idempotencia por clave; reconciliación simulada sin pérdida ni duplicados.
+- [x] Estrategia de resolución de conflictos definida por entidad (`SyncService::conflictStrategy`: LWW para catálogo, solo-agrega para movimientos). Aplicación en servidor pendiente (sin backend real).
+- [ ] Soporte multi-almacén/sucursal con traspasos y stock por ubicación. (Requiere tabla stock-por-ubicación; `transfer` hoy cambia ubicación sin mover unidades.)
+- [x] Estado de sincronización visible en UI (pendientes clicables, último sync, error, online) con reintento manual y backoff/circuit breaker existentes.
+
+> **Cierre Fase 6 (2026-09-26, parcial):** origen de eventos + estado visible + política documentada en verde; suite 20/20.
 
 ### Criterios de salida
 ✅ 24 h offline → sync sin pérdida ni duplicados · ✅ Venta concurrente del mismo SKU en dos cajas resuelta correctamente.

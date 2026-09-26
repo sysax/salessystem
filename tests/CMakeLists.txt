@@ -14,6 +14,7 @@ function(add_qt_test name src)
 endfunction()
 
 add_qt_test(tst_totp tst_totp.cpp)
+add_qt_test(tst_transaction tst_transaction.cpp)
 add_qt_test(tst_auth tst_auth.cpp)
 add_qt_test(tst_money tst_money.cpp)
 add_qt_test(tst_repositories tst_repositories.cpp)

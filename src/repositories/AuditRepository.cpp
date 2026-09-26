@@ -17,7 +17,10 @@ void AuditRepository::log(const QString &user, const QString &action, const QStr
     q.addBindValue(user);
     q.addBindValue(action);
     q.addBindValue(detail);
-    q.exec();
+    // Best-effort: la auditoría nunca debe tumbar la operación que
+    // registra, pero el fallo sí se reporta (Fase 1: exec verificado).
+    if (!q.exec())
+        qWarning() << "AuditRepository::log:" << action << q.lastError().text();
 }
 
 QList<AuditEntry> AuditRepository::list(int limit) const

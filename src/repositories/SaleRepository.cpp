@@ -3,9 +3,11 @@
 #include <QDate>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
 #include <QSqlError>
 #include <QSqlQuery>
 
+#include "../core/Transaction.h"
 #include "../services/Dian.h"
 #include "Counters.h"
 
@@ -199,7 +201,10 @@ Result<Sale> SaleRepository::create(const NewSale &s)
         paymentStr = s.paymentMethod;
     }
 
-    const QString folio = Counters::next(m_db, QStringLiteral("SALE_COUNTER"), QStringLiteral("V"));
+    // Folio y CUFE se generan DENTRO de la transacción (ver abajo):
+    // el contador es leer-luego-escribir y fuera del lock dos cajas
+    // concurrentes obtendrían el mismo folio (o SQLITE_BUSY_SNAPSHOT
+    // sin espera en autocommit). Dentro de BEGIN IMMEDIATE se serializa.
     double paidVal, balanceVal;
     const double creditPart = payments.value(QStringLiteral("credito"), 0.0);
     if (status == QLatin1String("Pagada")) {
@@ -216,7 +221,6 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     QString docType = s.docType;
     if (docType.isEmpty() || docType == QLatin1String("Factura electrónica DIAN"))
         docType = Dian::defaultDocType(m_db);
-    const QString cufe = Dian::generateCufe(m_db, folio);
     const QString dianStatus
         = s.offline ? QStringLiteral("PENDIENTE_OFFLINE") : QStringLiteral("SINCRONIZADO");
 
@@ -232,6 +236,16 @@ Result<Sale> SaleRepository::create(const NewSale &s)
         payObj[it.key()] = it.value();
 
     QSqlQuery q(m_db);
+    // Fase 1: todo el flujo multi-escritura (folio + venta + líneas +
+    // stock + crédito + caja) en una sola transacción. Cualquier fallo
+    // revierte todo vía ~Transaction (sin ventas a medias ni stock
+    // descontado sin venta). Anidable: si el llamador (SalesService) ya
+    // abrió una transacción, esto es un SAVEPOINT.
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<Sale>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+    const QString folio = Counters::next(m_db, QStringLiteral("SALE_COUNTER"), QStringLiteral("V"));
+    const QString cufe = Dian::generateCufe(m_db, folio);
     q.prepare(QStringLiteral(
         "INSERT INTO sales (id, date, client, vendedor, total, subtotal, tax, discount, promo, "
         "status, doc_type, payment, payments_json, paid, balance, due, estado, dian_cufe, "
@@ -262,16 +276,19 @@ Result<Sale> SaleRepository::create(const NewSale &s)
         return Result<Sale>::failure(q.lastError().text());
 
     for (const SaleItem &it : s.items) {
-        QSqlQuery cur(m_db);
-        cur.prepare(QStringLiteral("SELECT stock FROM products WHERE id=?"));
-        cur.addBindValue(it.productId);
-        if (cur.exec() && cur.next()) {
-            QSqlQuery up(m_db);
-            up.prepare(QStringLiteral("UPDATE products SET stock=? WHERE id=?"));
-            up.addBindValue(cur.value(0).toDouble() - it.qty);
-            up.addBindValue(it.productId);
-            up.exec();
-        }
+        // Fase 1: decremento atómico (sin TOCTOU leer-luego-escribir).
+        // 0 filas => otro hilo/caja vendió primero o no hay stock.
+        QSqlQuery up(m_db);
+        up.prepare(
+            QStringLiteral("UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?"));
+        up.addBindValue(it.qty);
+        up.addBindValue(it.productId);
+        up.addBindValue(it.qty);
+        if (!up.exec())
+            return Result<Sale>::failure(QStringLiteral("Stock: ") + up.lastError().text());
+        if (up.numRowsAffected() != 1)
+            return Result<Sale>::failure(
+                QStringLiteral("Stock insuficiente (producto ID %1)").arg(it.productId));
         QSqlQuery ins(m_db);
         ins.prepare(QStringLiteral(
             "INSERT INTO sale_items (sale_id, product_id, qty, subtotal, attrs_json, serial) "
@@ -282,19 +299,27 @@ Result<Sale> SaleRepository::create(const NewSale &s)
         ins.addBindValue(it.subtotal);
         ins.addBindValue(it.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}") : it.attrsJson);
         ins.addBindValue(it.serial);
-        ins.exec();
+        if (!ins.exec())
+            return Result<Sale>::failure(QStringLiteral("Línea de venta: ")
+                                         + ins.lastError().text());
     }
 
     // Crédito a la cuenta del cliente
     const double creditAmount
         = status == QLatin1String("Pendiente") ? (payments.isEmpty() ? s.total : creditPart) : 0.0;
-    if (creditAmount > 0 && m_clients)
-        m_clients->addCredit(s.clientName, creditAmount);
+    if (creditAmount > 0 && m_clients && !m_clients->addCredit(s.clientName, creditAmount))
+        return Result<Sale>::failure(QStringLiteral("No se pudo cargar el crédito al cliente"));
 
-    if (m_caja)
-        m_caja->recordSale(folio, s.total);
+    if (m_caja && !m_caja->recordSale(folio, s.total))
+        return Result<Sale>::failure(QStringLiteral("No se pudo registrar la venta en caja"));
 
-    return Result<Sale>::success(*find(folio));
+    if (!tx.commit())
+        return Result<Sale>::failure(QStringLiteral("No se pudo confirmar la venta"));
+    const auto done = find(folio);
+    if (!done)
+        return Result<Sale>::failure(
+            QStringLiteral("Venta %1 no encontrada tras crear").arg(folio));
+    return Result<Sale>::success(*done);
 }
 
 Result<Sale> SaleRepository::createDocument(const QString &docType, const QString &client,
@@ -319,8 +344,13 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     if (!prefixes.contains(docType))
         return Result<Sale>::failure(
             QStringLiteral("doc_type debe ser %1").arg(DocTypes.join(u", ")));
-    const QString folio = Counters::next(m_db, counters[docType], prefixes[docType]);
     const QString today = QDate::currentDate().toString(Qt::ISODate);
+    // Fase 1: documento + auditoría en una transacción (el folio vive
+    // dentro: sin duplicados entre cajas concurrentes, sin huecos si falla).
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<Sale>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+    const QString folio = Counters::next(m_db, counters[docType], prefixes[docType]);
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
         "INSERT INTO sales (id, date, client, vendedor, total, subtotal, tax, discount, status, "
@@ -347,7 +377,13 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
         m_audit->log(user,
                      QStringLiteral("doc_%1_creado").arg(docType.toLower().replace(u' ', u'_')),
                      QStringLiteral("%1 %2 $%3").arg(folio, client).arg(total, 0, 'f', 0));
-    return Result<Sale>::success(*find(folio));
+    if (!tx.commit())
+        return Result<Sale>::failure(QStringLiteral("No se pudo confirmar el documento"));
+    const auto created = find(folio);
+    if (!created)
+        return Result<Sale>::failure(
+            QStringLiteral("Documento %1 no encontrado tras crear").arg(folio));
+    return Result<Sale>::success(*created);
 }
 
 Result<Sale> SaleRepository::advanceStatus(const QString &saleId, const QString &newStatus,
@@ -358,6 +394,10 @@ Result<Sale> SaleRepository::advanceStatus(const QString &saleId, const QString 
         return Result<Sale>::failure(QStringLiteral("Venta %1 no encontrada").arg(saleId));
     if (s->status == QLatin1String("Cancelada"))
         return Result<Sale>::failure(QStringLiteral("Venta cancelada no avanza"));
+    // Fase 1: cambio de estado + auditoría en una transacción.
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<Sale>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     QSqlQuery q(m_db);
     if (newStatus == QLatin1String("Cancelada")) {
         q.prepare(QStringLiteral(
@@ -367,7 +407,13 @@ Result<Sale> SaleRepository::advanceStatus(const QString &saleId, const QString 
             return Result<Sale>::failure(q.lastError().text());
         if (m_audit)
             m_audit->log(user, QStringLiteral("venta_cancelada"), saleId);
-        return Result<Sale>::success(*find(saleId));
+        if (!tx.commit())
+            return Result<Sale>::failure(QStringLiteral("No se pudo confirmar el cambio"));
+        const auto cancelled = find(saleId);
+        if (!cancelled)
+            return Result<Sale>::failure(
+                QStringLiteral("Venta %1 no encontrada tras actualizar").arg(saleId));
+        return Result<Sale>::success(*cancelled);
     }
     if (!EstadosVenta.contains(newStatus))
         return Result<Sale>::failure(
@@ -388,7 +434,13 @@ Result<Sale> SaleRepository::advanceStatus(const QString &saleId, const QString 
     if (m_audit)
         m_audit->log(user, QStringLiteral("venta_avance"),
                      QStringLiteral("%1 -> %2").arg(saleId, newStatus));
-    return Result<Sale>::success(*find(saleId));
+    if (!tx.commit())
+        return Result<Sale>::failure(QStringLiteral("No se pudo confirmar el cambio"));
+    const auto advanced = find(saleId);
+    if (!advanced)
+        return Result<Sale>::failure(
+            QStringLiteral("Venta %1 no encontrada tras actualizar").arg(saleId));
+    return Result<Sale>::success(*advanced);
 }
 
 Result<Sale> SaleRepository::createCreditNote(const QString &saleId, double amount,

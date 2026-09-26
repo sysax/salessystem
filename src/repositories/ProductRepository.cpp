@@ -462,6 +462,25 @@ bool ProductRepository::setStockBySku(const QString &sku, double stock)
     return q.exec() && q.numRowsAffected() > 0;
 }
 
+bool ProductRepository::decrementStockAtomic(int id, double qty)
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?"));
+    q.addBindValue(qty);
+    q.addBindValue(id);
+    q.addBindValue(qty);
+    return q.exec() && q.numRowsAffected() == 1;
+}
+
+bool ProductRepository::incrementStockAtomic(int id, double qty)
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("UPDATE products SET stock = stock + ? WHERE id = ?"));
+    q.addBindValue(qty);
+    q.addBindValue(id);
+    return q.exec() && q.numRowsAffected() == 1;
+}
+
 bool ProductRepository::reserveAtomic(int id, double qty)
 {
     // Fase 3: aparta sin tocar el físico; falla si no hay disponible.
