@@ -43,6 +43,21 @@ ApplicationWindow {
         return online;
     }
 
+    // Fase 6: tooltip con último sync, pendientes y error.
+    function syncTip() {
+        try {
+            var m = syncSvc.metrics();
+            var s = qsTr("Pendientes: %1").arg(m.pending);
+            if (m.lastSync)
+                s += qsTr(" · último sync: %1").arg(m.lastSync);
+            if (m.lastError)
+                s += qsTr(" · error: %1").arg(m.lastError);
+            return s;
+        } catch (e) {
+            return qsTr("Estado de sincronización");
+        }
+    }
+
     // Mejora #5: metadatos para breadcrumbs + sidebar (etiqueta, icono, sección).
     function screenMeta(key) {
         var map = {
@@ -182,10 +197,19 @@ ApplicationWindow {
                 elide: Label.ElideRight
                 Layout.fillWidth: true
             }
-            Label {
-                visible: pos.pendingSync > 0
-                text: qsTr("⏳ %1 por sincronizar").arg(pos.pendingSync)
-                color: Material.color(Material.Orange)
+            // Fase 6: estado de sync (clic = sincronizar ahora).
+            ToolButton {
+                visible: auth.loggedIn
+                text: pos.pendingSync > 0 ? qsTr("⏳ %1").arg(pos.pendingSync) : qsTr("🔄")
+                Accessible.name: qsTr("Sincronizar pendientes")
+                ToolTip.text: root.syncTip()
+                ToolTip.visible: hovered
+                onClicked: {
+                    var r = syncSvc.syncNow(false);
+                    Utils.showToast(r.failed > 0 ? "warning" : "success",
+                        qsTr("Sincronizados %1 · fallos %2").arg(r.synced).arg(r.failed), 3000);
+                    root.recheckOnline();
+                }
             }
             // Reloj en vivo
             Label {

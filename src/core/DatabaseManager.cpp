@@ -1,5 +1,8 @@
 #include "DatabaseManager.h"
 
+#include <QDateTime>
+#include <QFileInfo>
+
 #include <QDir>
 #include <QFile>
 #include <QRegularExpression>
@@ -189,6 +192,8 @@ bool DatabaseManager::migrateLegacyColumns()
         {"promos", "max_uses", "max_uses INTEGER DEFAULT 0"}, // 0 = ilimitada
         {"promos", "uses", "uses INTEGER DEFAULT 0"},
         {"products", "stock_reserved", "stock_reserved REAL DEFAULT 0"}, // Fase 3: apartados
+        {"outbox", "device_id", "device_id TEXT DEFAULT ''"}, // Fase 6: origen del evento
+        {"outbox", "seq", "seq INTEGER DEFAULT 0"},
         {"audit_log", "entity", "entity TEXT DEFAULT ''"}, // Fase 5: auditoría estructurada
         {"audit_log", "entity_id", "entity_id TEXT DEFAULT ''"},
         {"audit_log", "before_json", "before_json TEXT DEFAULT ''"},
@@ -238,4 +243,42 @@ bool DatabaseManager::ensureColumn(const QString &table, const QString &column,
         return false;
     }
     return true;
+}
+
+QVariantMap DatabaseManager::backup(const QString &dir, int keep)
+{
+    // Fase 5: VACUUM INTO copia consistente en caliente (SQLite ≥ 3.27;
+    // falla dentro de transacción: las operaciones aquí son puntuales).
+    QString target = dir.trimmed();
+    if (target.isEmpty()) {
+        target = QFileInfo(m_dbPath).absolutePath() + QStringLiteral("/respaldos");
+    }
+    if (!QDir().mkpath(target))
+        return {{"ok", false}, {"error", QStringLiteral("No se pudo crear ") + target}};
+    const QString path
+        = target + QStringLiteral("/respaldo_")
+          + QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss_zzz"))
+          + QStringLiteral(".db");
+    // El nombre va entre comillas simples con escape (no admite binds).
+    const QString quoted = QStringLiteral("'") + QString(path).replace(u'\'', QStringLiteral("''"))
+                           + QStringLiteral("'");
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral("VACUUM INTO ") + quoted))
+        return {{"ok", false},
+                {"error", QStringLiteral("Respaldo falló: ") + q.lastError().text()}};
+    // Retención: conservar los `keep` más recientes (por modificación).
+    int pruned = 0;
+    if (keep > 0) {
+        QFileInfoList files = QDir(target).entryInfoList({QStringLiteral("respaldo_*.db")},
+                                                         QDir::Files, QDir::Time);
+        while (files.size() > keep) {
+            if (QFile::remove(files.takeLast().absoluteFilePath()))
+                ++pruned;
+            else
+                break;
+        }
+    }
+    m_status = QStringLiteral("Respaldo: ") + path;
+    emit openChanged();
+    return {{"ok", true}, {"path", path}, {"pruned", pruned}};
 }

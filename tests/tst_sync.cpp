@@ -51,6 +51,35 @@ class TstSync : public QObject
         QCOMPARE(m_sync->metrics()["circuit"].toString(), QStringLiteral("closed"));
     }
 
+    void deviceSeqAndStrategy()
+    {
+        // Fase 6: device estable + seq monótona + estrategia por entidad.
+        const QString d1 = m_sync->deviceId();
+        QVERIFY(!d1.isEmpty());
+        QCOMPARE(m_sync->deviceId(), d1); // estable entre llamadas
+        m_sync->queueOperation(QStringLiteral("sale"), {{"folio", "VD1"}}, QStringLiteral("kd1"));
+        m_sync->queueOperation(QStringLiteral("sale"), {{"folio", "VD2"}}, QStringLiteral("kd2"));
+        const QVariantList pend = m_sync->pendingList(10);
+        QCOMPARE(pend.size(), 2);
+        QCOMPARE(pend[0].toMap()["device"].toString(), d1);
+        QVERIFY(pend[1].toMap()["seq"].toLongLong() > pend[0].toMap()["seq"].toLongLong());
+        QCOMPARE(SyncService::conflictStrategy(QStringLiteral("sale")), QStringLiteral("additive"));
+        QCOMPARE(SyncService::conflictStrategy(QStringLiteral("payment")),
+                 QStringLiteral("additive"));
+        QCOMPARE(SyncService::conflictStrategy(QStringLiteral("product")), QStringLiteral("lww"));
+        QCOMPARE(SyncService::conflictStrategy(QStringLiteral("settings")), QStringLiteral("lww"));
+        // Limpieza: sincronizar lo encolado aquí.
+        QCOMPARE(m_sync->syncNow(true)["synced"].toInt(), 2);
+    }
+
+    void lastSyncVisible()
+    {
+        // Fase 6: el último sync y su estado quedan visibles en métricas.
+        const QVariantMap m = m_sync->metrics();
+        QVERIFY(!m["lastSync"].toString().isEmpty());
+        QVERIFY(m.contains("lastError") && m.contains("deviceId"));
+    }
+
   private:
     QTemporaryDir m_tmp;
     DatabaseManager *m_dbm = nullptr;

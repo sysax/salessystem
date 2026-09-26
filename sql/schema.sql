@@ -131,7 +131,10 @@ CREATE TABLE IF NOT EXISTS outbox (
     status TEXT DEFAULT 'pending',
     attempts INTEGER DEFAULT 0,
     last_error TEXT,
-    synced_ts TEXT
+    synced_ts TEXT,
+    -- Fase 6: origen del evento (id = secuencia por dispositivo).
+    device_id TEXT DEFAULT '',
+    seq INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS settings (

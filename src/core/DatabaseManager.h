@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QSqlDatabase>
 #include <QString>
+#include <QVariantMap>
 
 // Capa Repositories (arquitectura.txt): acceso a datos.
 // DatabaseManager abre/crea el SQLite, aplica sql/schema.sql por
@@ -43,6 +44,10 @@ class DatabaseManager : public QObject
     // Fase 2: aplica sql/seeds/<name>.sql (INSERT OR IGNORE, idempotente).
     // Solo añade: no borra usuarios, ventas ni productos existentes.
     Q_INVOKABLE bool applySeedFile(const QString &name);
+    // Fase 5: respaldo en caliente con VACUUM INTO (dir vacío = subcarpeta
+    // "respaldos" junto a la BD). Retorna {ok, path, pruned, error}.
+    // Conserva los `keep` más recientes (por fecha de archivo).
+    Q_INVOKABLE QVariantMap backup(const QString &dir = {}, int keep = 7);
 
   signals:
     void openChanged();

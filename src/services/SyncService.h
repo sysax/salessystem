@@ -45,6 +45,16 @@ class SyncService : public QObject
     Q_INVOKABLE bool isOnline() const;
     Q_INVOKABLE void resetCircuit();
 
+    // Fase 6: identidad estable del dispositivo (persistida en settings;
+    // QUuid la primera vez). Los eventos llevan device_id + seq (= rowid,
+    // secuencia por dispositivo de un solo escritor).
+    QString deviceId();
+    // Fase 6: estrategia de resolución por tipo de op (el servidor la
+    // aplicará; sin backend real se documenta y testea el mapeo).
+    // "lww" = last-writer-wins (catálogo); "additive" = solo-agrega,
+    // nunca se sobrescribe (movimientos: ventas, pagos, inventario).
+    static QString conflictStrategy(const QString &opType);
+
   signals:
     void queueChanged();
 
@@ -52,6 +62,8 @@ class SyncService : public QObject
     bool circuitAllows() const;
     void recordSuccess();
     void recordFailure(const QString &error);
+    void setSetting(const QString &key, const QString &value);
+    QString setting(const QString &key) const;
 
     QSqlDatabase m_db;
     EventBus *m_bus = nullptr;
