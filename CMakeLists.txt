@@ -99,6 +99,8 @@ add_library(
     src/services/TicketPrinter.cpp
     src/controllers/AuthController.h
     src/controllers/AuthController.cpp
+    src/controllers/AuditController.h
+    src/controllers/AuditController.cpp
     src/controllers/DashboardController.h
     src/controllers/DashboardController.cpp
     src/controllers/PagedListModel.h
@@ -197,6 +199,7 @@ qt_add_qml_module(
     qml/SerialsPage.qml
     qml/PromosPage.qml
     qml/UsersPage.qml
+    qml/AuditPage.qml
     qml/Utils.js
     qml/components/Toast.qml
     qml/components/LoadingOverlay.qml
