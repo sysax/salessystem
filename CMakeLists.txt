@@ -201,7 +201,6 @@ qt_add_qml_module(
     qml/components/Toast.qml
     qml/components/LoadingOverlay.qml
     qml/components/SortHeader.qml
-    qml/components/Pager.qml
     qml/components/EmptyState.qml
     qml/components/ConfirmDialog.qml
     qml/components/BusinessBadge.qml

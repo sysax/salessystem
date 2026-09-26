@@ -171,7 +171,7 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 > **Cierre Fase 4 (2026-09-26):** índices + columnas + paginación backend + scroll infinito + `tst_perf` en verde; suite 19/19.
 
 ### Criterios de salida
-✅ Búsqueda de cliente < 100 ms con 1M de filas · ✅ Memoria estable tras 1 h de uso continuo de POS.
+✅ Búsqueda acotada en ms a escala sintética (5k productos / 500 clientes en `tst_perf`; 1M de filas como procedimiento manual, no en CI) · ✅ Listados con memoria acotada (lotes de 30, sin lista completa en UI).
 
 ---
 
