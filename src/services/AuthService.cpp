@@ -1,6 +1,7 @@
 #include "AuthService.h"
 #include "Totp.h"
 #include "../core/EventBus.h"
+#include "../core/Permissions.h"
 #include "../core/Transaction.h"
 
 #include <QDateTime>
@@ -12,13 +13,7 @@
 #include <QSqlQuery>
 #include <QSqlRecord>
 
-#include <unordered_map>
-#include <vector>
-
-const QStringList AuthService::Roles = {
-    QStringLiteral("Administrador"), QStringLiteral("Vendedor"), QStringLiteral("Cajero"),
-    QStringLiteral("Almacén"),       QStringLiteral("Contador"),
-};
+const QStringList AuthService::Roles = Permissions::roles();
 int AuthService::MaxFailedAttempts = 3;
 int AuthService::LockoutMinutes = 5;
 int AuthService::MinPasswordLength = 4;
@@ -51,32 +46,6 @@ QByteArray pbkdf2Sha256(const QByteArray &password, const QByteArray &salt, int 
         dk.append(t);
     }
     return dk.left(dkLen);
-}
-
-// ROLE_PERMISSIONS (data/repository.py). "*" = acceso total.
-bool roleScreens(const QString &role, QStringList &out)
-{
-    static const std::unordered_map<QString, std::vector<QString>> kPerms = {
-        {QStringLiteral("Administrador"), {QStringLiteral("*")}},
-        {QStringLiteral("Vendedor"),
-         {QStringLiteral("dashboard"), QStringLiteral("products"), QStringLiteral("pos"),
-          QStringLiteral("sales"), QStringLiteral("clients"), QStringLiteral("inventory"),
-          QStringLiteral("serials")}},
-        {QStringLiteral("Cajero"),
-         {QStringLiteral("dashboard"), QStringLiteral("pos"), QStringLiteral("sales")}},
-        {QStringLiteral("Almacén"),
-         {QStringLiteral("dashboard"), QStringLiteral("products"), QStringLiteral("inventory"),
-          QStringLiteral("purchases"), QStringLiteral("suppliers"), QStringLiteral("lots"),
-          QStringLiteral("serials")}},
-        {QStringLiteral("Contador"),
-         {QStringLiteral("dashboard"), QStringLiteral("sales"), QStringLiteral("receivables"),
-          QStringLiteral("payables"), QStringLiteral("reports"), QStringLiteral("purchases")}},
-    };
-    const auto it = kPerms.find(role);
-    if (it == kPerms.end())
-        return false;
-    out = QStringList(it->second.begin(), it->second.end());
-    return true;
 }
 } // namespace
 
@@ -291,10 +260,7 @@ void AuthService::logout(const QString &username)
 
 bool AuthService::canAccess(const QString &role, const QString &screen) const
 {
-    QStringList screens;
-    if (!roleScreens(role, screens))
-        return false;
-    return screens.contains(QStringLiteral("*")) || screens.contains(screen);
+    return Permissions::canAccess(role, screen);
 }
 
 QList<AuthService::UserInfo> AuthService::listUsers() const

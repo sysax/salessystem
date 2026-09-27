@@ -2,6 +2,7 @@
 
 #include "../core/EventBus.h"
 #include "../core/Money.h"
+#include "../core/Permissions.h"
 #include "../core/Transaction.h"
 #include "../domain/Attrs.h"
 
@@ -337,7 +338,7 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
         return Result<CreatedSale>::failure(totals.error());
 
     // Fase 3: productos controlados exigen rol supervisor (Administrador).
-    if (role.trimmed() != QLatin1String("Administrador")) {
+    if (!Permissions::isAdmin(role.trimmed())) {
         for (const LineTotal &l : totals.value().lines) {
             const auto p = m_products->findById(l.productId);
             if (p && Attrs::boolean(p->attrsJson, Attrs::KControlled))
@@ -415,6 +416,8 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
     ns.promoCode = promoUsed;
     ns.payments = payments;
     ns.paymentMethod = paymentMethod.isEmpty() ? QStringLiteral("Efectivo") : paymentMethod;
+    // Fase 3: días de crédito externalizados (0 = default en SaleRepository).
+    ns.creditDays = m_settings ? m_settings->creditDays() : 0;
     ns.offline = offline;
     ns.taxBreakdownJson = bucketsToJson(totals.value().buckets);
     // Multitienda: rubro de la venta desde sus líneas (un solo rubro
@@ -525,7 +528,7 @@ Result<SalesService::CreatedSale> SalesService::cancel(const QString &saleId, co
                                                        const QString &user, const QString &role)
 {
     // Fase 3: anular exige supervisor (fail-closed: sin rol no se anula).
-    if (role.trimmed() != QLatin1String("Administrador"))
+    if (!Permissions::isAdmin(role.trimmed()))
         return Result<CreatedSale>::failure(
             QStringLiteral("Anular ventas requiere rol Administrador"));
     // Fase 5: motivo obligatorio (queda en sales.reason + bitácora).

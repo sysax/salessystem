@@ -73,13 +73,17 @@ int main(int argc, char *argv[])
 
     AuthService auth(conn, &bus);
     SettingsService settingsSvc(&settingsRepo, &bus);
+    // Fase 3: configuración externalizada en repos que la consumen.
+    sales.setSettings(&settingsSvc);
+    promos.setSettings(&settingsSvc);
     SalesService salesSvc(conn, &products, &sales, &inventory, &clients, &caja, &promos, &bus,
                           &settingsSvc, &audit, &serials);
     InventoryService invSvc(conn, &products, &inventory, &bus);
-    PurchaseService purSvc(conn, &purchases, &products, &suppliers, &inventory, &cxp, &audit);
+    PurchaseService purSvc(conn, &purchases, &products, &suppliers, &inventory, &cxp, &audit,
+                           nullptr, &settingsSvc);
     ReportService reports(conn, &settingsSvc);
     SyncService sync(conn, &bus);
-    ReceivablesService cxcSvc(&cxc, &bus);
+    ReceivablesService cxcSvc(&cxc, &bus, nullptr, &settingsSvc);
     PayablesService cxpSvc(&cxp, &bus);
     TicketPrinter printer;
 

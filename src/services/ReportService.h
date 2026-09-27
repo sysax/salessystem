@@ -5,10 +5,15 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include "ReportFinance.h"
+#include "ReportInventory.h"
+#include "ReportOps.h"
 #include "SettingsService.h"
 
-// Reportes operativos/financieros/KPIs — port de los get_* de
-// data/repository.py. Retorna QVariant nativo para QML directo.
+// Fachada de reportes operativos/financieros/KPIs — conserva TODOS los
+// Q_INVOKABLEs públicos con las mismas firmas y delega en instancias
+// internas (ReportFinance/ReportOps/ReportInventory). exportCsv/exportPdf
+// se quedan aquí (usan de todo). Nada de QML ni tests cambia.
 //
 // Multitienda: los reportes atribuibles a producto (top, margen, rotación,
 // valorizado, granel, vencimientos, seriales, mermas, controlados,
@@ -61,9 +66,9 @@ class ReportService : public QObject
 
   private:
     QString setting(const QString &key, const QString &fallback = {}) const;
-    // Multitienda: rubro efectivo (param explícito manda; si no, activo).
-    // Vacío o 'miscelanea' = sin filtro.
-    QString effectiveBt(const QString &businessType) const;
     QSqlDatabase m_db;
     SettingsService *m_settings = nullptr;
+    ReportFinance m_finance;
+    ReportOps m_ops;
+    ReportInventory m_inventory;
 };

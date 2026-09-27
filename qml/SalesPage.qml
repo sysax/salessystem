@@ -70,7 +70,7 @@ ColumnLayout {
                 }
                 Button {
                     text: qsTr("Pasar a RMA")
-                    enabled: warrantyMsg.text !== "" && auth.currentRole === "Administrador"
+                    enabled: warrantyMsg.text !== "" && auth.isAdmin
                     onClicked: {
                         var r = salesCtl.markRma(warrantyField.text.trim(), "RMA desde ventas", auth.currentUser);
                         warrantyMsg.text = r.ok ? qsTr("Serial en RMA.") : r.error;
@@ -265,7 +265,7 @@ ColumnLayout {
                 Button {
                     text: qsTr("Cancelar venta")
                     // Fase 3: anular exige supervisor (el backend lo valida también).
-                    visible: auth.currentRole === "Administrador"
+                    visible: auth.isAdmin
                     onClicked: confirmCancelSale.open()
                 }
             }

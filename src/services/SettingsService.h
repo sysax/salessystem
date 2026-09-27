@@ -1,10 +1,12 @@
 #pragma once
 
+#include <QMap>
 #include <QObject>
 #include <QString>
 #include <QStringList>
 #include <QVariantMap>
 
+#include "../core/Money.h"
 #include "../core/Result.h"
 
 class EventBus;
@@ -33,6 +35,12 @@ class SettingsService : public QObject
         QString name;
         double rate = 0.0;
     };
+    // Fase 3: serie de folio por tipo documental (prefijo + contador).
+    struct FolioSerie
+    {
+        QString prefix;
+        QString counter;
+    };
     // Claves canónicas (tabla `settings`, ver sql/schema.sql).
     static const QString KBusinessName;
     static const QString KBusinessType;
@@ -48,6 +56,13 @@ class SettingsService : public QObject
     static const QString KRequireExpiry;
     static const QString KRequireSerial;
     static const QString KWeightUnit;
+    // Fase 3 (MAP_PRO): configuración externalizada de crédito y operación.
+    static const QString KCreditDays;
+    static const QString KPayableDays;
+    static const QString KDefaultCreditLimit;
+    static const QString KFixedCostsMonthly;
+    static const QString KPromoVolumenMinQty;
+    static const QString KFolioSeriesJson;
 
     static const QStringList BusinessTypes;
 
@@ -72,6 +87,17 @@ class SettingsService : public QObject
     bool requireExpiry() const;
     bool requireSerial() const;
     QString weightUnit() const;
+    // Fase 3: crédito y operación (con defaults si la clave falta o es inválida).
+    int creditDays() const;
+    int payableDays() const;
+    Money defaultCreditLimit() const;
+    Money fixedCostsMonthly() const;
+    int promoVolumenMinQty() const;
+    QString folioSeriesJson() const;
+    // JSON inválido → series por defecto (las de SaleRepository::createDocument).
+    QMap<QString, FolioSerie> folioSeries() const;
+    static QMap<QString, FolioSerie> defaultFolioSeries();
+    static QString defaultFolioSeriesJson();
 
     Q_INVOKABLE QVariantMap all() const;
     // Valida y persiste; retorna {ok, error}. En éxito emite

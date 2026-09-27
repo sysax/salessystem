@@ -10,6 +10,8 @@
 #include "ClientRepository.h"
 #include "LocationRepository.h"
 
+class SettingsService;
+
 // Ventas y documentos (sales + sale_items): folios, pagos mixtos/crédito,
 // CUFE, estados, notas. Semántica de Repository.create_sale /
 // create_document / advance_sale_status / create_credit|debit_note.
@@ -45,11 +47,17 @@ class SaleRepository : public QObject
         QString taxBreakdownJson;
         // Multitienda: rubro de la venta ('' = mixta/legacy).
         QString businessType;
+        // Fase 3: días de crédito para el vencimiento (0 = default 15).
+        int creditDays = 0;
     };
 
     explicit SaleRepository(QSqlDatabase db, ClientRepository *clients = nullptr,
                             CajaRepository *caja = nullptr, AuditRepository *audit = nullptr,
                             QObject *parent = nullptr);
+
+    // Fase 3: configuración externalizada (series de folios). Sin settings
+    // se usan los defaults históricos (COT/PED/REM/FE/NC/ND).
+    void setSettings(SettingsService *s);
 
     QList<Sale> list() const;
     // Fase 4: paginación servidor (limit < 0 = sin límite) + total.
@@ -94,4 +102,6 @@ class SaleRepository : public QObject
     AuditRepository *m_audit = nullptr;
     // Fase 6: ledger propio (misma conexión; las ventas descuentan Principal).
     LocationRepository *m_locations = nullptr;
+    // Fase 3: settings opcionales (solo series de folios; nullptr = defaults).
+    SettingsService *m_settings = nullptr;
 };

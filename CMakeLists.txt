@@ -49,6 +49,7 @@ add_library(
     src/core/Transaction.cpp
     src/core/EventBus.h
     src/core/EventBus.cpp
+    src/core/Permissions.h
     src/core/Money.h
     src/core/Result.h
     src/domain/Entities.h
@@ -93,6 +94,13 @@ add_library(
     src/services/PurchaseService.cpp
     src/services/ReportService.h
     src/services/ReportService.cpp
+    src/services/ReportCommon.h
+    src/services/ReportFinance.h
+    src/services/ReportFinance.cpp
+    src/services/ReportOps.h
+    src/services/ReportOps.cpp
+    src/services/ReportInventory.h
+    src/services/ReportInventory.cpp
     src/services/SyncService.h
     src/services/SyncService.cpp
     src/services/CreditService.h
@@ -189,6 +197,8 @@ qt_add_qml_module(
     qml/LoginPage.qml
     qml/DashboardPage.qml
     qml/PosPage.qml
+    qml/PosQtyDialog.qml
+    qml/PosSerialDialog.qml
     qml/ProductsPage.qml
     qml/SalesPage.qml
     qml/ClientsPage.qml

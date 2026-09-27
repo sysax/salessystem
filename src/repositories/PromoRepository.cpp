@@ -6,10 +6,17 @@
 
 #include <cmath>
 
+#include "../services/SettingsService.h"
+
 PromoRepository::PromoRepository(QSqlDatabase db, ProductRepository *products,
                                  AuditRepository *audit, QObject *parent)
     : QObject(parent), m_db(std::move(db)), m_products(products), m_audit(audit)
 {
+}
+
+void PromoRepository::setSettings(SettingsService *s)
+{
+    m_settings = s;
 }
 
 Promo PromoRepository::rowToPromo(const QSqlQuery &q)
@@ -288,7 +295,9 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart, con
             }
         }
     } else if (promo->type == QLatin1String("volumen")) {
-        if (qtyTotal >= 10)
+        // Fase 3: mínimo externalizado (default 10).
+        const int minQty = m_settings ? m_settings->promoVolumenMinQty() : 10;
+        if (qtyTotal >= minQty)
             discount = Money(std::llround(static_cast<double>(subtotal.cents()) * promo->value
                                           / 100.0));
     } else if (promo->type == QLatin1String("cupon")

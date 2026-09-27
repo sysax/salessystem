@@ -5,13 +5,15 @@
 
 #include "../core/Transaction.h"
 #include "../repositories/Counters.h"
+#include "../services/SettingsService.h"
 
 PurchaseService::PurchaseService(QSqlDatabase db, PurchaseRepository *purchases,
                                  ProductRepository *products, SupplierRepository *suppliers,
                                  InventoryRepository *inventory, PayablesRepository *payables,
-                                 AuditRepository *audit, QObject *parent)
+                                 AuditRepository *audit, QObject *parent, SettingsService *settings)
     : QObject(parent), m_db(std::move(db)), m_purchases(purchases), m_products(products),
-      m_suppliers(suppliers), m_inventory(inventory), m_payables(payables), m_audit(audit)
+      m_suppliers(suppliers), m_inventory(inventory), m_payables(payables), m_audit(audit),
+      m_settings(settings)
 {
 }
 
@@ -146,8 +148,8 @@ Result<Purchase> PurchaseService::receive(const QString &folio,
         return Result<Purchase>::failure(
             QStringLiteral("No se pudo marcar la orden %1").arg(folio));
 
-    // CxP a 30 días (2 % pronto pago con TecnoMayorista): se crea en la
-    // primera entrega y crece con cada parcial.
+    // CxP a N días de settings (default 30; 2 % pronto pago con
+    // TecnoMayorista): se crea en la primera entrega y crece con cada parcial.
     if (const auto existing = m_payables->find(folio)) {
         Payable grow = *existing;
         grow.amount += deliveryValue;
@@ -164,7 +166,10 @@ Result<Purchase> PurchaseService::receive(const QString &folio,
         Payable cxp;
         cxp.id = folio;
         cxp.supplier = po->supplier;
-        cxp.due = QDate::currentDate().addDays(30).toString(Qt::ISODate);
+        // Fase 3: días de pago externalizados (default 30).
+        cxp.due = QDate::currentDate()
+                      .addDays(m_settings ? m_settings->payableDays() : 30)
+                      .toString(Qt::ISODate);
         cxp.amount = deliveryValue;
         cxp.paid = Money();
         cxp.balance = deliveryValue;

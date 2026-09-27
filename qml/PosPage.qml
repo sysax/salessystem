@@ -40,11 +40,7 @@ RowLayout {
             }
         }
         if (p && Utils.isWeighable(p.unit)) {
-            qtyDialog.productId = productId;
-            qtyDialog.productName = p.name + " (" + money(p.price) + " / " + (p.unit || "kg") + ")";
-            qtyField.text = "1";
-            qtyErr.text = "";
-            qtyDialog.open();
+            qtyDialog.openForProduct(productId, p.name + " (" + money(p.price) + " / " + (p.unit || "kg") + ")");
             return;
         }
         var r = pos.addToCart(productId, 1);
@@ -60,11 +56,8 @@ RowLayout {
                 Utils.showToast("error", qsTr("Producto con serial fuera del rubro '%1'").arg(root.businessType()), 3500);
                 return;
             }
-            serialDialog.cartIndex = pos.cart.length - 1;
-            serialDialog.productId = productId;
-            serialField.text = "";
-            serialErr.text = "";
-            serialDialog.open();
+            serialDialog.openForLine(pos.cart.length - 1, productId,
+                                       pos.inStockSerials(productId));
         } else {
             Utils.showToast("success", "Agregado al carrito", 1500);
         }
@@ -594,12 +587,8 @@ RowLayout {
 
     // Fase 2: editar cantidad exacta de una línea pesable del carrito.
     function editCartQty(idx, line) {
-        qtyDialog.productId = -1;
-        qtyDialog.cartIndex = idx;
-        qtyDialog.productName = (line.name || "") + (line.unit ? " (" + line.unit + ")" : "");
-        qtyField.text = Utils.formatQty(line.qty);
-        qtyErr.text = "";
-        qtyDialog.open();
+        qtyDialog.openForLine(idx, (line.name || "") + (line.unit ? " (" + line.unit + ")" : ""),
+                              Utils.formatQty(line.qty));
     }
 
     // Confirmación antes de eliminar una línea (acción destructiva)
@@ -643,131 +632,35 @@ RowLayout {
         }
     }
 
-    // Fase 2: cantidad decimal para productos a granel (agregar o editar línea).
-    Dialog {
+    // Cantidad a granel: componente extraído (Fase 3). Solo valida y emite;
+    // PosPage ejecuta pos.addToCart/setQty y confirma el resultado.
+    PosQtyDialog {
         id: qtyDialog
-        title: qsTr("Cantidad")
-        modal: true
-        width: 320
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        property int productId: -1
-        property int cartIndex: -1
-        property string productName: ""
-        onOpened: qtyField.forceActiveFocus()
-        ColumnLayout {
-            width: 280
-            Label {
-                text: qtyDialog.productName
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-                font.bold: true
-            }
-            // Fase 2: qty pesable admite 3 decimales (>0); precio solo 2 (backend Money).
-            MoneyField {
-                id: qtyField
-                placeholderText: qsTr("Cantidad (ej. 0.350)")
-                label: qsTr("Cantidad (ej. 0.350)")
-                Layout.fillWidth: true
-                maxValue: 999999
-                allowNegative: false
-                maxDecimals: 3
-                onErrorTextChanged: qtyErr.text = errorText
-            }
-            Label {
-                id: qtyErr
-                color: Theme.error
-                wrapMode: Text.Wrap
-                Layout.fillWidth: true
-            }
-        }
-        onAccepted: {
-            if (!qtyField.isValid()) {
-                qtyErr.text = qtyField.errorText || qsTr("Cantidad inválida.");
-                open();
-                return;
-            }
-            var q = qtyField.parsedValue();
-            if (!(q > 0)) {
-                qtyErr.text = qsTr("Cantidad mayor a 0.");
-                open();
-                return;
-            }
-            if (qtyDialog.cartIndex >= 0) {
-                pos.setQty(qtyDialog.cartIndex, q);
-                Utils.showToast("success", "Cantidad: " + Utils.formatQty(q), 1500);
+        onQtyChosen: function (qty, cIdx, pid) {
+            if (cIdx >= 0) {
+                pos.setQty(cIdx, qty);
+                Utils.showToast("success", "Cantidad: " + Utils.formatQty(qty), 1500);
+                qtyDialog.confirmDone();
             } else {
-                var r = pos.addToCart(qtyDialog.productId, q);
+                var r = pos.addToCart(pid, qty);
                 if (!r.ok) {
-                    qtyErr.text = r.error;
-                    open();
+                    qtyDialog.showError(r.error);
                     return;
                 }
-                Utils.showToast("success", "Agregado: " + Utils.formatQty(q), 1500);
+                Utils.showToast("success", "Agregado: " + Utils.formatQty(qty), 1500);
+                qtyDialog.confirmDone();
             }
-            qtyDialog.cartIndex = -1;
-            qtyDialog.productId = -1;
-        }
-        onRejected: {
-            qtyDialog.cartIndex = -1;
-            qtyDialog.productId = -1;
         }
     }
 
-    // Fase 3: serial/IMEI para la línea recién agregada (y edición).
-    Dialog {
+    // Serial/IMEI: componente extraído (Fase 3). PosPage provee el stock y
+    // ejecuta pos.setLineSerial.
+    PosSerialDialog {
         id: serialDialog
-        title: qsTr("Serial / IMEI")
-        modal: true
-        width: 320
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        property int cartIndex: -1
-        property int productId: -1
-        onOpened: {
-            serialField.forceActiveFocus();
-            serialList.model = serialDialog.productId >= 0
-                ? pos.inStockSerials(serialDialog.productId) : [];
-        }
-        ColumnLayout {
-            width: 280
-            Label {
-                text: qsTr("Escanee o seleccione el serial:")
-                Layout.fillWidth: true
-            }
-            TextField {
-                id: serialField
-                placeholderText: qsTr("Serial / IMEI")
-                Layout.fillWidth: true
-            }
-            ListView {
-                id: serialList
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(160, (count || 0) * 40)
-                visible: (count || 0) > 0
-                clip: true
-                delegate: ItemDelegate {
-                    width: ListView.view.width
-                    text: modelData.serial + (modelData.imei2 ? " / " + modelData.imei2 : "")
-                    onClicked: serialField.text = modelData.serial
-                }
-                ScrollBar.vertical: ScrollBar {}
-            }
-            Label {
-                id: serialErr
-                color: Theme.error
-                wrapMode: Text.Wrap
-                Layout.fillWidth: true
-            }
-        }
-        onAccepted: {
-            if (serialField.text.trim() === "") {
-                serialErr.text = qsTr("Serial requerido para este producto.");
-                open();
-                return;
-            }
-            var r = pos.setLineSerial(serialDialog.cartIndex, serialField.text);
+        onSerialChosen: function (serial, cIdx) {
+            var r = pos.setLineSerial(cIdx, serial);
             if (!r.ok) {
-                serialErr.text = r.error;
-                open();
+                serialDialog.showError(r.error);
                 return;
             }
             Utils.showToast("success", "Serial registrado", 1500);

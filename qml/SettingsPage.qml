@@ -187,6 +187,66 @@ ScrollView {
         }
 
         GroupBox {
+            title: qsTr("Crédito y operación")
+            Layout.fillWidth: true
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: Theme.spacingSmall
+                RowLayout {
+                    TextField {
+                        id: fCreditDays
+                        placeholderText: qsTr("Días de crédito ventas (0-365)")
+                        maximumLength: 3
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        Layout.fillWidth: true
+                    }
+                    TextField {
+                        id: fPayableDays
+                        placeholderText: qsTr("Días pago a proveedores (0-365)")
+                        maximumLength: 3
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        Layout.fillWidth: true
+                    }
+                    TextField {
+                        id: fPromoMinQty
+                        placeholderText: qsTr("Promo volumen: qty mínima (1-1000)")
+                        maximumLength: 4
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        Layout.fillWidth: true
+                    }
+                }
+                RowLayout {
+                    // Fase 3: importes >= 0 (MoneyField + Money backend).
+                    MoneyField {
+                        id: fDefaultCreditLimit
+                        label: qsTr("Límite crédito por defecto")
+                        placeholderText: qsTr("Límite crédito por defecto")
+                        maxValue: 999999999
+                        allowNegative: false
+                        maxDecimals: 0
+                        Layout.fillWidth: true
+                    }
+                    MoneyField {
+                        id: fFixedCosts
+                        label: qsTr("Costos fijos mensuales")
+                        placeholderText: qsTr("Costos fijos mensuales")
+                        maxValue: 999999999
+                        allowNegative: false
+                        maxDecimals: 0
+                        Layout.fillWidth: true
+                    }
+                }
+                Label {
+                    text: qsTr("La mora mensual se configura arriba (Mora mensual %).")
+                    font.pixelSize: Theme.fontS
+                    opacity: 0.7
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+            }
+        }
+
+        GroupBox {
             title: qsTr("Vertical (fases siguientes)")
             Layout.fillWidth: true
             ColumnLayout {
@@ -330,6 +390,13 @@ ScrollView {
             "default_tax_rate": fTax.text,
             "tax_rates_json": JSON.stringify(ratesBox.rates),
             "mora_rate_monthly": fMora.text,
+            "credit_days": fCreditDays.text,
+            "payable_days": fPayableDays.text,
+            "default_credit_limit": fDefaultCreditLimit.text.trim() !== "" ? String(
+                fDefaultCreditLimit.amount()) : "5000000",
+            "fixed_costs_monthly": fFixedCosts.text.trim() !== "" ? String(
+                fFixedCosts.amount()) : "5000000",
+            "promo_volumen_min_qty": fPromoMinQty.text,
             "require_expiry": fExpiry.checked ? "1" : "0",
             "require_serial": fSerial.checked ? "1" : "0"
         });
@@ -378,6 +445,11 @@ ScrollView {
         fDecimals.text = s["currency_decimals"] || "0";
         fTax.text = s["default_tax_rate"] || "19";
         fMora.text = s["mora_rate_monthly"] || "2";
+        fCreditDays.text = s["credit_days"] || "15";
+        fPayableDays.text = s["payable_days"] || "30";
+        fDefaultCreditLimit.text = s["default_credit_limit"] || "5000000";
+        fFixedCosts.text = s["fixed_costs_monthly"] || "5000000";
+        fPromoMinQty.text = s["promo_volumen_min_qty"] || "10";
         try {
             var arr = JSON.parse(s["tax_rates_json"] || "[]");
             ratesBox.rates = arr.length > 0 ? arr : [{ "name": "IVA 19%", "rate": 19 },

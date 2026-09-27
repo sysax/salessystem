@@ -22,6 +22,12 @@ const QString SettingsService::KMoraRate = QStringLiteral("mora_rate_monthly");
 const QString SettingsService::KRequireExpiry = QStringLiteral("require_expiry");
 const QString SettingsService::KRequireSerial = QStringLiteral("require_serial");
 const QString SettingsService::KWeightUnit = QStringLiteral("weight_unit_default");
+const QString SettingsService::KCreditDays = QStringLiteral("credit_days");
+const QString SettingsService::KPayableDays = QStringLiteral("payable_days");
+const QString SettingsService::KDefaultCreditLimit = QStringLiteral("default_credit_limit");
+const QString SettingsService::KFixedCostsMonthly = QStringLiteral("fixed_costs_monthly");
+const QString SettingsService::KPromoVolumenMinQty = QStringLiteral("promo_volumen_min_qty");
+const QString SettingsService::KFolioSeriesJson = QStringLiteral("folio_series_json");
 
 const QStringList SettingsService::BusinessTypes = {
     QStringLiteral("farmacia"),    QStringLiteral("abarrotes"),   QStringLiteral("celulares"),
@@ -95,6 +101,87 @@ QString SettingsService::weightUnit() const
     return m_repo->get(KWeightUnit, QStringLiteral("unidad"));
 }
 
+int SettingsService::creditDays() const
+{
+    bool ok = false;
+    const int v = m_repo->get(KCreditDays, QStringLiteral("15")).toInt(&ok);
+    return ok ? qBound(0, v, 365) : 15;
+}
+int SettingsService::payableDays() const
+{
+    bool ok = false;
+    const int v = m_repo->get(KPayableDays, QStringLiteral("30")).toInt(&ok);
+    return ok ? qBound(0, v, 365) : 30;
+}
+Money SettingsService::defaultCreditLimit() const
+{
+    bool ok = false;
+    const double v = m_repo->get(KDefaultCreditLimit, QStringLiteral("5000000")).toDouble(&ok);
+    return ok && v >= 0.0 ? Money::fromCop(v) : Money::fromCop(5000000.0);
+}
+Money SettingsService::fixedCostsMonthly() const
+{
+    bool ok = false;
+    const double v = m_repo->get(KFixedCostsMonthly, QStringLiteral("5000000")).toDouble(&ok);
+    return ok && v >= 0.0 ? Money::fromCop(v) : Money::fromCop(5000000.0);
+}
+int SettingsService::promoVolumenMinQty() const
+{
+    bool ok = false;
+    const int v = m_repo->get(KPromoVolumenMinQty, QStringLiteral("10")).toInt(&ok);
+    return ok ? qBound(1, v, 1000) : 10;
+}
+QString SettingsService::folioSeriesJson() const
+{
+    return m_repo->get(KFolioSeriesJson, defaultFolioSeriesJson());
+}
+
+QMap<QString, SettingsService::FolioSerie> SettingsService::defaultFolioSeries()
+{
+    return {
+        {QStringLiteral("Cotización"), {QStringLiteral("COT"), QStringLiteral("QUOTE_COUNTER")}},
+        {QStringLiteral("Pedido"), {QStringLiteral("PED"), QStringLiteral("ORDER_COUNTER")}},
+        {QStringLiteral("Remisión"), {QStringLiteral("REM"), QStringLiteral("REM_COUNTER")}},
+        {QStringLiteral("Factura"), {QStringLiteral("FE"), QStringLiteral("INVOICE_COUNTER")}},
+        {QStringLiteral("Nota crédito"),
+         {QStringLiteral("NC"), QStringLiteral("CREDIT_NOTE_COUNTER")}},
+        {QStringLiteral("Nota cargo"), {QStringLiteral("ND"), QStringLiteral("DEBIT_NOTE_COUNTER")}},
+    };
+}
+
+QString SettingsService::defaultFolioSeriesJson()
+{
+    // Canónico (mismas series hardcodeadas hoy en SaleRepository::createDocument).
+    return QStringLiteral(
+        "{\"Cotizaci\u00f3n\":{\"prefix\":\"COT\",\"counter\":\"QUOTE_COUNTER\"},"
+        "\"Pedido\":{\"prefix\":\"PED\",\"counter\":\"ORDER_COUNTER\"},"
+        "\"Remisi\u00f3n\":{\"prefix\":\"REM\",\"counter\":\"REM_COUNTER\"},"
+        "\"Factura\":{\"prefix\":\"FE\",\"counter\":\"INVOICE_COUNTER\"},"
+        "\"Nota cr\u00e9dito\":{\"prefix\":\"NC\",\"counter\":\"CREDIT_NOTE_COUNTER\"},"
+        "\"Nota cargo\":{\"prefix\":\"ND\",\"counter\":\"DEBIT_NOTE_COUNTER\"}}");
+}
+
+QMap<QString, SettingsService::FolioSerie> SettingsService::folioSeries() const
+{
+    const QMap<QString, FolioSerie> dflt = defaultFolioSeries();
+    QJsonParseError err{};
+    const auto doc = QJsonDocument::fromJson(folioSeriesJson().toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject() || doc.object().isEmpty())
+        return dflt;
+    QMap<QString, FolioSerie> out = dflt;
+    const QJsonObject obj = doc.object();
+    for (auto it = obj.begin(); it != obj.end(); ++it) {
+        if (!dflt.contains(it.key()) || !it.value().isObject())
+            continue;
+        const QJsonObject e = it.value().toObject();
+        const QString prefix = e.value(QStringLiteral("prefix")).toString().trimmed();
+        const QString counter = e.value(QStringLiteral("counter")).toString().trimmed();
+        if (!prefix.isEmpty() && !counter.isEmpty())
+            out[it.key()] = FolioSerie{prefix, counter};
+    }
+    return out;
+}
+
 QList<SettingsService::TaxRate> SettingsService::taxRates() const
 {
     static const QList<TaxRate> kFallback = {
@@ -161,6 +248,18 @@ QVariantMap SettingsService::all() const
         m[KRequireSerial] = QStringLiteral("0");
     if (!m.contains(KWeightUnit))
         m[KWeightUnit] = QStringLiteral("unidad");
+    if (!m.contains(KCreditDays))
+        m[KCreditDays] = QStringLiteral("15");
+    if (!m.contains(KPayableDays))
+        m[KPayableDays] = QStringLiteral("30");
+    if (!m.contains(KDefaultCreditLimit))
+        m[KDefaultCreditLimit] = QStringLiteral("5000000");
+    if (!m.contains(KFixedCostsMonthly))
+        m[KFixedCostsMonthly] = QStringLiteral("5000000");
+    if (!m.contains(KPromoVolumenMinQty))
+        m[KPromoVolumenMinQty] = QStringLiteral("10");
+    if (!m.contains(KFolioSeriesJson))
+        m[KFolioSeriesJson] = defaultFolioSeriesJson();
     return m;
 }
 
@@ -182,6 +281,12 @@ QString SettingsService::validate(const QVariantMap &m, QVariantMap &cleaned) co
         KRequireExpiry,
         KRequireSerial,
         KWeightUnit,
+        KCreditDays,
+        KPayableDays,
+        KDefaultCreditLimit,
+        KFixedCostsMonthly,
+        KPromoVolumenMinQty,
+        KFolioSeriesJson,
         QStringLiteral("business_tax_id"),
     };
     for (auto it = m.begin(); it != m.end(); ++it) {
@@ -220,6 +325,50 @@ QString SettingsService::validate(const QVariantMap &m, QVariantMap &cleaned) co
             const QString v = cleaned[flag].toString();
             if (v != QStringLiteral("0") && v != QStringLiteral("1"))
                 return QStringLiteral("Flag inválido para %1 (0/1)").arg(flag);
+        }
+    }
+    for (const QString &key : {KCreditDays, KPayableDays}) {
+        if (cleaned.contains(key)) {
+            bool ok = false;
+            const int v = cleaned[key].toInt(&ok);
+            if (!ok || v < 0 || v > 365)
+                return QStringLiteral("Días inválidos para %1 (0-365)").arg(key);
+            cleaned[key] = QString::number(v);
+        }
+    }
+    if (cleaned.contains(KPromoVolumenMinQty)) {
+        bool ok = false;
+        const int v = cleaned[KPromoVolumenMinQty].toInt(&ok);
+        if (!ok || v < 1 || v > 1000)
+            return QStringLiteral("Cantidad mínima de promo inválida (1-1000)");
+        cleaned[KPromoVolumenMinQty] = QString::number(v);
+    }
+    for (const QString &key : {KDefaultCreditLimit, KFixedCostsMonthly}) {
+        if (cleaned.contains(key)) {
+            bool ok = false;
+            const double v = cleaned[key].toDouble(&ok);
+            if (!ok || v < 0.0)
+                return QStringLiteral("Importe inválido para %1 (>= 0)").arg(key);
+        }
+    }
+    if (cleaned.contains(KFolioSeriesJson)) {
+        QJsonParseError err{};
+        const auto doc = QJsonDocument::fromJson(cleaned[KFolioSeriesJson].toByteArray(), &err);
+        if (err.error != QJsonParseError::NoError || !doc.isObject() || doc.object().isEmpty())
+            return QStringLiteral("Series de folios inválidas (objeto JSON esperado)");
+        // Nota: iterar sobre un QJsonObject nombrado (begin()/end() de
+        // temporales distintos es UB: compara punteros y el bucle lee
+        // basura — el save de folios fallaba siempre).
+        const QJsonObject seriesObj = doc.object();
+        for (auto it = seriesObj.begin(); it != seriesObj.end(); ++it) {
+            if (!it.value().isObject())
+                return QStringLiteral("Series de folios inválidas (%1 sin prefijo/contador)")
+                    .arg(it.key());
+            const QJsonObject e = it.value().toObject();
+            if (e.value(QStringLiteral("prefix")).toString().trimmed().isEmpty()
+                || e.value(QStringLiteral("counter")).toString().trimmed().isEmpty())
+                return QStringLiteral("Series de folios inválidas (%1 sin prefijo/contador)")
+                    .arg(it.key());
         }
     }
     return {};

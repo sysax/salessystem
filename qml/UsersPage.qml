@@ -86,7 +86,7 @@ ColumnLayout {
             }
             ComboBox {
                 id: uRole
-                model: ["Administrador", "Vendedor", "Cajero", "Almacén", "Contador"]
+                model: auth.availableRoles
             }
             Label {
                 id: uErr

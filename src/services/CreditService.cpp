@@ -4,10 +4,11 @@
 
 #include "../core/EventBus.h"
 #include "../repositories/SaleRepository.h"
+#include "../services/SettingsService.h"
 
 namespace
 {
-QVariantMap saleToMap(const Sale &s)
+QVariantMap saleToMap(const Sale &s, double moraRate)
 {
     return {{"id", s.id},
             {"date", s.date},
@@ -17,7 +18,7 @@ QVariantMap saleToMap(const Sale &s)
             {"balance", s.balance.toCop()},
             {"status", s.status},
             {"due", s.due},
-            {"mora", ReceivablesRepository::mora(s).toCop()}};
+            {"mora", ReceivablesRepository::mora(s, moraRate).toCop()}};
 }
 QVariantMap payableToMap(const Payable &p)
 {
@@ -37,24 +38,33 @@ QVariantMap payableToMap(const Payable &p)
 }
 } // namespace
 
-ReceivablesService::ReceivablesService(ReceivablesRepository *repos, EventBus *bus, QObject *parent)
-    : QObject(parent), m_repos(repos), m_bus(bus)
+ReceivablesService::ReceivablesService(ReceivablesRepository *repos, EventBus *bus,
+                                         QObject *parent, SettingsService *settings)
+    : QObject(parent), m_repos(repos), m_bus(bus), m_settings(settings)
 {
+}
+
+double ReceivablesService::moraMonthlyRate() const
+{
+    // Fase 3: settings guarda porciento ("2" = 2 %); el repo usa fracción.
+    return m_settings ? m_settings->moraRate() / 100.0 : ReceivablesRepository::MoraRate;
 }
 
 QVariantList ReceivablesService::pending() const
 {
     QVariantList out;
+    const double rate = moraMonthlyRate();
     for (const Sale &s : m_repos->pending())
-        out << saleToMap(s);
+        out << saleToMap(s, rate);
     return out;
 }
 
 QVariantList ReceivablesService::statement(const QString &client) const
 {
     QVariantList out;
+    const double rate = moraMonthlyRate();
     for (const Sale &s : m_repos->statement(client))
-        out << saleToMap(s);
+        out << saleToMap(s, rate);
     return out;
 }
 
@@ -73,7 +83,8 @@ Money ReceivablesService::mora(const Sale &s)
     return ReceivablesRepository::mora(s);
 }
 
-PayablesService::PayablesService(PayablesRepository *repos, EventBus *bus, QObject *parent)
+PayablesService::PayablesService(PayablesRepository *repos, EventBus *bus, QObject *parent,
+                                   SettingsService * /*settings*/)
     : QObject(parent), m_repos(repos), m_bus(bus)
 {
 }

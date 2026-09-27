@@ -9,6 +9,7 @@
 
 #include "../core/Transaction.h"
 #include "../services/Dian.h"
+#include "../services/SettingsService.h"
 #include "Counters.h"
 
 const QStringList SaleRepository::EstadosVenta = {
@@ -26,6 +27,26 @@ SaleRepository::SaleRepository(QSqlDatabase db, ClientRepository *clients, CajaR
 {
     m_locations = new LocationRepository(m_db, m_audit, this);
 }
+
+void SaleRepository::setSettings(SettingsService *s)
+{
+    m_settings = s;
+}
+
+namespace
+{
+// Fase 3: defaults históricos de series (misma fuente que
+// SettingsService::defaultFolioSeries; aquí en forma prefix/counter para
+// no duplicar literales dentro de createDocument).
+void folioDefaults(QMap<QString, QString> &prefixes, QMap<QString, QString> &counters)
+{
+    const auto series = SettingsService::defaultFolioSeries();
+    for (auto it = series.begin(); it != series.end(); ++it) {
+        prefixes[it.key()] = it.value().prefix;
+        counters[it.key()] = it.value().counter;
+    }
+}
+} // namespace
 
 Sale SaleRepository::rowToSale(const QSqlQuery &q)
 {
@@ -230,8 +251,10 @@ Result<Sale> SaleRepository::create(const NewSale &s)
         = s.offline ? QStringLiteral("PENDIENTE_OFFLINE") : QStringLiteral("SINCRONIZADO");
 
     const QString today = QDate::currentDate().toString(Qt::ISODate);
+    // Fase 3: días de crédito externalizados (0 = default 15).
+    const int creditDays = s.creditDays > 0 ? s.creditDays : 15;
     const QString due = status == QLatin1String("Pendiente")
-                            ? QDate::currentDate().addDays(15).toString(Qt::ISODate)
+                            ? QDate::currentDate().addDays(creditDays).toString(Qt::ISODate)
                             : today;
 
     QMap<QString, Money> storedPayments
@@ -348,22 +371,20 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     // Fase 5: cada tipo documental con folio y contador propios. Antes,
     // Remisión/Factura/Nota cargo compartían SALE_COUNTER con las ventas
     // POS (un V001 podía ser remisión, factura, ticket o nota de cargo).
-    static const QMap<QString, QString> prefixes = {
-        {QStringLiteral("Cotización"), QStringLiteral("COT")},
-        {QStringLiteral("Pedido"), QStringLiteral("PED")},
-        {QStringLiteral("Remisión"), QStringLiteral("REM")},
-        {QStringLiteral("Factura"), QStringLiteral("FE")},
-        {QStringLiteral("Nota crédito"), QStringLiteral("NC")},
-        {QStringLiteral("Nota cargo"), QStringLiteral("ND")},
-    };
-    static const QMap<QString, QString> counters = {
-        {QStringLiteral("Cotización"), QStringLiteral("QUOTE_COUNTER")},
-        {QStringLiteral("Pedido"), QStringLiteral("ORDER_COUNTER")},
-        {QStringLiteral("Remisión"), QStringLiteral("REM_COUNTER")},
-        {QStringLiteral("Factura"), QStringLiteral("INVOICE_COUNTER")},
-        {QStringLiteral("Nota crédito"), QStringLiteral("CREDIT_NOTE_COUNTER")},
-        {QStringLiteral("Nota cargo"), QStringLiteral("DEBIT_NOTE_COUNTER")},
-    };
+    // Fase 3: series externalizadas en settings (sin settings = defaults).
+    QMap<QString, QString> prefixes;
+    QMap<QString, QString> counters;
+    folioDefaults(prefixes, counters);
+    if (m_settings) {
+        const auto series = m_settings->folioSeries();
+        for (auto it = series.begin(); it != series.end(); ++it) {
+            if (prefixes.contains(it.key()) && !it.value().prefix.isEmpty()
+                && !it.value().counter.isEmpty()) {
+                prefixes[it.key()] = it.value().prefix;
+                counters[it.key()] = it.value().counter;
+            }
+        }
+    }
     if (!prefixes.contains(docType))
         return Result<Sale>::failure(
             QStringLiteral("doc_type debe ser %1").arg(DocTypes.join(u", ")));

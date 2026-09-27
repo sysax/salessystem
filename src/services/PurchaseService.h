@@ -12,6 +12,8 @@
 #include "../repositories/PurchaseRepository.h"
 #include "../repositories/ClientRepository.h" // Client + Supplier
 
+class SettingsService;
+
 // Órdenes de compra: crear → recibir (stock + CxP automática) → cancelar.
 // Port de create/receive/cancel_purchase.
 class PurchaseService : public QObject
@@ -22,7 +24,8 @@ class PurchaseService : public QObject
     explicit PurchaseService(QSqlDatabase db, PurchaseRepository *purchases,
                              ProductRepository *products, SupplierRepository *suppliers,
                              InventoryRepository *inventory, PayablesRepository *payables,
-                             AuditRepository *audit = nullptr, QObject *parent = nullptr);
+                             AuditRepository *audit = nullptr, QObject *parent = nullptr,
+                             SettingsService *settings = nullptr);
 
     Result<Purchase> create(const QString &supplierName, const QString &sku, double qty,
                              const QString &user);
@@ -41,4 +44,6 @@ class PurchaseService : public QObject
     InventoryRepository *m_inventory = nullptr;
     PayablesRepository *m_payables = nullptr;
     AuditRepository *m_audit = nullptr;
+    // Fase 3: settings opcionales (días de pago a proveedores).
+    SettingsService *m_settings = nullptr;
 };

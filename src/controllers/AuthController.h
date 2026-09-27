@@ -4,10 +4,12 @@
 #include <QFutureWatcher>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVariantMap>
 
 #include <optional>
 
+#include "../core/Permissions.h"
 #include "../services/AuthService.h"
 
 class EventBus;
@@ -19,6 +21,9 @@ class AuthController : public QObject
     Q_PROPERTY(bool loggedIn READ loggedIn NOTIFY sessionChanged)
     Q_PROPERTY(QString currentUser READ currentUser NOTIFY sessionChanged)
     Q_PROPERTY(QString currentRole READ currentRole NOTIFY sessionChanged)
+    Q_PROPERTY(QStringList allowedScreens READ allowedScreens NOTIFY sessionChanged)
+    Q_PROPERTY(bool isAdmin READ isAdmin NOTIFY sessionChanged)
+    Q_PROPERTY(QStringList availableRoles READ availableRoles CONSTANT)
     Q_PROPERTY(bool loginBusy READ loginBusy NOTIFY loginBusyChanged)
 
   public:
@@ -45,6 +50,20 @@ class AuthController : public QObject
     QString currentRole() const
     {
         return m_role;
+    }
+    QStringList allowedScreens() const
+    {
+        if (m_user.isEmpty())
+            return {};
+        return Permissions::screensForRole(m_role);
+    }
+    bool isAdmin() const
+    {
+        return !m_user.isEmpty() && Permissions::isAdmin(m_role);
+    }
+    QStringList availableRoles() const
+    {
+        return Permissions::roles();
     }
     bool loginBusy() const
     {

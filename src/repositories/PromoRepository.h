@@ -8,6 +8,8 @@
 #include "AuditRepository.h"
 #include "ProductRepository.h"
 
+class SettingsService;
+
 // Promociones — CRUD + evaluación de descuento sobre carrito.
 // Tipos: porcentaje|monto_fijo|2x1|3x2|volumen|cupon|happy_hour
 // (semántica idéntica a Repository.apply_promo).
@@ -38,6 +40,10 @@ class PromoRepository : public QObject
     explicit PromoRepository(QSqlDatabase db, ProductRepository *products = nullptr,
                              AuditRepository *audit = nullptr, QObject *parent = nullptr);
 
+    // Fase 3: configuración externalizada (mínimo de promo volumen).
+    // Sin settings se usa el default histórico (10).
+    void setSettings(SettingsService *s);
+
     QList<Promo> list() const;
     // Multitienda: bt vacío o 'miscelanea' = todas; si no, ('' OR bt).
     QList<Promo> list(const QString &businessType) const;
@@ -63,4 +69,6 @@ class PromoRepository : public QObject
     QSqlDatabase m_db;
     ProductRepository *m_products = nullptr;
     AuditRepository *m_audit = nullptr;
+    // Fase 3: settings opcionales (solo promo_volumen_min_qty).
+    SettingsService *m_settings = nullptr;
 };

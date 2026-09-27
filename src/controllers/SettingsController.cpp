@@ -1,5 +1,7 @@
 #include "SettingsController.h"
 
+#include "../core/Permissions.h"
+
 SettingsController::SettingsController(SettingsService *settings, AuthService *auth,
                                        QObject *parent)
     : QObject(parent), m_settings(settings), m_auth(auth)
@@ -36,7 +38,7 @@ bool SettingsController::canEdit() const
     // desde auth.currentRole y solo admin edita.
     if (m_role.isEmpty())
         return true;
-    return m_role == QLatin1String("Administrador");
+    return Permissions::isAdmin(m_role);
 }
 
 void SettingsController::setRole(const QString &role)
