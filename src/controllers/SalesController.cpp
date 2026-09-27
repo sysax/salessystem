@@ -1,6 +1,27 @@
 #include "SalesController.h"
 
+#include <cmath>
+
 #include "../domain/Attrs.h"
+
+namespace
+{
+// Frontera QML: QML solo maneja double; el dominio usa Money (céntimos).
+// Totales/montos double → Money::fromCop + validación fail-closed
+// (finito, no negativo; >2 decimales por redondeo half-up en fromCop).
+bool checkCopInput(double cop, QString &error)
+{
+    if (!std::isfinite(cop)) {
+        error = QStringLiteral("Importe inválido");
+        return false;
+    }
+    if (cop < 0.0) {
+        error = QStringLiteral("El importe no puede ser negativo");
+        return false;
+    }
+    return true;
+}
+} // namespace
 
 SalesController::SalesController(SaleRepository *sales, SalesService *service,
                                  SerialRepository *serials, ProductRepository *products,
@@ -15,20 +36,20 @@ QVariantMap SalesController::toMap(const Sale &s)
 {
     QVariantMap pay;
     for (auto it = s.payments.begin(); it != s.payments.end(); ++it)
-        pay[it.key()] = it.value();
+        pay[it.key()] = it.value().toCop();
     return {{"id", s.id},
             {"date", s.date},
             {"client", s.client},
-            {"total", s.total},
-            {"subtotal", s.subtotal},
-            {"tax", s.tax},
-            {"discount", s.discount},
+            {"total", s.total.toCop()},
+            {"subtotal", s.subtotal.toCop()},
+            {"tax", s.tax.toCop()},
+            {"discount", s.discount.toCop()},
             {"status", s.status},
             {"docType", s.docType},
             {"payment", s.payment},
             {"payments", pay},
-            {"paid", s.paid},
-            {"balance", s.balance},
+            {"paid", s.paid.toCop()},
+            {"balance", s.balance.toCop()},
             {"cufe", s.dianCufe},
             {"parentId", s.parentId},
             {"reason", s.reason}};
@@ -136,7 +157,7 @@ QVariantMap SalesController::detail(const QString &id) const
     for (const SaleItem &it : m_repos->itemsFor(id)) {
         QVariantMap m{{"productId", it.productId},
                       {"qty", it.qty},
-                      {"subtotal", it.subtotal},
+                      {"subtotal", it.subtotal.toCop()},
                       {"serial", it.serial}};
         if (it.attrsJson.trimmed() != QStringLiteral("{}") && !it.attrsJson.trimmed().isEmpty())
             m["attrs"] = it.attrsJson;
@@ -169,7 +190,10 @@ QVariantMap SalesController::cancel(const QString &id, const QString &reason, co
 QVariantMap SalesController::createDoc(const QString &type, const QString &client, double total,
                                        const QString &user)
 {
-    const auto r = m_repos->createDocument(type, client, total, user);
+    QString err;
+    if (!checkCopInput(total, err))
+        return {{"ok", false}, {"error", QStringLiteral("Documento: ") + err}};
+    const auto r = m_repos->createDocument(type, client, Money::fromCop(total), user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     reloadSales();
@@ -189,7 +213,10 @@ QVariantMap SalesController::convert(const QString &originId, const QString &tar
 QVariantMap SalesController::creditNote(const QString &id, double amount, const QString &reason,
                                         const QString &user)
 {
-    const auto r = m_repos->createCreditNote(id, amount, reason, user);
+    QString err;
+    if (!checkCopInput(amount, err))
+        return {{"ok", false}, {"error", QStringLiteral("Nota crédito: ") + err}};
+    const auto r = m_repos->createCreditNote(id, Money::fromCop(amount), reason, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     reloadSales();
@@ -199,7 +226,10 @@ QVariantMap SalesController::creditNote(const QString &id, double amount, const 
 QVariantMap SalesController::debitNote(const QString &id, double amount, const QString &reason,
                                        const QString &user)
 {
-    const auto r = m_repos->createDebitNote(id, amount, reason, user);
+    QString err;
+    if (!checkCopInput(amount, err))
+        return {{"ok", false}, {"error", QStringLiteral("Nota cargo: ") + err}};
+    const auto r = m_repos->createDebitNote(id, Money::fromCop(amount), reason, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     reloadSales();

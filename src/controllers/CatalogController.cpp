@@ -1,6 +1,7 @@
 #include "CatalogController.h"
 
 #include <QSet>
+#include <cmath>
 
 CatalogController::CatalogController(ProductRepository *products, CategoryRepository *categories,
                                      SettingsService *settings, QObject *parent)
@@ -19,6 +20,44 @@ QString checkExpiry(const SettingsService *settings, const Product &p)
     if (settings && settings->requireExpiry()) {
         if (p.lote.trimmed().isEmpty() || p.vencimiento.trimmed().isEmpty())
             return QStringLiteral("Lote y vencimiento obligatorios (configuración farmacia)");
+    }
+    return {};
+}
+// Frontera QML: QML solo maneja double; el dominio usa Money (céntimos).
+// Hacia QML se expone con .toCop(); desde QML se convierte con
+// Money::fromCop + validación fail-closed (finito, no negativo; los
+// >2 decimales se resuelven por redondeo half-up en fromCop).
+bool checkCopInput(double cop, bool requirePositive, QString &error)
+{
+    if (!std::isfinite(cop)) {
+        error = QStringLiteral("Importe inválido");
+        return false;
+    }
+    if (cop < 0.0) {
+        error = QStringLiteral("El importe no puede ser negativo");
+        return false;
+    }
+    if (requirePositive && !Money::fromCop(cop).isPositive()) {
+        error = QStringLiteral("Precio >0");
+        return false;
+    }
+    return true;
+}
+// Valida los importes que trae el mapa QML (solo las claves presentes;
+// en update los campos ausentes conservan la base).
+QString checkPriceFields(const QVariantMap &m, bool isNew)
+{
+    QString error;
+    static const char *keys[] = {"price", "priceBuy", "priceWholesale"};
+    for (const char *k : keys) {
+        const QString key = QString::fromLatin1(k);
+        if (!m.contains(key))
+            continue;
+        // En alta el precio es obligatorio >0; en update solo se valida
+        // lo que se envía (el repo exige >0 al guardar).
+        const bool requirePositive = (key == QStringLiteral("price")) && isNew;
+        if (!checkCopInput(m[key].toDouble(), requirePositive, error))
+            return key + QStringLiteral(": ") + error;
     }
     return {};
 }
@@ -64,9 +103,9 @@ QVariantMap CatalogController::toMap(const Product &p)
             {"businessType", p.businessType},
             {"brand", p.brand},
             {"supplier", p.supplier},
-            {"price", p.price},
-            {"priceBuy", p.priceBuy},
-            {"priceWholesale", p.priceWholesale},
+            {"price", p.price.toCop()},
+            {"priceBuy", p.priceBuy.toCop()},
+            {"priceWholesale", p.priceWholesale.toCop()},
             {"tax", p.tax},
             {"unit", p.unit},
             {"subcat", p.subcat},
@@ -115,9 +154,11 @@ Product CatalogController::fromMap(const QVariantMap &m, const Product &base)
     if (m.contains(QStringLiteral("supplier")))
         p.supplier = m[QStringLiteral("supplier")].toString();
     if (m.contains(QStringLiteral("price")))
-        p.price = m[QStringLiteral("price")].toDouble();
+        p.price = Money::fromCop(m[QStringLiteral("price")].toDouble());
     if (m.contains(QStringLiteral("priceBuy")))
-        p.priceBuy = m[QStringLiteral("priceBuy")].toDouble();
+        p.priceBuy = Money::fromCop(m[QStringLiteral("priceBuy")].toDouble());
+    if (m.contains(QStringLiteral("priceWholesale")))
+        p.priceWholesale = Money::fromCop(m[QStringLiteral("priceWholesale")].toDouble());
     if (m.contains(QStringLiteral("tax")))
         p.tax = m[QStringLiteral("tax")].toString();
     if (m.contains(QStringLiteral("stock")))
@@ -186,6 +227,8 @@ void CatalogController::searchPaged(const QString &text, const QString &business
 
 QVariantMap CatalogController::add(const QVariantMap &fields)
 {
+    if (const QString perr = checkPriceFields(fields, true); !perr.isEmpty())
+        return {{"ok", false}, {"error", perr}};
     Product p = fromMap(fields);
     // Multitienda: auto-etiquetar con el rubro activo si no se indicó.
     if (p.businessType.trimmed().isEmpty() && m_settings) {
@@ -210,6 +253,8 @@ QVariantMap CatalogController::update(const QString &sku, const QVariantMap &fie
     const auto cur = m_repos->findBySku(sku);
     if (!cur)
         return {{"ok", false}, {"error", QStringLiteral("No encontrado")}};
+    if (const QString perr = checkPriceFields(fields, false); !perr.isEmpty())
+        return {{"ok", false}, {"error", perr}};
     Product p = fromMap(fields, *cur);
     if (const QString err = checkExpiry(m_settings, p); !err.isEmpty())
         return {{"ok", false}, {"error", err}};

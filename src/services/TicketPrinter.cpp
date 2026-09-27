@@ -6,6 +6,8 @@
 #include <QProcess>
 #include <QStandardPaths>
 
+#include <cmath>
+
 TicketPrinter::TicketPrinter(const QString &ticketsDir, QObject *parent) : QObject(parent)
 {
     m_dir = ticketsDir;
@@ -16,10 +18,10 @@ TicketPrinter::TicketPrinter(const QString &ticketsDir, QObject *parent) : QObje
     QDir().mkpath(m_dir);
 }
 
-static QString money(double v, const QString &symbol = QStringLiteral("$"))
+static QString money(Money v, const QString &symbol = QStringLiteral("$"))
 {
     // "$1.850.000" sin decimales (formato ticket)
-    long long cop = llround(v);
+    long long cop = llround(v.toCop());
     QString digits = QString::number(qAbs(cop));
     QString grouped;
     while (digits.size() > 3) {
@@ -68,7 +70,7 @@ QString TicketPrinter::buildText(const Ticket &t)
                  .arg(QStringLiteral("Precio"), 10)
                  .arg(QStringLiteral("Subtotal"), 10);
     lines << QString(42, u'-');
-    double subtotal = 0.0;
+    Money subtotal;
     for (const Ticket::Line &l : t.lines) {
         subtotal += l.subtotal;
         lines << QStringLiteral("%1 %2 %3 %4")
@@ -82,7 +84,7 @@ QString TicketPrinter::buildText(const Ticket &t)
     }
     lines << QString(42, u'-');
     lines << QStringLiteral("Subtotal: %1").arg(money(subtotal, sym));
-    if (t.discount > 0)
+    if (t.discount > Money::zero())
         lines << QStringLiteral("Descuento (%1): -%2").arg(t.promoCode, money(t.discount, sym));
     if (t.taxLines.size() > 1) {
         // Fase 1: desglose por tasa (base + impuesto por tasa).
@@ -99,7 +101,7 @@ QString TicketPrinter::buildText(const Ticket &t)
     lines << QString(42, u'-');
     lines << QStringLiteral("Pagos:");
     for (auto it = t.payments.begin(); it != t.payments.end(); ++it) {
-        if (it.value() != 0)
+        if (it.value() != Money::zero())
             lines << QStringLiteral("  %1 %2")
                          .arg(it.key().first(1).toUpper() + it.key().mid(1), -12)
                          .arg(money(it.value(), sym));

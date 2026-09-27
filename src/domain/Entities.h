@@ -2,7 +2,12 @@
 
 // Entidades del dominio — réplica 1:1 de las columnas SQLite (ver
 // sql/schema.sql). Sustituyen a los dicts de data/repository.py.
-// Dinero en double (COP; magnitudes exactas en binario hasta 2^53).
+// Fase 2 (cierre): el dinero viaja como Money (céntimos exactos); la BD
+// sigue en REAL por compatibilidad y la conversión vive en la frontera
+// de cada repositorio (Money::fromCop/toCop). Cantidades (stock, qty)
+// siguen en double (granel admite fracciones); tasas/descuentos % en double.
+#include "../core/Money.h"
+
 #include <QList>
 #include <QMap>
 #include <QString>
@@ -18,9 +23,9 @@ struct Product
     QString subcat;
     QString brand;
     QString supplier;
-    double price = 0.0;
-    double priceBuy = 0.0;
-    double priceWholesale = 0.0;
+    Money price;
+    Money priceBuy;
+    Money priceWholesale;
     QString tax = QStringLiteral("IVA 19%");
     QString unit = QStringLiteral("unidad");
     // Fase 2: cantidades decimales (granel). SQLite guarda REAL sin ALTER.
@@ -66,10 +71,10 @@ struct Client
     QString phone;
     QString address;
     QString city;
-    double credit = 0.0;
-    double creditLimit = 5000000.0;
+    Money credit;
+    Money creditLimit = Money::fromCop(5000000.0);
     int discount = 0;
-    double balance = 0.0;
+    Money balance;
     QString priceList = QStringLiteral("detal");
     QString status = QStringLiteral("activo");
 };
@@ -87,15 +92,16 @@ struct Supplier
     QString catalog;
     QString leadTime;
     QString paymentTerms;
-    double balance = 0.0;
+    Money balance;
 };
 
-// Línea de venta (carrito y sale_items). qty decimal desde Fase 2 (granel).
+// Línea de venta (carrito y sale_items). qty decimal desde Fase 2 (granel);
+// subtotal en Money (unitPrice * qty redondeado al céntimo).
 struct SaleItem
 {
     int productId = 0;
     double qty = 0.0;
-    double subtotal = 0.0;
+    Money subtotal;
     // Fase 3: metadatos de línea (receta) + serial vendido.
     QString attrsJson = QStringLiteral("{}");
     QString serial;
@@ -107,21 +113,21 @@ struct Sale
     QString date;
     QString client;
     QString vendedor;
-    double total = 0.0;
-    double subtotal = 0.0;
-    double tax = 0.0;
+    Money total;
+    Money subtotal;
+    Money tax;
     // Fase 1: desglose por tasa (JSON); vacío en ventas históricas.
     QString taxBreakdown;
     // Multitienda: rubro de la venta ('' = mixta o legacy, visible en todos).
     QString businessType;
-    double discount = 0.0;
+    Money discount;
     QString promo;
     QString status;
     QString docType;
     QString payment;
-    QMap<QString, double> payments;
-    double paid = 0.0;
-    double balance = 0.0;
+    QMap<QString, Money> payments;
+    Money paid;
+    Money balance;
     QString due;
     QString estado;
     QString dianCufe;
@@ -135,7 +141,7 @@ struct PurchaseItem
 {
     QString sku;
     double qty = 0.0;
-    double priceBuy = 0.0;
+    Money priceBuy;
 };
 
 struct Purchase
@@ -143,7 +149,7 @@ struct Purchase
     QString id;
     QString date;
     QString supplier;
-    double total = 0.0;
+    Money total;
     QString status;
     QList<PurchaseItem> items;
     QString notes;
@@ -156,6 +162,8 @@ struct Promo
     int id = 0;
     QString name;
     QString type; // porcentaje|monto_fijo|2x1|3x2|volumen|cupon|happy_hour
+    // Polimórfico: % (0-100) si type=porcentaje, COP si type=monto_fijo
+    // (interpretar con Money::fromCop). No es Money puro a propósito.
     double value = 0.0;
     QString condition;
     QString code;
@@ -175,27 +183,27 @@ struct Promo
 struct CajaSale
 {
     QString id;
-    double total = 0.0;
+    Money total;
 };
 
 struct CajaStatus
 {
     bool open = false;
-    double openingAmount = 0.0;
+    Money openingAmount;
     QString openingTs;
     QString openingUser;
     QList<CajaSale> salesToday;
-    double totalSales = 0.0;
-    double expected = 0.0;
+    Money totalSales;
+    Money expected;
 };
 
 struct CajaCloseResult
 {
-    double expected = 0.0;
-    double counted = 0.0;
-    double diff = 0.0;
+    Money expected;
+    Money counted;
+    Money diff;
     int salesCount = 0;
-    double totalSales = 0.0;
+    Money totalSales;
 };
 
 struct InventoryMovement
@@ -210,12 +218,15 @@ struct InventoryMovement
     double after = 0.0;
     QString reason;
     QString user;
+    // Fase 6: traspasos ('' = no aplica).
+    QString fromLocation;
+    QString toLocation;
 };
 
 struct InventoryValue
 {
-    double costValue = 0.0;
-    double saleValue = 0.0;
+    Money costValue;
+    Money saleValue;
     double units = 0.0;
 };
 
@@ -224,10 +235,10 @@ struct Payable
     QString id;
     QString supplier;
     QString due;
-    double amount = 0.0;
-    double paid = 0.0;
-    double balance = 0.0;
-    double discountEarly = 0.0;
+    Money amount;
+    Money paid;
+    Money balance;
+    Money discountEarly;
     QString status;
 };
 
@@ -236,7 +247,7 @@ struct CxcPayment
     int id = 0;
     QString saleId;
     QString date;
-    double amount = 0.0;
+    Money amount;
     QString method;
     QString user;
 };
@@ -249,7 +260,7 @@ struct Lot
     QString lote;
     QString vencimiento; // AAAA-MM-DD ('' = sin vencimiento, sale al final)
     double qty = 0.0;
-    double cost = 0.0;
+    Money cost;
     QString createdTs;
 };
 

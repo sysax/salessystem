@@ -1,6 +1,28 @@
 #include "OpsControllers.h"
 
+#include <cmath>
+
 // ── Inventory ─────────────────────────────────────────────────────────────
+
+namespace
+{
+// Frontera QML: QML solo maneja double; el dominio usa Money (céntimos).
+// Abonos/entradas double → Money::fromCop + validación fail-closed
+// (finito, no negativo; >2 decimales por redondeo half-up en fromCop).
+// El >0 estricto lo exige cada repo (monto <= balance/saldo).
+bool checkCopInput(double cop, QString &error)
+{
+    if (!std::isfinite(cop)) {
+        error = QStringLiteral("Importe inválido");
+        return false;
+    }
+    if (cop < 0.0) {
+        error = QStringLiteral("El importe no puede ser negativo");
+        return false;
+    }
+    return true;
+}
+} // namespace
 
 InventoryController::InventoryController(InventoryService *service, InventoryRepository *inventory,
                                          ProductRepository *products, QObject *parent)
@@ -15,7 +37,8 @@ void InventoryController::refresh()
     for (const InventoryMovement &m : m_inventory->movements(50)) {
         m_movements << QVariantMap{{"ts", m.ts},        {"sku", m.sku},       {"type", m.type},
                                    {"qty", m.qty},      {"before", m.before}, {"after", m.after},
-                                   {"reason", m.reason}};
+                                   {"reason", m.reason}, {"from", m.fromLocation},
+                                   {"to", m.toLocation}};
     }
     QVariantList low, excess, out;
     for (const Product &p : m_inventory->belowMin())
@@ -38,14 +61,45 @@ QVariantMap InventoryController::adjust(const QString &sku, double delta, const 
     return {{"ok", true}, {"newStock", r.value().newStock}};
 }
 
-QVariantMap InventoryController::transfer(const QString &sku, double qty, const QString &to,
-                                          const QString &reason, const QString &user)
+QVariantMap InventoryController::transfer(const QString &sku, double qty, const QString &from,
+                                           const QString &to, const QString &reason,
+                                           const QString &user)
 {
-    const auto r = m_service->transfer(sku, qty, to, reason, user);
+    const auto r = m_service->transfer(sku, qty, from, to, reason, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     refresh();
     return {{"ok", true}};
+}
+
+QVariantList InventoryController::locations()
+{
+    QVariantList out;
+    for (const auto &l : m_products->locations()->locations())
+        out << QVariantMap{{"id", l.id}, {"name", l.name}};
+    return out;
+}
+
+QVariantMap InventoryController::createLocation(const QString &name)
+{
+    const auto r = m_products->locations()->ensureLocation(name);
+    if (!r.ok())
+        return {{"ok", false}, {"error", r.error()}};
+    return {{"ok", true}, {"id", r.value().id}, {"name", r.value().name}};
+}
+
+QVariantList InventoryController::stockBySku(const QString &sku)
+{
+    QVariantList out;
+    auto *ledger = m_products->locations();
+    const auto perLoc = ledger->stockBySku(sku);
+    for (auto it = perLoc.begin(); it != perLoc.end(); ++it) {
+        const auto loc = ledger->findLocation(it.key());
+        out << QVariantMap{{"locationId", it.key()},
+                           {"location", loc ? loc->name : QString::number(it.key())},
+                           {"qty", it.value()}};
+    }
+    return out;
 }
 
 QVariantMap InventoryController::waste(const QString &sku, double qty, const QString &reason,
@@ -61,7 +115,7 @@ QVariantMap InventoryController::waste(const QString &sku, double qty, const QSt
 QVariantMap InventoryController::valuation() const
 {
     const auto v = m_service->valuation();
-    return {{"totalValue", v.totalValue}, {"productsCount", v.productsCount}};
+    return {{"totalValue", v.totalValue.toCop()}, {"productsCount", v.productsCount}};
 }
 
 QVariantMap InventoryController::reserve(const QString &sku, double qty, const QString &reason,
@@ -98,7 +152,7 @@ QVariantMap PurchasesController::toMap(const Purchase &p)
     for (auto it = p.received.begin(); it != p.received.end(); ++it)
         rec[it.key()] = it.value();
     return {{"id", p.id},       {"date", p.date},     {"supplier", p.supplier},
-            {"total", p.total}, {"status", p.status}, {"notes", p.notes},
+            {"total", p.total.toCop()}, {"status", p.status}, {"notes", p.notes},
             {"received", rec}};
 }
 
@@ -173,11 +227,14 @@ QVariantList ReceivablesController::statement(const QString &client) const
 QVariantMap ReceivablesController::pay(const QString &saleId, double amount, const QString &method,
                                        const QString &user)
 {
-    const auto r = m_service->pay(saleId, amount, method, user);
+    QString err;
+    if (!checkCopInput(amount, err))
+        return {{"ok", false}, {"error", QStringLiteral("Abono: ") + err}};
+    const auto r = m_service->pay(saleId, Money::fromCop(amount), method, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     refresh();
-    return {{"ok", true}, {"balance", r.value().balance}};
+    return {{"ok", true}, {"balance", r.value().balance.toCop()}};
 }
 
 PayablesController::PayablesController(PayablesService *service, QObject *parent)
@@ -195,13 +252,16 @@ void PayablesController::refresh()
 QVariantMap PayablesController::pay(const QString &id, double amount, const QString &method,
                                     const QString &user)
 {
-    const auto r = m_service->pay(id, amount, method, user);
+    QString err;
+    if (!checkCopInput(amount, err))
+        return {{"ok", false}, {"error", QStringLiteral("Pago: ") + err}};
+    const auto r = m_service->pay(id, Money::fromCop(amount), method, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     refresh();
     return {{"ok", true},
-            {"balance", r.value().payable.balance},
-            {"earlyDiscount", r.value().earlyDiscount}};
+            {"balance", r.value().payable.balance.toCop()},
+            {"earlyDiscount", r.value().earlyDiscount.toCop()}};
 }
 
 // ── Promos ────────────────────────────────────────────────────────────────

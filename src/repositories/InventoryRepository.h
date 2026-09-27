@@ -21,9 +21,10 @@ class InventoryRepository : public QObject
                                  QObject *parent = nullptr);
 
     // Registra movimiento con before/after explícitos (no toca stock).
-    // Fase 2: cantidades decimales.
+    // Fase 2: cantidades decimales. Fase 6: origen/destino del traspaso.
     bool record(const QString &sku, const QString &productName, const QString &type, double qty,
-                double before, double after, const QString &reason, const QString &user);
+                double before, double after, const QString &reason, const QString &user,
+                const QString &fromLocation = {}, const QString &toLocation = {});
 
     QList<InventoryMovement> movements(int limit = 20) const;
     QList<InventoryMovement> movementsBySku(const QString &sku) const;
@@ -37,10 +38,10 @@ class InventoryRepository : public QObject
 
     // Fase 5: lotes PEPS (un SKU, varios lotes con costo/vencimiento).
     Result<Lot> addLot(const QString &sku, const QString &lote, const QString &vencimiento,
-                       double qty, double cost);
+                       double qty, Money cost);
     QList<Lot> lotsBySku(const QString &sku) const; // qty>0, PEPS: vencimiento ASC ('' al final)
     bool reduceLot(int lotId, double qty);
-    double lotsValue(const QString &sku = {}) const; // valuación PEPS (suma lotes)
+    Money lotsValue(const QString &sku = {}) const; // valuación PEPS (suma lotes)
     QList<Lot> expiringLots(int days) const;
 
     // Fase 5: conteos cíclicos (conteo → diferencia → ajuste justificado).

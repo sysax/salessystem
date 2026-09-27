@@ -80,8 +80,23 @@ CREATE TABLE IF NOT EXISTS purchases (
 
 CREATE TABLE IF NOT EXISTS inventory_movements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts TEXT, sku TEXT, product TEXT, type TEXT, qty INTEGER, before_qty INTEGER, after_qty INTEGER, reason TEXT, user TEXT
+    ts TEXT, sku TEXT, product TEXT, type TEXT, qty INTEGER, before_qty INTEGER, after_qty INTEGER, reason TEXT, user TEXT,
+    from_location TEXT DEFAULT '', to_location TEXT DEFAULT ''
 );
+
+-- Fase 6: almacenes/sucursales + existencias por ubicación.
+-- products.stock es el agregado (suma); el ledger vive aquí.
+CREATE TABLE IF NOT EXISTS locations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL
+);
+INSERT OR IGNORE INTO locations (id, name) VALUES (1, 'Principal');
+CREATE TABLE IF NOT EXISTS stock_by_location (
+    sku TEXT NOT NULL, location_id INTEGER NOT NULL, qty REAL DEFAULT 0,
+    UNIQUE(sku, location_id)
+);
+CREATE INDEX IF NOT EXISTS idx_stock_loc ON stock_by_location(location_id);
+CREATE INDEX IF NOT EXISTS idx_stock_sku ON stock_by_location(sku);
 
 CREATE TABLE IF NOT EXISTS payables (
     id TEXT PRIMARY KEY, supplier TEXT, due TEXT, amount REAL, paid REAL, balance REAL, discount_early REAL, status TEXT
@@ -136,7 +151,10 @@ CREATE TABLE IF NOT EXISTS outbox (
     synced_ts TEXT,
     -- Fase 6: origen del evento (id = secuencia por dispositivo).
     device_id TEXT DEFAULT '',
-    seq INTEGER DEFAULT 0
+    seq INTEGER DEFAULT 0,
+    -- Fase 6: backoff persistente (sobrevive reinicios) + prioridad de lote.
+    next_retry_at TEXT DEFAULT '',
+    priority INTEGER DEFAULT 0
 );
 
 -- Fase 5: lotes para valuación PEPS y caducidad por lote (un producto

@@ -8,6 +8,7 @@
 #include "AuditRepository.h"
 #include "CajaRepository.h"
 #include "ClientRepository.h"
+#include "LocationRepository.h"
 
 // Ventas y documentos (sales + sale_items): folios, pagos mixtos/crédito,
 // CUFE, estados, notas. Semántica de Repository.create_sale /
@@ -28,14 +29,14 @@ class SaleRepository : public QObject
     {
         QString clientName;
         QString vendedor = QStringLiteral("vendedor");
-        double subtotal = 0.0;
-        double discount = 0.0;
-        double tax = 0.0;
-        double total = 0.0;
+        Money subtotal;
+        Money discount;
+        Money tax;
+        Money total;
         QString promoCode;
-        // Pagos mixtos: {"efectivo": X, "credito": Y, ...}. Vacío + método
+        // Pagos mixtos: {"efectivo": Money, "credito": Money, ...}. Vacío + método
         // "Credito" ⇒ todo a crédito. Vacío + otro método ⇒ contado total.
-        QMap<QString, double> payments;
+        QMap<QString, Money> payments;
         QString paymentMethod = QStringLiteral("Efectivo");
         QString docType;       // vacío ⇒ default DIAN/offline
         QList<SaleItem> items; // productId, qty, subtotal por línea
@@ -62,7 +63,7 @@ class SaleRepository : public QObject
     QList<SaleItem> itemsFor(const QString &saleId) const;
 
     Result<Sale> create(const NewSale &s);
-    Result<Sale> createDocument(const QString &docType, const QString &client, double total,
+    Result<Sale> createDocument(const QString &docType, const QString &client, Money total,
                                 const QString &user, const QString &parentId = {},
                                 const QString &reason = {});
     // Fase 5: máquina de estados documental (origen → destino permitido).
@@ -76,12 +77,12 @@ class SaleRepository : public QObject
     // advanceStatus rechaza Cancelada para cerrar el bypass sin reversión.
     Result<Sale> markCancelled(const QString &saleId, const QString &reason, const QString &user);
     // Fase 5: total de notas crédito ligadas a un folio (evita NC múltiple > total).
-    double creditNotesTotal(const QString &parentId) const;
+    Money creditNotesTotal(const QString &parentId) const;
     Result<Sale> advanceStatus(const QString &saleId, const QString &newStatus,
                                const QString &user);
-    Result<Sale> createCreditNote(const QString &saleId, double amount, const QString &reason,
+    Result<Sale> createCreditNote(const QString &saleId, Money amount, const QString &reason,
                                   const QString &user);
-    Result<Sale> createDebitNote(const QString &saleId, double amount, const QString &reason,
+    Result<Sale> createDebitNote(const QString &saleId, Money amount, const QString &reason,
                                  const QString &user);
 
     static Sale rowToSale(const QSqlQuery &q);
@@ -91,4 +92,6 @@ class SaleRepository : public QObject
     ClientRepository *m_clients = nullptr;
     CajaRepository *m_caja = nullptr;
     AuditRepository *m_audit = nullptr;
+    // Fase 6: ledger propio (misma conexión; las ventas descuentan Principal).
+    LocationRepository *m_locations = nullptr;
 };

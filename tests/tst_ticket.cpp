@@ -21,13 +21,14 @@ class TstTicket : public QObject
         t.clientName = QStringLiteral("Juan Pérez");
         t.docType = QStringLiteral("Ticket de venta");
         t.cufe = QStringLiteral("CUFE-TEST");
-        t.lines = {{"Mouse", 2, 45000, 90000}};
-        t.discount = 5000;
+        t.lines = {TicketPrinter::Ticket::Line{QStringLiteral("Mouse"), 2,
+                                               Money::fromCop(45000), Money::fromCop(90000)}};
+        t.discount = Money::fromCop(5000);
         t.promoCode = QStringLiteral("PROMO");
-        t.tax = 16150;
-        t.total = 100150;
-        t.payments = {{"efectivo", 100150.0}};
-        t.change = 0;
+        t.tax = Money::fromCop(16150);
+        t.total = Money::fromCop(100150);
+        t.payments = QMap<QString, Money>{{QStringLiteral("efectivo"), Money::fromCop(100150.0)}};
+        t.change = Money();
 
         const QString text = TicketPrinter::buildText(t);
         QVERIFY(text.contains(QStringLiteral("V777")));
@@ -61,8 +62,9 @@ class TstTicket : public QObject
         t.businessNit = QStringLiteral("900123456-7");
         t.businessAddress = QStringLiteral("Calle 10 #5-20");
         t.businessPhone = QStringLiteral("6015550101");
-        t.lines = {{"Aspirina", 2, 5000, 10000}};
-        t.total = 10000;
+        t.lines = {TicketPrinter::Ticket::Line{QStringLiteral("Aspirina"), 2,
+                                               Money::fromCop(5000), Money::fromCop(10000)}};
+        t.total = Money::fromCop(10000);
         const QString text = TicketPrinter::buildText(t);
         QVERIFY(text.contains(QStringLiteral("Farmacia La Salud")));
         QVERIFY(text.contains(QStringLiteral("900123456-7")));
@@ -71,8 +73,9 @@ class TstTicket : public QObject
         // Sin negocio configurado se conserva el aspecto anterior
         TicketPrinter::Ticket plain;
         plain.saleId = QStringLiteral("V889");
-        plain.lines = {{"X", 1, 1000, 1000}};
-        plain.total = 1000;
+        plain.lines = {TicketPrinter::Ticket::Line{QStringLiteral("X"), 1, Money::fromCop(1000),
+                                                   Money::fromCop(1000)}};
+        plain.total = Money::fromCop(1000);
         QVERIFY(TicketPrinter::buildText(plain).contains(QStringLiteral("SISTEMA DE VENTAS")));
     }
 };

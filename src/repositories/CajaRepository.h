@@ -18,12 +18,12 @@ class CajaRepository : public QObject
                             QObject *parent = nullptr);
 
     CajaStatus status() const;
-    Result<CajaStatus> open(double amount, const QString &user);
+    Result<CajaStatus> open(Money amount, const QString &user);
     // Fase 5: con diferencia (sobra/falta) el motivo es obligatorio.
-    Result<CajaCloseResult> close(double counted, const QString &user, const QString &reason = {});
+    Result<CajaCloseResult> close(Money counted, const QString &user, const QString &reason = {});
 
     // Agrega {id,total} a sales_today_json y recalcula expected (solo si abierta)
-    bool recordSale(const QString &saleId, double total);
+    bool recordSale(const QString &saleId, Money total);
     // Fase 1: retira {saleId} del JSON y recalcula expected (cancelación).
     // Si la caja está cerrada o no contiene la venta, no-op (true).
     bool reverseSale(const QString &saleId);
@@ -37,12 +37,12 @@ class CajaRepository : public QObject
         QString ts;
         QString turno;
         QString type;
-        double amount = 0.0;
+        Money amount;
         QString method;
         QString saleId;
         QString user;
     };
-    bool logMovement(const QString &type, double amount, const QString &method,
+    bool logMovement(const QString &type, Money amount, const QString &method,
                      const QString &saleId, const QString &user);
     // Movimientos del turno actual (turno vacío = todos). El JSON de caja
     // queda como caché de presentación.
@@ -50,7 +50,7 @@ class CajaRepository : public QObject
     QString currentTurno() const;
     // Esperado calculado desde movimientos (cuadra por construcción con
     // status().expected; el test lo verifica).
-    double expectedFromMovements() const;
+    Money expectedFromMovements() const;
 
   private:
     QSqlDatabase m_db;

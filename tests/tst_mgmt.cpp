@@ -108,8 +108,9 @@ class TstMgmt : public QObject
                  ->adjust(QStringLiteral("P001"), 0, QStringLiteral("x"), QStringLiteral("t"))["ok"]
                  .toBool());
         QVERIFY(m_inventory
-                    ->transfer(QStringLiteral("P001"), 1, QStringLiteral("Z9"),
-                               QStringLiteral("prueba"), QStringLiteral("tester"))["ok"]
+                    ->transfer(QStringLiteral("P001"), 1, QStringLiteral("Principal"),
+                               QStringLiteral("Z9"), QStringLiteral("prueba"),
+                               QStringLiteral("tester"))["ok"]
                     .toBool());
         QVERIFY(m_inventory->valuation()["totalValue"].toDouble() > 0);
         QVERIFY(!m_inventory->alerts().isEmpty());

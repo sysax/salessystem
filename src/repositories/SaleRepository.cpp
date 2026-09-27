@@ -24,6 +24,7 @@ SaleRepository::SaleRepository(QSqlDatabase db, ClientRepository *clients, CajaR
                                AuditRepository *audit, QObject *parent)
     : QObject(parent), m_db(std::move(db)), m_clients(clients), m_caja(caja), m_audit(audit)
 {
+    m_locations = new LocationRepository(m_db, m_audit, this);
 }
 
 Sale SaleRepository::rowToSale(const QSqlQuery &q)
@@ -33,10 +34,10 @@ Sale SaleRepository::rowToSale(const QSqlQuery &q)
     s.date = q.value(QStringLiteral("date")).toString();
     s.client = q.value(QStringLiteral("client")).toString();
     s.vendedor = q.value(QStringLiteral("vendedor")).toString();
-    s.total = q.value(QStringLiteral("total")).toDouble();
-    s.subtotal = q.value(QStringLiteral("subtotal")).toDouble();
-    s.tax = q.value(QStringLiteral("tax")).toDouble();
-    s.discount = q.value(QStringLiteral("discount")).toDouble();
+    s.total = Money::fromCop(q.value(QStringLiteral("total")).toDouble());
+    s.subtotal = Money::fromCop(q.value(QStringLiteral("subtotal")).toDouble());
+    s.tax = Money::fromCop(q.value(QStringLiteral("tax")).toDouble());
+    s.discount = Money::fromCop(q.value(QStringLiteral("discount")).toDouble());
     s.promo = q.value(QStringLiteral("promo")).toString();
     s.status = q.value(QStringLiteral("status")).toString();
     s.docType = q.value(QStringLiteral("doc_type")).toString();
@@ -44,9 +45,9 @@ Sale SaleRepository::rowToSale(const QSqlQuery &q)
     const QByteArray raw = q.value(QStringLiteral("payments_json")).toByteArray();
     const QJsonObject obj = QJsonDocument::fromJson(raw.isEmpty() ? "{}" : raw).object();
     for (auto it = obj.begin(); it != obj.end(); ++it)
-        s.payments[it.key()] = it.value().toDouble();
-    s.paid = q.value(QStringLiteral("paid")).toDouble();
-    s.balance = q.value(QStringLiteral("balance")).toDouble();
+        s.payments[it.key()] = Money::fromCop(it.value().toDouble());
+    s.paid = Money::fromCop(q.value(QStringLiteral("paid")).toDouble());
+    s.balance = Money::fromCop(q.value(QStringLiteral("balance")).toDouble());
     s.due = q.value(QStringLiteral("due")).toString();
     s.estado = q.value(QStringLiteral("estado")).toString();
     s.dianCufe = q.value(QStringLiteral("dian_cufe")).toString();
@@ -174,7 +175,7 @@ QList<SaleItem> SaleRepository::itemsFor(const QString &saleId) const
         SaleItem it;
         it.productId = q.value(QStringLiteral("product_id")).toInt();
         it.qty = q.value(QStringLiteral("qty")).toDouble();
-        it.subtotal = q.value(QStringLiteral("subtotal")).toDouble();
+        it.subtotal = Money::fromCop(q.value(QStringLiteral("subtotal")).toDouble());
         it.attrsJson = q.value(QStringLiteral("attrs_json")).toString();
         if (it.attrsJson.trimmed().isEmpty())
             it.attrsJson = QStringLiteral("{}");
@@ -187,14 +188,15 @@ QList<SaleItem> SaleRepository::itemsFor(const QString &saleId) const
 Result<Sale> SaleRepository::create(const NewSale &s)
 {
     // Estado y descripción de pagos (réplica exacta de create_sale)
-    QMap<QString, double> payments;
+    QMap<QString, Money> payments;
     for (auto it = s.payments.begin(); it != s.payments.end(); ++it) {
-        if (it.value() > 0)
+        if (it.value().isPositive())
             payments[it.key()] = it.value();
     }
     QString status, paymentStr;
     if (!payments.isEmpty()) {
-        const bool hasCredit = payments.value(QStringLiteral("credito"), 0.0) > 0;
+        const bool hasCredit
+            = payments.value(QStringLiteral("credito"), Money::zero()).isPositive();
         status = hasCredit ? QStringLiteral("Pendiente") : QStringLiteral("Pagada");
         paymentStr = QStringList(payments.keys()).join(u'+');
     } else {
@@ -208,16 +210,16 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     // el contador es leer-luego-escribir y fuera del lock dos cajas
     // concurrentes obtendrían el mismo folio (o SQLITE_BUSY_SNAPSHOT
     // sin espera en autocommit). Dentro de BEGIN IMMEDIATE se serializa.
-    double paidVal, balanceVal;
-    const double creditPart = payments.value(QStringLiteral("credito"), 0.0);
+    Money paidVal, balanceVal;
+    const Money creditPart = payments.value(QStringLiteral("credito"), Money::zero());
     if (status == QLatin1String("Pagada")) {
         paidVal = s.total;
-        balanceVal = 0.0;
+        balanceVal = Money::zero();
     } else if (!payments.isEmpty()) {
         paidVal = s.total - creditPart;
         balanceVal = payments.contains(QStringLiteral("credito")) ? creditPart : s.total;
     } else {
-        paidVal = 0.0;
+        paidVal = Money::zero();
         balanceVal = s.total;
     }
 
@@ -232,11 +234,11 @@ Result<Sale> SaleRepository::create(const NewSale &s)
                             ? QDate::currentDate().addDays(15).toString(Qt::ISODate)
                             : today;
 
-    QMap<QString, double> storedPayments
-        = payments.isEmpty() ? QMap<QString, double>{{paymentStr.toLower(), s.total}} : payments;
+    QMap<QString, Money> storedPayments
+        = payments.isEmpty() ? QMap<QString, Money>{{paymentStr.toLower(), s.total}} : payments;
     QJsonObject payObj;
     for (auto it = storedPayments.begin(); it != storedPayments.end(); ++it)
-        payObj[it.key()] = it.value();
+        payObj[it.key()] = it.value().toCop();
 
     QSqlQuery q(m_db);
     // Fase 1: todo el flujo multi-escritura (folio + venta + líneas +
@@ -258,17 +260,17 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     q.addBindValue(today);
     q.addBindValue(s.clientName);
     q.addBindValue(s.vendedor);
-    q.addBindValue(s.total);
-    q.addBindValue(s.subtotal != 0 ? s.subtotal : s.total + s.discount - s.tax);
-    q.addBindValue(s.tax);
-    q.addBindValue(s.discount);
+    q.addBindValue(s.total.toCop());
+    q.addBindValue((!s.subtotal.isZero() ? s.subtotal : s.total + s.discount - s.tax).toCop());
+    q.addBindValue(s.tax.toCop());
+    q.addBindValue(s.discount.toCop());
     q.addBindValue(s.promoCode.isEmpty() ? QVariant() : s.promoCode);
     q.addBindValue(status);
     q.addBindValue(docType);
     q.addBindValue(paymentStr);
     q.addBindValue(QString::fromUtf8(QJsonDocument(payObj).toJson(QJsonDocument::Compact)));
-    q.addBindValue(paidVal);
-    q.addBindValue(balanceVal);
+    q.addBindValue(paidVal.toCop());
+    q.addBindValue(balanceVal.toCop());
     q.addBindValue(due);
     q.addBindValue(status);
     q.addBindValue(cufe);
@@ -281,6 +283,18 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     for (const SaleItem &it : s.items) {
         // Fase 1: decremento atómico (sin TOCTOU leer-luego-escribir).
         // 0 filas => otro hilo/caja vendió primero o no hay stock.
+        // Fase 6: además del agregado, se descuenta el ledger de Principal
+        // (misma tx): la venta consume existencias del almacén por defecto.
+        QSqlQuery skuQ(m_db);
+        skuQ.prepare(QStringLiteral("SELECT sku FROM products WHERE id=?"));
+        skuQ.addBindValue(it.productId);
+        if (!skuQ.exec() || !skuQ.next())
+            return Result<Sale>::failure(
+                QStringLiteral("Producto ID %1 no existe").arg(it.productId));
+        const QString sku = skuQ.value(0).toString();
+        if (!m_locations->takeLedger(sku, LocationRepository::kPrincipalId, it.qty))
+            return Result<Sale>::failure(
+                QStringLiteral("Stock insuficiente (producto ID %1)").arg(it.productId));
         QSqlQuery up(m_db);
         up.prepare(
             QStringLiteral("UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?"));
@@ -299,7 +313,7 @@ Result<Sale> SaleRepository::create(const NewSale &s)
         ins.addBindValue(folio);
         ins.addBindValue(it.productId);
         ins.addBindValue(it.qty);
-        ins.addBindValue(it.subtotal);
+        ins.addBindValue(it.subtotal.toCop());
         ins.addBindValue(it.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}") : it.attrsJson);
         ins.addBindValue(it.serial);
         if (!ins.exec())
@@ -308,9 +322,11 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     }
 
     // Crédito a la cuenta del cliente
-    const double creditAmount
-        = status == QLatin1String("Pendiente") ? (payments.isEmpty() ? s.total : creditPart) : 0.0;
-    if (creditAmount > 0 && m_clients && !m_clients->addCredit(s.clientName, creditAmount))
+    const Money creditAmount = status == QLatin1String("Pendiente")
+                                   ? (payments.isEmpty() ? s.total : creditPart)
+                                   : Money::zero();
+    if (creditAmount.isPositive() && m_clients
+        && !m_clients->addCredit(s.clientName, creditAmount))
         return Result<Sale>::failure(QStringLiteral("No se pudo cargar el crédito al cliente"));
 
     if (m_caja && !m_caja->recordSale(folio, s.total))
@@ -326,7 +342,7 @@ Result<Sale> SaleRepository::create(const NewSale &s)
 }
 
 Result<Sale> SaleRepository::createDocument(const QString &docType, const QString &client,
-                                             double total, const QString &user,
+                                             Money total, const QString &user,
                                              const QString &parentId, const QString &reason)
 {
     // Fase 5: cada tipo documental con folio y contador propios. Antes,
@@ -367,8 +383,8 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     q.addBindValue(today);
     q.addBindValue(client);
     q.addBindValue(user);
-    q.addBindValue(total);
-    q.addBindValue(total);
+    q.addBindValue(total.toCop());
+    q.addBindValue(total.toCop());
     q.addBindValue(0.0);
     q.addBindValue(0.0);
     q.addBindValue(docType);
@@ -376,7 +392,7 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     q.addBindValue(QString());
     q.addBindValue(QStringLiteral("{}"));
     q.addBindValue(0.0);
-    q.addBindValue(total);
+    q.addBindValue(total.toCop());
     q.addBindValue(docType);
     q.addBindValue(parentId);
     q.addBindValue(reason.trimmed().left(280));
@@ -385,7 +401,7 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     if (m_audit)
         m_audit->log(user,
                      QStringLiteral("doc_%1_creado").arg(docType.toLower().replace(u' ', u'_')),
-                     QStringLiteral("%1 %2 $%3").arg(folio, client).arg(total, 0, 'f', 0));
+                     QStringLiteral("%1 %2 $%3").arg(folio, client).arg(total.toCop(), 0, 'f', 0));
     if (!tx.commit())
         return Result<Sale>::failure(QStringLiteral("No se pudo confirmar el documento"));
     const auto created = find(folio);
@@ -452,7 +468,7 @@ Result<Sale> SaleRepository::convertDocument(const QString &originFolio,
         ins.addBindValue(created.value().id);
         ins.addBindValue(it.productId);
         ins.addBindValue(it.qty);
-        ins.addBindValue(it.subtotal);
+        ins.addBindValue(it.subtotal.toCop());
         ins.addBindValue(it.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}") : it.attrsJson);
         ins.addBindValue(it.serial);
         if (!ins.exec())
@@ -505,15 +521,15 @@ Result<Sale> SaleRepository::markCancelled(const QString &saleId, const QString 
     return Result<Sale>::success(*cancelled);
 }
 
-double SaleRepository::creditNotesTotal(const QString &parentId) const
+Money SaleRepository::creditNotesTotal(const QString &parentId) const
 {
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("SELECT COALESCE(SUM(total),0) FROM sales WHERE parent_id=? AND "
                              "doc_type='Nota crédito' AND status!='Cancelada'"));
     q.addBindValue(parentId);
     if (!q.exec() || !q.next())
-        return 0.0;
-    return q.value(0).toDouble();
+        return Money::zero();
+    return Money::fromCop(q.value(0).toDouble());
 }
 
 Result<Sale> SaleRepository::advanceStatus(const QString &saleId, const QString &newStatus,
@@ -572,7 +588,7 @@ Result<Sale> SaleRepository::advanceStatus(const QString &saleId, const QString 
     return Result<Sale>::success(*advanced);
 }
 
-Result<Sale> SaleRepository::createCreditNote(const QString &saleId, double amount,
+Result<Sale> SaleRepository::createCreditNote(const QString &saleId, Money amount,
                                               const QString &reason, const QString &user)
 {
     const auto s = find(saleId);
@@ -584,12 +600,12 @@ Result<Sale> SaleRepository::createCreditNote(const QString &saleId, double amou
         || s->status == QStringLiteral("Cotización") || s->status == QLatin1String("Pedido"))
         return Result<Sale>::failure(
             QStringLiteral("La nota crédito aplica sobre factura, no sobre %1").arg(s->status));
-    if (amount <= 0 || amount > s->total)
+    if (!amount.isPositive() || amount > s->total)
         return Result<Sale>::failure(QStringLiteral("Monto inválido"));
-    if (creditNotesTotal(saleId) + amount > s->total + 1e-9)
+    if (creditNotesTotal(saleId) + amount > s->total)
         return Result<Sale>::failure(QStringLiteral("Notas crédito acumulan $%1: supera el total $%2")
-                                         .arg(creditNotesTotal(saleId) + amount, 0, 'f', 0)
-                                         .arg(s->total, 0, 'f', 0));
+                                         .arg((creditNotesTotal(saleId) + amount).toCop(), 0, 'f', 0)
+                                         .arg(s->total.toCop(), 0, 'f', 0));
     if (reason.trimmed().isEmpty())
         return Result<Sale>::failure(QStringLiteral("Motivo requerido"));
     auto note = createDocument(QStringLiteral("Nota crédito"), s->client, amount, user, saleId,
@@ -600,12 +616,12 @@ Result<Sale> SaleRepository::createCreditNote(const QString &saleId, double amou
         m_audit->log(user, QStringLiteral("nota_credito"),
                      QStringLiteral("%1 ref %2 $%3 %4")
                          .arg(note.value().id, saleId)
-                         .arg(amount, 0, 'f', 0)
+                         .arg(amount.toCop(), 0, 'f', 0)
                          .arg(reason.trimmed().left(20)));
     return note;
 }
 
-Result<Sale> SaleRepository::createDebitNote(const QString &saleId, double amount,
+Result<Sale> SaleRepository::createDebitNote(const QString &saleId, Money amount,
                                              const QString &reason, const QString &user)
 {
     const auto s = find(saleId);
@@ -614,7 +630,7 @@ Result<Sale> SaleRepository::createDebitNote(const QString &saleId, double amoun
     if (s->docType == QStringLiteral("Cotización") || s->docType == QLatin1String("Pedido"))
         return Result<Sale>::failure(
             QStringLiteral("La nota cargo aplica sobre factura, no sobre %1").arg(s->status));
-    if (amount <= 0)
+    if (!amount.isPositive())
         return Result<Sale>::failure(QStringLiteral("Monto >0"));
     if (reason.trimmed().isEmpty())
         return Result<Sale>::failure(QStringLiteral("Motivo requerido"));
@@ -625,6 +641,6 @@ Result<Sale> SaleRepository::createDebitNote(const QString &saleId, double amoun
     if (m_audit)
         m_audit->log(
             user, QStringLiteral("nota_cargo"),
-            QStringLiteral("%1 ref %2 $%3").arg(note.value().id, saleId).arg(amount, 0, 'f', 0));
+            QStringLiteral("%1 ref %2 $%3").arg(note.value().id, saleId).arg(amount.toCop(), 0, 'f', 0));
     return note;
 }

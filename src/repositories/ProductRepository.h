@@ -6,6 +6,7 @@
 #include "../core/Result.h"
 #include "../domain/Entities.h"
 #include "AuditRepository.h"
+#include "LocationRepository.h"
 
 // Catálogo (products) — CRUD + búsqueda + kits + vencimientos.
 // Validaciones idénticas a Repository.add/update_product (mensajes en ES).
@@ -60,7 +61,7 @@ class ProductRepository : public QObject
     // Kits: stock virtual = mín(floor(stock/qty) componentes)
     QList<Product> kits() const;
     Result<Product> createKit(const QString &sku, const QString &name,
-                              const QList<KitComponent> &components, double priceOverride,
+                              const QList<KitComponent> &components, Money priceOverride,
                               const QString &user);
     QList<KitComponent> kitComponents(const QString &sku) const;
     double kitStock(const QList<KitComponent> &components) const;
@@ -79,7 +80,15 @@ class ProductRepository : public QObject
     static QString generateBarcode(const QString &sku);
     static Product rowToProduct(const QSqlQuery &q);
 
+    // Fase 6: ledger de existencias (el agregado products.stock se mantiene
+    // en cada escritura; Principal = ubicación por defecto).
+    LocationRepository *locations()
+    {
+        return m_locations;
+    }
+
   private:
     QSqlDatabase m_db;
     AuditRepository *m_audit = nullptr;
+    LocationRepository *m_locations = nullptr;
 };

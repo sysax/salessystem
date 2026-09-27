@@ -49,12 +49,12 @@ class TstRepositories : public QObject
         Product p;
         p.sku = QStringLiteral("T001");
         p.name = QStringLiteral("Producto Test");
-        p.price = 10000;
+        p.price = Money::fromCop(10000);
         p.stock = 5;
         auto r = m_products->add(p);
         QVERIFY(r.ok());
-        QCOMPARE(r.value().priceBuy, 7000.0);       // default 70 %
-        QCOMPARE(r.value().priceWholesale, 9000.0); // default 90 %
+        QCOMPARE(r.value().priceBuy, Money::fromCop(7000.0));       // default 70 %
+        QCOMPARE(r.value().priceWholesale, Money::fromCop(9000.0)); // default 90 %
 
         Product dup = p;
         QVERIFY(!m_products->add(dup).ok()); // SKU duplicado
@@ -64,15 +64,15 @@ class TstRepositories : public QObject
         QVERIFY(!m_products->add(shortName).ok());
         Product badPrice = p;
         badPrice.sku = QStringLiteral("T003");
-        badPrice.price = 0;
+        badPrice.price = Money();
         QVERIFY(!m_products->add(badPrice).ok());
 
         Product upd = r.value();
-        upd.price = 12000;
+        upd.price = Money::fromCop(12000);
         upd.stock = 7;
         auto u = m_products->update(QStringLiteral("T001"), upd);
         QVERIFY(u.ok());
-        QCOMPARE(u.value().price, 12000.0);
+        QCOMPARE(u.value().price, Money::fromCop(12000.0));
         QCOMPARE(u.value().stock, 7);
 
         QVERIFY(m_products->remove(QStringLiteral("T001")).ok());
@@ -94,20 +94,20 @@ class TstRepositories : public QObject
             = {KitComponent{QStringLiteral("P002"), 2}, KitComponent{QStringLiteral("P003"), 1}};
         // stock kit = min(45//2, 20//1) = 20
         auto r = m_products->createKit(QStringLiteral("KIT1"), QStringLiteral("Kit Oficina"), comps,
-                                       0.0, QStringLiteral("tester"));
+                                       Money(), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(r.value().stock, 20);
         // precio default = (45000*2 + 145000) * 0.95 = 223250
-        QCOMPARE(r.value().price, 223250.0);
+        QCOMPARE(r.value().price, Money::fromCop(223250.0));
         QCOMPARE(m_products->kitComponents(QStringLiteral("KIT1")).size(), 2);
 
         QList<KitComponent> bad = {KitComponent{QStringLiteral("NOPE"), 1}};
         QVERIFY(!m_products
-                     ->createKit(QStringLiteral("KIT2"), QStringLiteral("Malo"), bad, 0.0,
+                     ->createKit(QStringLiteral("KIT2"), QStringLiteral("Malo"), bad, Money(),
                                  QStringLiteral("tester"))
                      .ok());
         QVERIFY(!m_products
-                     ->createKit(QStringLiteral("KIT1"), QStringLiteral("Dup"), comps, 0.0,
+                     ->createKit(QStringLiteral("KIT1"), QStringLiteral("Dup"), comps, Money(),
                                  QStringLiteral("tester"))
                      .ok());
     }
@@ -117,115 +117,122 @@ class TstRepositories : public QObject
         CartLine laptop{.productId = 1,
                         .sku = QStringLiteral("P001"),
                         .cat = QStringLiteral("Electronica"),
-                        .price = 1850000.0,
+                        .price = Money::fromCop(1850000.0),
                         .qty = 1,
-                        .subtotal = 1850000.0};
+                        .subtotal = Money::fromCop(1850000.0)};
         auto e1 = m_promos->evaluate({laptop}, QStringLiteral("ELEC10"));
         QVERIFY(e1.ok());
-        QCOMPARE(e1.value().discount, 185000.0);
+        QCOMPARE(e1.value().discount, Money::fromCop(185000.0));
 
         CartLine rice{.productId = 9,
                       .sku = QStringLiteral("AB01"),
                       .cat = QStringLiteral("Abarrotes"),
-                      .price = 23500.0,
+                      .price = Money::fromCop(23500.0),
                       .qty = 1,
-                      .subtotal = 23500.0};
+                      .subtotal = Money::fromCop(23500.0)};
         auto e2 = m_promos->evaluate({rice}, QStringLiteral("ELEC10"));
         QVERIFY(e2.ok());
-        QCOMPARE(e2.value().discount, 0.0); // categoría no coincide
+        QCOMPARE(e2.value().discount, Money()); // categoría no coincide
 
         CartLine big{.productId = 1,
                      .sku = QStringLiteral("P001"),
                      .cat = QStringLiteral("Electronica"),
-                     .price = 600000.0,
+                     .price = Money::fromCop(600000.0),
                      .qty = 1,
-                     .subtotal = 600000.0};
-        QCOMPARE(m_promos->evaluate({big}, QStringLiteral("50KOFF")).value().discount, 50000.0);
+                     .subtotal = Money::fromCop(600000.0)};
+        QCOMPARE(m_promos->evaluate({big}, QStringLiteral("50KOFF")).value().discount,
+                 Money::fromCop(50000.0));
         CartLine small{.productId = 1,
                        .sku = QStringLiteral("P001"),
                        .cat = QStringLiteral("Electronica"),
-                       .price = 100000.0,
+                       .price = Money::fromCop(100000.0),
                        .qty = 1,
-                       .subtotal = 100000.0};
+                       .subtotal = Money::fromCop(100000.0)};
         QCOMPARE(m_promos->evaluate({small}, QStringLiteral("50KOFF")).value().discount,
-                 0.0); // bajo el mínimo
+                 Money()); // bajo el mínimo
 
         CartLine buds{.productId = 5,
                       .sku = QStringLiteral("P005"),
                       .cat = QStringLiteral("Audio"),
-                      .price = 320000.0,
+                      .price = Money::fromCop(320000.0),
                       .qty = 2,
-                      .subtotal = 640000.0};
-        QCOMPARE(m_promos->evaluate({buds}, QStringLiteral("2X1AUD")).value().discount, 320000.0);
+                      .subtotal = Money::fromCop(640000.0)};
+        QCOMPARE(m_promos->evaluate({buds}, QStringLiteral("2X1AUD")).value().discount,
+                 Money::fromCop(320000.0));
 
         QList<CartLine> vol;
         for (int i = 0; i < 10; ++i)
             vol << CartLine{.productId = 2,
                             .sku = QStringLiteral("P002"),
                             .cat = QStringLiteral("Accesorios"),
-                            .price = 45000.0,
+                            .price = Money::fromCop(45000.0),
                             .qty = 1,
-                            .subtotal = 45000.0};
-        QCOMPARE(m_promos->evaluate(vol, QStringLiteral("VOL5")).value().discount, 450000.0 * 0.05);
+                            .subtotal = Money::fromCop(45000.0)};
+        QCOMPARE(m_promos->evaluate(vol, QStringLiteral("VOL5")).value().discount,
+                 Money::fromCop(450000.0 * 0.05));
 
         QVERIFY(!m_promos->evaluate({laptop}, QStringLiteral("3X2ACC")).ok()); // inactiva
         QVERIFY(!m_promos->evaluate({laptop}, QStringLiteral("NOPE")).ok());
         auto empty = m_promos->evaluate({laptop}, QString());
         QVERIFY(empty.ok());
-        QCOMPARE(empty.value().discount, 0.0);
+        QCOMPARE(empty.value().discount, Money());
     }
 
     void cajaFlow()
     {
-        auto o = m_caja->open(100000, QStringLiteral("cajero"));
+        auto o = m_caja->open(Money::fromCop(100000), QStringLiteral("cajero"));
         QVERIFY(o.ok());
         QVERIFY(o.value().open);
-        QVERIFY(!m_caja->open(50000, QStringLiteral("cajero")).ok()); // ya abierta
-        QVERIFY(m_caja->recordSale(QStringLiteral("VX1"), 25000));
-        QVERIFY(m_caja->recordSale(QStringLiteral("VX2"), 15000));
-        auto c = m_caja->close(140000, QStringLiteral("cajero"));
+        QVERIFY(!m_caja->open(Money::fromCop(50000), QStringLiteral("cajero")).ok()); // ya abierta
+        QVERIFY(m_caja->recordSale(QStringLiteral("VX1"), Money::fromCop(25000)));
+        QVERIFY(m_caja->recordSale(QStringLiteral("VX2"), Money::fromCop(15000)));
+        auto c = m_caja->close(Money::fromCop(140000), QStringLiteral("cajero"));
         QVERIFY(c.ok());
-        QCOMPARE(c.value().expected, 140000.0);
-        QCOMPARE(c.value().diff, 0.0);
+        QCOMPARE(c.value().expected, Money::fromCop(140000.0));
+        QCOMPARE(c.value().diff, Money());
         QCOMPARE(c.value().salesCount, 2);
-        QVERIFY(!m_caja->close(0, QStringLiteral("cajero")).ok()); // cerrada
+        QVERIFY(!m_caja->close(Money(), QStringLiteral("cajero")).ok()); // cerrada
     }
 
     void cajaMovements()
     {
         // Fase 3: el JSON cuadra con los movimientos normalizados.
-        QVERIFY(m_caja->open(1000, QStringLiteral("cajero")).ok());
+        QVERIFY(m_caja->open(Money::fromCop(1000), QStringLiteral("cajero")).ok());
         const QString turno = m_caja->currentTurno();
         QVERIFY(!turno.isEmpty());
-        QVERIFY(m_caja->recordSale(QStringLiteral("VM1"), 500));
-        QVERIFY(m_caja->recordSale(QStringLiteral("VM2"), 300));
+        QVERIFY(m_caja->recordSale(QStringLiteral("VM1"), Money::fromCop(500)));
+        QVERIFY(m_caja->recordSale(QStringLiteral("VM2"), Money::fromCop(300)));
         // Devolución directa (el hook en reverseSale vive con Fase 1).
-        QVERIFY(m_caja->logMovement(QStringLiteral("devolucion"), -500, QString(),
+        QVERIFY(m_caja->logMovement(QStringLiteral("devolucion"), Money::fromCop(-500), QString(),
                                     QStringLiteral("VM1"), QStringLiteral("cajero")));
         // JSON manual: 1000 + 500 + 300 − 500 = 1300. El repo no reescribe el
         // JSON en logMovement, así que se compara contra movimientos.
-        double movExpected = 0.0;
+        Money movExpected;
         for (const auto &m : m_caja->movements(turno)) {
             if (m.type != QLatin1String("cierre"))
                 movExpected += m.amount;
         }
-        QCOMPARE(movExpected, 1300.0);
-        QCOMPARE(m_caja->expectedFromMovements(), 1300.0);
+        QCOMPARE(movExpected, Money::fromCop(1300.0));
+        QCOMPARE(m_caja->expectedFromMovements(), Money::fromCop(1300.0));
         QCOMPARE(m_caja->movements(turno).size(), 4); // apertura + 2 ventas + devolución
         // El JSON aún cuenta VM1 (sin reverseSale): el cierre justifica la diff.
-        QVERIFY(!m_caja->close(1300, QStringLiteral("cajero")).ok());
-        QVERIFY(m_caja->close(1300, QStringLiteral("cajero"), QStringLiteral("prueba")).ok());
-        QCOMPARE(m_caja->expectedFromMovements(), 0.0); // sin turno abierto
-        QCOMPARE(m_caja->movements(turno).size(), 5);   // + cierre auditado
+        QVERIFY(!m_caja->close(Money::fromCop(1300), QStringLiteral("cajero")).ok());
+        QVERIFY(
+            m_caja->close(Money::fromCop(1300), QStringLiteral("cajero"), QStringLiteral("prueba"))
+                .ok());
+        QCOMPARE(m_caja->expectedFromMovements(), Money()); // sin turno abierto
+        QCOMPARE(m_caja->movements(turno).size(), 5);       // + cierre auditado
     }
 
     void cajaCloseNeedsReason()
     {
         // Fase 5: sobra/falta sin motivo no cierra; con motivo sí.
-        QVERIFY(m_caja->open(100, QStringLiteral("cajero")).ok());
-        QVERIFY(!m_caja->close(90, QStringLiteral("cajero")).ok());
-        QVERIFY(m_caja->close(90, QStringLiteral("cajero"), QStringLiteral("faltante")).ok());
-        QVERIFY(!m_caja->close(100, QStringLiteral("cajero")).ok()); // ya cerrada
+        QVERIFY(m_caja->open(Money::fromCop(100), QStringLiteral("cajero")).ok());
+        QVERIFY(!m_caja->close(Money::fromCop(90), QStringLiteral("cajero")).ok());
+        QVERIFY(
+            m_caja->close(Money::fromCop(90), QStringLiteral("cajero"), QStringLiteral("faltante"))
+                .ok());
+        QVERIFY(!m_caja->close(Money::fromCop(100), QStringLiteral("cajero")).ok()); // ya cerrada
     }
 
     void auditTrailsPriceChange()
@@ -234,7 +241,7 @@ class TstRepositories : public QObject
         auto cur = m_products->findBySku(QStringLiteral("P001"));
         QVERIFY(cur.has_value());
         Product upd = *cur;
-        upd.price = cur->price + 5000.0;
+        upd.price = cur->price + Money::fromCop(5000.0);
         upd.priceBuy = cur->priceBuy;
         QVERIFY(m_products->update(QStringLiteral("P001"), upd, QStringLiteral("admin")).ok());
         const auto hits = m_audit->search(QStringLiteral("P001"), QStringLiteral("admin"),
@@ -242,8 +249,8 @@ class TstRepositories : public QObject
         QVERIFY(!hits.isEmpty());
         const auto e = hits.first();
         QCOMPARE(e.entity, QStringLiteral("product"));
-        QVERIFY(e.beforeJson.contains(QString::number((int)cur->price)));
-        QVERIFY(e.afterJson.contains(QString::number((int)upd.price)));
+        QVERIFY(e.beforeJson.contains(QString::number((int)cur->price.toCop())));
+        QVERIFY(e.afterJson.contains(QString::number((int)upd.price.toCop())));
         // Sin usuario no se audita (compat legacy).
         QVERIFY(m_audit
                     ->search(QStringLiteral("P001"), QStringLiteral("nadie"),
@@ -256,15 +263,15 @@ class TstRepositories : public QObject
         // Fase 4: filtro texto + orden servidor + páginas (clientes únicos).
         QVERIFY(m_sales
                     ->createDocument(QStringLiteral("Remisión"), QStringLiteral("QTest Zeta"),
-                                     300.0, QStringLiteral("tester"))
+                                     Money::fromCop(300.0), QStringLiteral("tester"))
                     .ok());
         QVERIFY(m_sales
                     ->createDocument(QStringLiteral("Remisión"), QStringLiteral("QTest Alfa"),
-                                     100.0, QStringLiteral("tester"))
+                                     Money::fromCop(100.0), QStringLiteral("tester"))
                     .ok());
         QVERIFY(m_sales
                     ->createDocument(QStringLiteral("Remisión"), QStringLiteral("QTest Media"),
-                                     200.0, QStringLiteral("tester"))
+                                     Money::fromCop(200.0), QStringLiteral("tester"))
                     .ok());
         QCOMPARE(m_sales->countSearch(QStringLiteral("qtest")), 3);
         QCOMPARE(m_sales->countSearch(QStringLiteral("QTest Zeta")), 1);
@@ -272,8 +279,8 @@ class TstRepositories : public QObject
         const auto desc
             = m_sales->searchPaged(QStringLiteral("qtest"), QStringLiteral("total"), false, 10, 0);
         QCOMPARE(desc.size(), 3);
-        QCOMPARE(desc[0].total, 300.0);
-        QCOMPARE(desc[2].total, 100.0);
+        QCOMPARE(desc[0].total, Money::fromCop(300.0));
+        QCOMPARE(desc[2].total, Money::fromCop(100.0));
         // Página 2 de a 2 con filtro: 1 resto.
         const auto p2
             = m_sales->searchPaged(QStringLiteral("qtest"), QStringLiteral("id"), true, 2, 2);
@@ -287,7 +294,7 @@ class TstRepositories : public QObject
         auto c = svc.create(QStringLiteral("TecnoMayorista SAS"), QStringLiteral("P002"), 5,
                             QStringLiteral("tester"));
         QVERIFY(c.ok());
-        QCOMPARE(c.value().total, 28000.0 * 5);
+        QCOMPARE(c.value().total, Money::fromCop(28000.0 * 5));
         QCOMPARE(c.value().status, QStringLiteral("Pendiente"));
 
         auto r = svc.receive(c.value().id, QStringLiteral("tester"));
@@ -296,8 +303,8 @@ class TstRepositories : public QObject
         QCOMPARE(m_products->findBySku(QStringLiteral("P002"))->stock, 45 + 5);
         auto cxp = m_cxp->find(c.value().id);
         QVERIFY(cxp.has_value());
-        QCOMPARE(cxp->balance, 140000.0);
-        QCOMPARE(cxp->discountEarly, 2.0); // regla TecnoMayorista
+        QCOMPARE(cxp->balance, Money::fromCop(140000.0));
+        QCOMPARE(cxp->discountEarly, Money::fromCop(2.0)); // regla TecnoMayorista
 
         QVERIFY(!svc.receive(c.value().id, QStringLiteral("tester")).ok()); // ya recibida
         QVERIFY(!svc.cancel(c.value().id, QStringLiteral("tester")).ok());  // recibida
@@ -318,32 +325,33 @@ class TstRepositories : public QObject
         SaleRepository::NewSale ns;
         ns.clientName = QStringLiteral("María López");
         ns.vendedor = QStringLiteral("tester");
-        ns.subtotal = 200000;
-        ns.total = 200000;
-        ns.payments = {{"efectivo", 50000.0}, {"credito", 150000.0}};
-        ns.items = {SaleItem{2, 1, 45000.0}};
+        ns.subtotal = Money::fromCop(200000);
+        ns.total = Money::fromCop(200000);
+        ns.payments = QMap<QString, Money>{{QStringLiteral("efectivo"), Money::fromCop(50000.0)},
+                                           {QStringLiteral("credito"), Money::fromCop(150000.0)}};
+        ns.items = {SaleItem{2, 1, Money::fromCop(45000.0)}};
         auto s = m_sales->create(ns);
         QVERIFY(s.ok());
         QCOMPARE(s.value().status, QStringLiteral("Pendiente"));
-        QCOMPARE(s.value().paid, 50000.0);
-        QCOMPARE(s.value().balance, 150000.0);
+        QCOMPARE(s.value().paid, Money::fromCop(50000.0));
+        QCOMPARE(s.value().balance, Money::fromCop(150000.0));
 
         QVERIFY(!m_cxc->pending().isEmpty());
         QVERIFY(!m_cxc
-                     ->addPayment(s.value().id, 999999, QStringLiteral("Efectivo"),
+                     ->addPayment(s.value().id, Money::fromCop(999999), QStringLiteral("Efectivo"),
                                   QStringLiteral("tester"))
                      .ok()); // sobrepago
-        auto p1 = m_cxc->addPayment(s.value().id, 50000, QStringLiteral("Efectivo"),
+        auto p1 = m_cxc->addPayment(s.value().id, Money::fromCop(50000), QStringLiteral("Efectivo"),
                                     QStringLiteral("tester"));
         QVERIFY(p1.ok());
-        QCOMPARE(p1.value().balance, 100000.0);
-        auto p2 = m_cxc->addPayment(s.value().id, 100000, QStringLiteral("Transferencia"),
-                                    QStringLiteral("tester"));
+        QCOMPARE(p1.value().balance, Money::fromCop(100000.0));
+        auto p2 = m_cxc->addPayment(s.value().id, Money::fromCop(100000),
+                                    QStringLiteral("Transferencia"), QStringLiteral("tester"));
         QVERIFY(p2.ok());
         QCOMPARE(p2.value().status, QStringLiteral("Pagada"));
         QCOMPARE(m_cxc->paymentsFor(s.value().id).size(), 2);
         QVERIFY(!m_cxc
-                     ->addPayment(s.value().id, 1000, QStringLiteral("Efectivo"),
+                     ->addPayment(s.value().id, Money::fromCop(1000), QStringLiteral("Efectivo"),
                                   QStringLiteral("tester"))
                      .ok()); // sin saldo
     }
@@ -354,59 +362,59 @@ class TstRepositories : public QObject
         p.id = QStringLiteral("CXPT1");
         p.supplier = QStringLiteral("OfiSurte SAS");
         p.due = QDate::currentDate().addDays(20).toString(Qt::ISODate);
-        p.amount = 100000;
-        p.balance = 100000;
-        p.discountEarly = 10.0;
+        p.amount = Money::fromCop(100000);
+        p.balance = Money::fromCop(100000);
+        p.discountEarly = Money::fromCop(10.0);
         p.status = QStringLiteral("Pendiente");
         QVERIFY(m_cxp->create(p).ok());
         QVERIFY(!m_cxp->pending().isEmpty());
 
-        auto r1 = m_cxp->addPayment(QStringLiteral("CXPT1"), 40000, QStringLiteral("Transferencia"),
-                                    QStringLiteral("tester"));
+        auto r1 = m_cxp->addPayment(QStringLiteral("CXPT1"), Money::fromCop(40000),
+                                    QStringLiteral("Transferencia"), QStringLiteral("tester"));
         QVERIFY(r1.ok());
-        QCOMPARE(r1.value().payable.balance, 60000.0);
-        QCOMPARE(r1.value().earlyDiscount, 4000.0); // pronto pago 10 %
-        auto r2 = m_cxp->addPayment(QStringLiteral("CXPT1"), 60000, QStringLiteral("Transferencia"),
-                                    QStringLiteral("tester"));
+        QCOMPARE(r1.value().payable.balance, Money::fromCop(60000.0));
+        QCOMPARE(r1.value().earlyDiscount, Money::fromCop(4000.0)); // pronto pago 10 %
+        auto r2 = m_cxp->addPayment(QStringLiteral("CXPT1"), Money::fromCop(60000),
+                                    QStringLiteral("Transferencia"), QStringLiteral("tester"));
         QVERIFY(r2.ok());
         QCOMPARE(r2.value().payable.status, QStringLiteral("Pagada"));
         QVERIFY(!m_cxp
-                     ->addPayment(QStringLiteral("CXPT1"), 1, QStringLiteral("Efectivo"),
-                                  QStringLiteral("tester"))
+                     ->addPayment(QStringLiteral("CXPT1"), Money::fromCop(1),
+                                  QStringLiteral("Efectivo"), QStringLiteral("tester"))
                      .ok()); // excede saldo
         QVERIFY(!m_cxp
-                     ->addPayment(QStringLiteral("NOPE"), 1, QStringLiteral("Efectivo"),
-                                  QStringLiteral("tester"))
+                     ->addPayment(QStringLiteral("NOPE"), Money::fromCop(1),
+                                  QStringLiteral("Efectivo"), QStringLiteral("tester"))
                      .ok());
     }
 
     void moraCalc()
     {
         Sale overdue;
-        overdue.balance = 300000;
+        overdue.balance = Money::fromCop(300000);
         overdue.due = QDate::currentDate().addDays(-60).toString(Qt::ISODate);
         // 2 meses × 2 % × 300000 = 12000
-        QVERIFY(qFuzzyCompare(ReceivablesRepository::mora(overdue), 12000.0));
+        QCOMPARE(ReceivablesRepository::mora(overdue), Money::fromCop(12000.0));
 
         Sale future = overdue;
         future.due = QDate::currentDate().addDays(10).toString(Qt::ISODate);
-        QCOMPARE(ReceivablesRepository::mora(future), 0.0);
+        QCOMPARE(ReceivablesRepository::mora(future), Money());
 
         Sale settled = overdue;
-        settled.balance = 0;
-        QCOMPARE(ReceivablesRepository::mora(settled), 0.0);
+        settled.balance = Money();
+        QCOMPARE(ReceivablesRepository::mora(settled), Money());
     }
 
     void docFlow()
     {
         auto cot
             = m_sales->createDocument(QStringLiteral("Cotización"), QStringLiteral("Juan Pérez"),
-                                      50000, QStringLiteral("tester"));
+                                      Money::fromCop(50000), QStringLiteral("tester"));
         QVERIFY(cot.ok());
         QVERIFY(cot.value().id.startsWith(QStringLiteral("COT")));
         QVERIFY(!m_sales
-                     ->createDocument(QStringLiteral("Factura X"), QStringLiteral("Juan Pérez"), 1,
-                                      QStringLiteral("tester"))
+                     ->createDocument(QStringLiteral("Factura X"), QStringLiteral("Juan Pérez"),
+                                      Money::fromCop(1), QStringLiteral("tester"))
                      .ok());
 
         // Fase 5: máquina documental (sin saltos: COT→Pedido→Facturada).
@@ -424,7 +432,7 @@ class TstRepositories : public QObject
         auto f2 = m_sales->advanceStatus(ped.value().id, QStringLiteral("Pagada"),
                                          QStringLiteral("tester"));
         QVERIFY(f2.ok());
-        QCOMPARE(f2.value().balance, 0.0);
+        QCOMPARE(f2.value().balance, Money());
         QCOMPARE(f2.value().paid, f2.value().total);
         QVERIFY(!m_sales
                      ->advanceStatus(ped.value().id, QStringLiteral("Volando"),
@@ -450,25 +458,25 @@ class TstRepositories : public QObject
     {
         const auto v1 = m_sales->find(QStringLiteral("V001"));
         QVERIFY(v1.has_value());
-        auto nc = m_sales->createCreditNote(QStringLiteral("V001"), 100000,
+        auto nc = m_sales->createCreditNote(QStringLiteral("V001"), Money::fromCop(100000),
                                             QStringLiteral("Devolución parcial"),
                                             QStringLiteral("tester"));
         QVERIFY(nc.ok());
         QVERIFY(nc.value().id.startsWith(QStringLiteral("NC")));
         QVERIFY(!m_sales
-                     ->createCreditNote(QStringLiteral("V001"), v1->total + 1,
+                     ->createCreditNote(QStringLiteral("V001"), v1->total + Money::fromCop(1),
                                         QStringLiteral("Motivo"), QStringLiteral("tester"))
                      .ok());
         QVERIFY(!m_sales
-                     ->createCreditNote(QStringLiteral("V001"), 100, QStringLiteral("  "),
-                                        QStringLiteral("tester"))
+                     ->createCreditNote(QStringLiteral("V001"), Money::fromCop(100),
+                                        QStringLiteral("  "), QStringLiteral("tester"))
                      .ok());
-        auto nd = m_sales->createDebitNote(QStringLiteral("V001"), 50000, QStringLiteral("Ajuste"),
-                                           QStringLiteral("tester"));
+        auto nd = m_sales->createDebitNote(QStringLiteral("V001"), Money::fromCop(50000),
+                                           QStringLiteral("Ajuste"), QStringLiteral("tester"));
         QVERIFY(nd.ok());
         QVERIFY(!m_sales
-                     ->createDebitNote(QStringLiteral("NOPE"), 10, QStringLiteral("x"),
-                                       QStringLiteral("tester"))
+                     ->createDebitNote(QStringLiteral("NOPE"), Money::fromCop(10),
+                                       QStringLiteral("x"), QStringLiteral("tester"))
                      .ok());
     }
 

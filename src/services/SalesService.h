@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QSqlDatabase>
 
+#include "../core/Money.h"
 #include "../core/Result.h"
 #include "../domain/Entities.h"
 #include "../repositories/CajaRepository.h"
@@ -32,9 +33,9 @@ class SalesService : public QObject
     struct ServiceItem
     {
         int productId = 0;
-        double qty = 1.0;
-        double priceOverride = 0.0; // 0 ⇒ precio lista
-        double discountPct = 0.0;
+        double qty = 1.0; // cantidad (granel admite fracción) — no es dinero
+        Money priceOverride; // Money() ⇒ precio lista
+        double discountPct = 0.0; // % — no es dinero
         QString serial; // Fase 3: IMEI/serial (productos tracked)
         QString receta; // Fase 3: Nº receta (requires_prescription)
     };
@@ -43,14 +44,14 @@ class SalesService : public QObject
         int productId = 0;
         QString name;
         QString sku;
-        double qty = 0.0;
-        double unitPrice = 0.0;
-        double subtotal = 0.0;
-        double discount = 0.0;
-        double tax = 0.0;
-        double total = 0.0;
+        double qty = 0.0; // cantidad — no es dinero
+        Money unitPrice;
+        Money subtotal;
+        Money discount;
+        Money tax;
+        Money total;
         // Fase 1: tasa efectivamente aplicada (validada contra settings).
-        double taxRate = 0.0;
+        double taxRate = 0.0; // % — no es dinero
         QString taxName;
         // Fase 3: serial/receta de la línea.
         QString serial;
@@ -59,16 +60,16 @@ class SalesService : public QObject
     struct TaxBucket
     {
         QString name;
-        double rate = 0.0;
-        double base = 0.0; // Σ(subtotal − descuento) de sus líneas
-        double tax = 0.0;  // Σ impuesto de sus líneas (agregado, no recalculado)
+        double rate = 0.0; // % — no es dinero
+        Money base; // Σ(subtotal − descuento) de sus líneas
+        Money tax;  // Σ impuesto de sus líneas (agregado, no recalculado)
     };
     struct Totals
     {
-        double subtotal = 0.0;
-        double discount = 0.0;
-        double tax = 0.0;
-        double total = 0.0;
+        Money subtotal;
+        Money discount;
+        Money tax;
+        Money total;
         int itemsCount = 0;
         QList<LineTotal> lines;
         QList<TaxBucket> buckets; // desglose por tasa
@@ -76,7 +77,7 @@ class SalesService : public QObject
     struct CreatedSale
     {
         QString id;
-        double total = 0.0;
+        Money total;
         QString cufe;
         QString status;
         QList<LineTotal> items;
@@ -89,11 +90,13 @@ class SalesService : public QObject
                           SettingsService *settings = nullptr, AuditRepository *audit = nullptr,
                           SerialRepository *serials = nullptr, QObject *parent = nullptr);
 
-    // Crea venta completa. payments: {"efectivo": X, "credito": Y} o vacío +
+    // Crea venta completa. payments: {"efectivo": Money, "credito": Money} o vacío +
     // paymentMethod ("Efectivo"|"Credito"|...). promoCode opcional.
     // role: rol del vendedor (productos controlled exigen Administrador).
+    // QML bridge: PosController convierte QVariantMap (double redondeado a
+    // cent) → QMap<QString,Money> en la frontera (Money::fromCop).
     Result<CreatedSale> create(const QList<ServiceItem> &items, const QString &clientName,
-                               const QMap<QString, double> &payments, const QString &paymentMethod,
+                               const QMap<QString, Money> &payments, const QString &paymentMethod,
                                const QString &promoCode, const QString &vendedor,
                                bool offline = false, const QString &role = {});
     Result<CreatedSale> cancel(const QString &saleId, const QString &reason, const QString &user,
@@ -115,7 +118,7 @@ class SalesService : public QObject
     Result<Totals> buildTotals(const QList<ServiceItem> &items, QString &error,
                                const QString &clientName = {}) const;
     // Fase 4: precio según lista del cliente (mayorista → price_wholesale).
-    double priceFor(const Product &p, double priceOverride, const QString &clientName) const;
+    Money priceFor(const Product &p, Money priceOverride, const QString &clientName) const;
     // Fase 3: producto con seguimiento de serial (flag attrs o seriales registrados).
     bool isTracked(const Product &p) const;
 

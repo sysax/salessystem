@@ -20,7 +20,7 @@ QList<PurchaseItem> PurchaseRepository::parseItems(const QString &json)
         PurchaseItem it;
         it.sku = o.value(QStringLiteral("sku")).toString();
         it.qty = o.value(QStringLiteral("qty")).toDouble();
-        it.priceBuy = o.value(QStringLiteral("price_buy")).toDouble();
+        it.priceBuy = Money::fromCop(o.value(QStringLiteral("price_buy")).toDouble());
         out << it;
     }
     return out;
@@ -33,7 +33,7 @@ QString PurchaseRepository::itemsToJson(const QList<PurchaseItem> &items)
         QJsonObject o;
         o[QStringLiteral("sku")] = it.sku;
         o[QStringLiteral("qty")] = it.qty;
-        o[QStringLiteral("price_buy")] = it.priceBuy;
+        o[QStringLiteral("price_buy")] = it.priceBuy.toCop();
         arr << o;
     }
     return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
@@ -45,7 +45,7 @@ Purchase PurchaseRepository::rowToPurchase(const QSqlQuery &q)
     p.id = q.value(QStringLiteral("id")).toString();
     p.date = q.value(QStringLiteral("date")).toString();
     p.supplier = q.value(QStringLiteral("supplier")).toString();
-    p.total = q.value(QStringLiteral("total")).toDouble();
+    p.total = Money::fromCop(q.value(QStringLiteral("total")).toDouble());
     p.status = q.value(QStringLiteral("status")).toString();
     p.items = parseItems(q.value(QStringLiteral("items_json")).toString());
     p.notes = q.value(QStringLiteral("notes")).toString();
@@ -84,7 +84,7 @@ Result<Purchase> PurchaseRepository::insert(const Purchase &p)
     q.addBindValue(p.id);
     q.addBindValue(p.date);
     q.addBindValue(p.supplier);
-    q.addBindValue(p.total);
+    q.addBindValue(p.total.toCop());
     q.addBindValue(p.status);
     q.addBindValue(itemsToJson(p.items));
     q.addBindValue(p.notes);

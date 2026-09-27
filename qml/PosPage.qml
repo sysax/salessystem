@@ -183,6 +183,11 @@ RowLayout {
         return methodBox.currentText === "Efectivo" || methodBox.currentText === "Mixto";
     }
     function cashValue() {
+        // MoneyField normaliza es_CO ("10.000,50"); fallback a parseFloat si cambia el tipo.
+        try {
+            if (cashField.amount !== undefined)
+                return cashField.amount();
+        } catch (e) {}
         return parseFloat(cashField.text) || 0;
     }
     function cartTotal() {
@@ -452,13 +457,22 @@ RowLayout {
             implicitHeight: root.touchH
             model: ["Efectivo", "Transferencia", "Tarjeta", "Credito", "Mixto"]
         }
-        TextField {
+        // Fase 2: efectivo/cash >= 0 con máx. 2 decimales (MoneyField + Money backend).
+        MoneyField {
             id: cashField
+            label: qsTr("Efectivo recibido")
             placeholderText: qsTr("Efectivo recibido")
             Layout.fillWidth: true
             implicitHeight: root.touchH
-            inputMethodHints: Qt.ImhDigitsOnly
-            validator: DoubleValidator { bottom: 0 }
+            maxValue: 999999999
+            allowNegative: false
+            maxDecimals: 2
+        }
+        Label {
+            visible: cashField.errorText !== ""
+            text: cashField.errorText
+            color: Theme.error
+            font.pixelSize: Theme.fontS
         }
         TextField {
             id: clientField
@@ -485,9 +499,13 @@ RowLayout {
             font.pixelSize: Theme.fontL
             enabled: root.canCharge()
             onClicked: {
+                if (!cashField.isValid()) {
+                    Utils.showToast("error", cashField.errorText || qsTr("Efectivo inválido"), 3000);
+                    return;
+                }
                 var pays = {};
                 if (methodBox.currentText === "Mixto" || methodBox.currentText === "Efectivo") {
-                    var cash = parseFloat(cashField.text) || 0;
+                    var cash = root.cashValue();
                     if (cash > 0)
                         pays["efectivo"] = cash;
                 }
@@ -520,18 +538,28 @@ RowLayout {
                 }
                 RowLayout {
                     spacing: Theme.spacingSmall
-                    TextField {
+                    // Fase 2: apertura/cierre de caja >= 0, 2 decimales.
+                    MoneyField {
                         id: cajaField
                         placeholderText: qsTr("Monto")
+                        label: qsTr("Monto")
                         Layout.fillWidth: true
                         implicitHeight: root.touchH
+                        maxValue: 999999999
+                        allowNegative: false
+                        maxDecimals: 2
                     }
                     Button {
                         text: pos.caja.open ? qsTr("Cerrar") : qsTr("Abrir")
                         implicitHeight: root.touchH
                         implicitWidth: 100
                         onClicked: {
-                            var r = pos.caja.open ? pos.closeCaja(parseFloat(cajaField.text) || 0, auth.currentUser, cajaReason.text) : pos.openCaja(parseFloat(cajaField.text) || 0, auth.currentUser);
+                            if (!cajaField.isValid()) {
+                                Utils.showToast("error", cajaField.errorText || qsTr("Monto inválido"), 3000);
+                                return;
+                            }
+                            var counted = cajaField.amount();
+                            var r = pos.caja.open ? pos.closeCaja(counted, auth.currentUser, cajaReason.text) : pos.openCaja(counted, auth.currentUser);
                             if (r.ok) {
                                 if (r.diff !== undefined)
                                     Utils.showToast("warning", "Diferencia: " + money(r.diff), 3000);
@@ -551,6 +579,14 @@ RowLayout {
                     placeholderText: qsTr("Motivo (si hay diferencia al cerrar)")
                     Layout.fillWidth: true
                     implicitHeight: root.touchH
+                }
+                Label {
+                    visible: cajaField.errorText !== ""
+                    text: cajaField.errorText
+                    color: Theme.error
+                    font.pixelSize: Theme.fontS
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
                 }
             }
         }
@@ -626,12 +662,16 @@ RowLayout {
                 Layout.fillWidth: true
                 font.bold: true
             }
-            TextField {
+            // Fase 2: qty pesable admite 3 decimales (>0); precio solo 2 (backend Money).
+            MoneyField {
                 id: qtyField
                 placeholderText: qsTr("Cantidad (ej. 0.350)")
+                label: qsTr("Cantidad (ej. 0.350)")
                 Layout.fillWidth: true
-                validator: DoubleValidator { bottom: 0.001; decimals: 3 }
-                inputMethodHints: Qt.ImhFormattedNumbersOnly
+                maxValue: 999999
+                allowNegative: false
+                maxDecimals: 3
+                onErrorTextChanged: qtyErr.text = errorText
             }
             Label {
                 id: qtyErr
@@ -641,8 +681,13 @@ RowLayout {
             }
         }
         onAccepted: {
-            var q = parseFloat(qtyField.text) || 0;
-            if (q <= 0) {
+            if (!qtyField.isValid()) {
+                qtyErr.text = qtyField.errorText || qsTr("Cantidad inválida.");
+                open();
+                return;
+            }
+            var q = qtyField.parsedValue();
+            if (!(q > 0)) {
                 qtyErr.text = qsTr("Cantidad mayor a 0.");
                 open();
                 return;

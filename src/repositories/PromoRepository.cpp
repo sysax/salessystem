@@ -217,20 +217,20 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart, con
         return Result<PromoDiscount>::failure(
             QStringLiteral("Promo %1 agotó sus %2 usos").arg(promo->code).arg(promo->maxUses));
 
-    double subtotal = 0.0;
+    Money subtotal;
     double qtyTotal = 0.0;
     for (const CartLine &l : cart) {
         subtotal += l.subtotal;
         qtyTotal += l.qty;
     }
-    double discount = 0.0;
+    Money discount;
     const QString cond = promo->condition;
     if (promo->type == QLatin1String("porcentaje")) {
         const QString c = cond.toLower();
         if (!c.isEmpty() && c != QLatin1String("min 5000") && c != QLatin1String("min 500000")
             && c != QLatin1String("qty>=10")) {
             // Condición = categoría
-            double catTotal = 0.0;
+            Money catTotal;
             for (const CartLine &l : cart) {
                 QString cat = l.cat;
                 if (cat.isEmpty() && m_products) {
@@ -240,9 +240,13 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart, con
                 if (!cat.isEmpty() && cat.toLower() == c)
                     catTotal += l.subtotal;
             }
-            discount = catTotal > 0 ? catTotal * promo->value / 100.0 : 0.0;
+            discount = catTotal.isPositive()
+                           ? Money(std::llround(static_cast<double>(catTotal.cents())
+                                                * promo->value / 100.0))
+                           : Money();
         } else {
-            discount = subtotal * promo->value / 100.0;
+            discount = Money(std::llround(static_cast<double>(subtotal.cents()) * promo->value
+                                          / 100.0));
         }
     } else if (promo->type == QLatin1String("monto_fijo")) {
         double minVal = 0.0;
@@ -258,8 +262,8 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart, con
             if (!ok)
                 minVal = 0.0;
         }
-        if (subtotal >= minVal)
-            discount = promo->value;
+        if (subtotal >= Money::fromCop(minVal))
+            discount = Money::fromCop(promo->value);
     } else if (promo->type == QLatin1String("2x1")) {
         const QString sku = cond.trimmed();
         for (const CartLine &l : cart) {
@@ -285,10 +289,13 @@ Result<PromoDiscount> PromoRepository::evaluate(const QList<CartLine> &cart, con
         }
     } else if (promo->type == QLatin1String("volumen")) {
         if (qtyTotal >= 10)
-            discount = subtotal * promo->value / 100.0;
+            discount = Money(std::llround(static_cast<double>(subtotal.cents()) * promo->value
+                                          / 100.0));
     } else if (promo->type == QLatin1String("cupon")
                || promo->type == QLatin1String("happy_hour")) {
-        discount = promo->value ? subtotal * promo->value / 100.0 : 0.0;
+        discount = promo->value ? Money(std::llround(static_cast<double>(subtotal.cents())
+                                                     * promo->value / 100.0))
+                                : Money();
     }
     d.discount = std::min(discount, subtotal);
     d.promoName = promo->name;

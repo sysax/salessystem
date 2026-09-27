@@ -2,6 +2,8 @@
 
 #include <QSqlQuery>
 
+#include <cmath>
+
 #include "../core/EventBus.h"
 #include "../core/Transaction.h"
 
@@ -12,7 +14,7 @@ InventoryService::InventoryService(QSqlDatabase db, ProductRepository *products,
 }
 
 Result<InventoryService::StockResult>
-InventoryService::registerPurchase(int productId, double qty, double cost, const QString &supplier,
+InventoryService::registerPurchase(int productId, double qty, Money cost, const QString &supplier,
                                    const QString &invoice, const QString &user, const QString &lote,
                                    const QString &vencimiento)
 {
@@ -23,7 +25,12 @@ InventoryService::registerPurchase(int productId, double qty, double cost, const
         return Result<StockResult>::failure(QStringLiteral("Producto %1 no existe").arg(productId));
 
     const double newStock = p->stock + qty;
-    const double newCost = (p->stock * p->priceBuy + qty * cost) / (newStock > 0 ? newStock : 1);
+    // Promedio ponderado en céntimos (redondeado al céntimo).
+    const qint64 newCents = static_cast<qint64>(std::llround(
+        (p->stock * static_cast<double>(p->priceBuy.cents())
+         + qty * static_cast<double>(cost.cents()))
+        / (newStock > 0 ? newStock : 1)));
+    const Money newCost = Money::fromCents(newCents);
     // Fase 1: costo + stock + movimiento en una transacción.
     Transaction tx(m_db);
     if (!tx.isValid())
@@ -38,7 +45,7 @@ InventoryService::registerPurchase(int productId, double qty, double cost, const
             p->sku, p->name, QStringLiteral("Entrada"), qty, p->stock, newStock,
             QStringLiteral("Compra %1 uds a $%2 (%3)%4")
                 .arg(qty)
-                .arg(cost, 0, 'f', 0)
+                .arg(cost.toCop(), 0, 'f', 0)
                 .arg(supplier)
                 .arg(invoice.isEmpty() ? QString() : QStringLiteral(" ") + invoice),
             user)) {
@@ -143,33 +150,55 @@ Result<InventoryService::StockResult> InventoryService::registerWaste(const QStr
     return Result<StockResult>::success(r);
 }
 
-StatusResult InventoryService::transfer(const QString &sku, double qty, const QString &toLocation,
-                                        const QString &reason, const QString &user)
+StatusResult InventoryService::transfer(const QString &sku, double qty,
+                                          const QString &fromLocation, const QString &toLocation,
+                                          const QString &reason, const QString &user)
 {
     const auto p = m_products->findBySku(sku);
     if (!p)
         return StatusResult::failure(QStringLiteral("SKU %1 no encontrado").arg(sku));
-    if (toLocation.trimmed().isEmpty())
+    const QString from = fromLocation.trimmed().isEmpty() ? p->location.trimmed() : fromLocation.trimmed();
+    const QString to = toLocation.trimmed();
+    if (to.isEmpty())
         return StatusResult::failure(QStringLiteral("Ubicación destino requerida"));
+    if (from.isEmpty())
+        return StatusResult::failure(QStringLiteral("Ubicación origen requerida"));
+    if (from == to)
+        return StatusResult::failure(QStringLiteral("Origen y destino iguales"));
     if (reason.trimmed().isEmpty())
         return StatusResult::failure(QStringLiteral("Motivo requerido"));
-    if (qty <= 0 || qty > p->stock)
-        return StatusResult::failure(QStringLiteral("Cantidad inválida: stock %1").arg(p->stock));
-    // Fase 1: cambio de ubicación + movimiento en una transacción.
+    if (qty <= 0)
+        return StatusResult::failure(QStringLiteral("Cantidad >0"));
+    auto *ledger = m_products->locations();
+    const auto src = ledger->findByName(from);
+    if (!src)
+        return StatusResult::failure(QStringLiteral("Almacén origen %1 no existe").arg(from));
+    if (ledger->stockAt(sku, src->id) < qty - 1e-9)
+        return StatusResult::failure(
+            QStringLiteral("Sin existencias en %1 (hay %2)").arg(from).arg(ledger->stockAt(sku, src->id)));
+    auto dst = ledger->ensureLocation(to);
+    if (!dst.ok())
+        return StatusResult::failure(dst.error());
+    // Fase 1+6: ledger + movimientos + etiqueta en una transacción.
     Transaction tx(m_db);
     if (!tx.isValid())
         return StatusResult::failure(QStringLiteral("No se pudo iniciar la transacción"));
+    if (!ledger->transferStock(sku, src->id, dst.value().id, qty))
+        return StatusResult::failure(QStringLiteral("No se pudo mover %1 de %2 a %3").arg(sku, from, to));
+    const double srcAfter = ledger->stockAt(sku, src->id);
+    const double dstAfter = ledger->stockAt(sku, dst.value().id);
+    if (!m_inventory->record(sku, p->name, QStringLiteral("Transferencia"), -qty, srcAfter + qty,
+                             srcAfter, QStringLiteral("%1->%2 %3").arg(from, to, reason.trimmed().left(30)),
+                             user, from, to))
+        return StatusResult::failure(QStringLiteral("No se pudo registrar la salida"));
+    if (!m_inventory->record(sku, p->name, QStringLiteral("Transferencia"), qty, dstAfter - qty,
+                             dstAfter, QStringLiteral("%1->%2 %3").arg(from, to, reason.trimmed().left(30)),
+                             user, from, to))
+        return StatusResult::failure(QStringLiteral("No se pudo registrar la entrada"));
     Product upd = *p;
-    upd.location = toLocation.trimmed();
-    auto r = m_products->update(sku, upd);
-    if (!r.ok())
-        return StatusResult::failure(r.error());
-    if (!m_inventory->record(sku, p->name, QStringLiteral("Transferencia"), qty, p->stock, p->stock,
-                             QStringLiteral("%1->%2 %3")
-                                 .arg(p->location, toLocation.trimmed(), reason.trimmed().left(30)),
-                             user)) {
-        return StatusResult::failure(QStringLiteral("No se pudo registrar el movimiento"));
-    }
+    upd.location = to;
+    if (!m_products->update(sku, upd).ok())
+        return StatusResult::failure(QStringLiteral("No se pudo etiquetar el destino"));
     if (!tx.commit())
         return StatusResult::failure(QStringLiteral("No se pudo confirmar la transferencia"));
     return StatusResult::success({});
@@ -191,7 +220,7 @@ InventoryService::Valuation InventoryService::valuation() const
     const InventoryValue val = m_inventory->value();
     v.totalValue = val.costValue;
     for (const Product &p : m_products->list()) {
-        if (p.stock * p.priceBuy > 0)
+        if ((p.priceBuy * p.stock).isPositive())
             ++v.productsCount;
     }
     return v;
@@ -319,33 +348,33 @@ InventoryService::Valuation InventoryService::valuation(const QString &method) c
     return valuation();
 }
 
-Result<double> InventoryService::consumeFifo(const QString &sku, double qty)
+Result<Money> InventoryService::consumeFifo(const QString &sku, double qty)
 {
     // Fase 5: salida PEPS sin tocar products.stock (el llamador descuenta
     // el físico en la misma transacción que la venta/ajuste).
     if (qty <= 1e-9)
-        return Result<double>::failure(QStringLiteral("Cantidad >0"));
+        return Result<Money>::failure(QStringLiteral("Cantidad >0"));
     Transaction tx(m_db);
     if (!tx.isValid())
-        return Result<double>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+        return Result<Money>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     double need = qty;
-    double cogs = 0.0;
+    Money cogs;
     for (const Lot &l : m_inventory->lotsBySku(sku)) {
         if (need <= 1e-9)
             break;
         const double take = qMin(need, l.qty);
         if (!m_inventory->reduceLot(l.id, take))
-            return Result<double>::failure(
+            return Result<Money>::failure(
                 QStringLiteral("No se pudo consumir el lote %1").arg(l.id));
         need -= take;
-        cogs += take * l.cost;
+        cogs += l.cost * take;
     }
     if (need > 1e-9)
-        return Result<double>::failure(
+        return Result<Money>::failure(
             QStringLiteral("Lotes insuficientes para %1 (faltan %2)").arg(sku).arg(need));
     if (!tx.commit())
-        return Result<double>::failure(QStringLiteral("No se pudo confirmar el consumo PEPS"));
-    return Result<double>::success(cogs);
+        return Result<Money>::failure(QStringLiteral("No se pudo confirmar el consumo PEPS"));
+    return Result<Money>::success(cogs);
 }
 
 Result<InventoryCount> InventoryService::startCount(const QString &sku, double counted,

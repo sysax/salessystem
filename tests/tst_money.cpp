@@ -52,6 +52,62 @@ class TstMoney : public QObject
         QVERIFY(s.contains(QStringLiteral("1.850.000")));
         QVERIFY(!s.contains(u'.') || s.endsWith(QStringLiteral("0")));
     }
+
+    void fromCopHalfAway()
+    {
+        // fromCop usa llround (half-away sobre el valor double real).
+        // Ojo binario: 1.005 en double es 1.004999... → 100 cents.
+        QCOMPARE(Money::fromCop(1.005).cents(), (qint64)100);
+        // Casos exactos en binario sí redondean half-away hacia arriba.
+        QCOMPARE(Money::fromCop(0.005).cents(), (qint64)1);
+        QCOMPARE(Money::fromCop(2.675).cents(), (qint64)268);
+        QCOMPARE(Money::fromCop(-0.005).cents(), (qint64)-1);
+    }
+
+    void tryParseEsCo()
+    {
+        Money out;
+        QString err;
+        QVERIFY(Money::tryParse(QStringLiteral("10.000,50"), false, out, err));
+        QCOMPARE(out.cents(), (qint64)1000050);
+        QVERIFY(Money::tryParse(QStringLiteral("1.850.000"), false, out, err));
+        QCOMPARE(out.cents(), (qint64)185000000);
+        // "10.999" con un punto y 3 decimales se lee como miles es_CO
+        // ("1.850" ⇒ 1850): 10999 COP.
+        QVERIFY(Money::tryParse(QStringLiteral("10.999"), false, out, err));
+        QCOMPARE(out.cents(), (qint64)1099900);
+        // Con coma decimal, 3 decimales sí se rechazan (>2 decimales).
+        QVERIFY(!Money::tryParse(QStringLiteral("10,999"), false, out, err));
+        // Negativos rechazados por defecto, aceptados con flag.
+        QVERIFY(!Money::tryParse(QStringLiteral("-5"), false, out, err));
+        QVERIFY(Money::tryParse(QStringLiteral("-5"), true, out, err));
+        QCOMPARE(out, Money::fromCop(-5.0));
+    }
+
+    void maxCentsClamp()
+    {
+        // Tope operativo: fromCop recorta a MaxCents, tryParse lo rechaza.
+        QCOMPARE(Money::fromCop(1e15).cents(), Money::MaxCents);
+        Money out;
+        QString err;
+        QVERIFY(!Money::tryParse(QStringLiteral("99999999999999"), false, out, err));
+    }
+
+    void operators()
+    {
+        const Money a = Money::fromCop(100.0);
+        const Money b = Money::fromCop(100.0);
+        QVERIFY(a == b);
+        QVERIFY(!(a < b));
+        QVERIFY(a <= b);
+        QVERIFY(!(a > b));
+        QVERIFY(a >= b);
+        QVERIFY(Money() < a);
+        // Multiplicación por cantidad entera y fraccionaria (granel).
+        QCOMPARE((a * 3).cents(), Money::fromCop(300.0).cents());
+        QCOMPARE((a * 0.35).cents(), Money::fromCop(35.0).cents());
+        QCOMPARE((0.35 * a).cents(), Money::fromCop(35.0).cents());
+    }
 };
 
 QTEST_MAIN(TstMoney)

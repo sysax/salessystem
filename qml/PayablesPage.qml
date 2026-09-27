@@ -58,13 +58,28 @@ ColumnLayout {
         standardButtons: Dialog.Ok | Dialog.Cancel
         property string payId: ""
         ColumnLayout {
-            TextField {
+            // Fase 2: pago >= 0, 2 decimales (MoneyField + Money backend).
+            MoneyField {
                 id: payAmount
                 placeholderText: qsTr("Monto")
+                label: qsTr("Monto")
+                Layout.fillWidth: true
+                maxValue: 999999999
+                allowNegative: false
+                maxDecimals: 2
+            }
+            Label {
+                visible: payAmount.errorText !== ""
+                text: payAmount.errorText
+                color: Theme.error
             }
         }
         onAccepted: {
-            var r = cxpCtl.pay(payDialog.payId, parseFloat(payAmount.text) || 0, "Transferencia", auth.currentUser);
+            if (!payAmount.isValid()) {
+                open();
+                return;
+            }
+            var r = cxpCtl.pay(payDialog.payId, payAmount.amount(), "Transferencia", auth.currentUser);
             msg.text = r.ok ? qsTr("Pagado. Descuento pronto pago: ") + money(r.earlyDiscount) : r.error;
             if (!r.ok)
                 open();

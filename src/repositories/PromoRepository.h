@@ -11,19 +11,21 @@
 // Promociones — CRUD + evaluación de descuento sobre carrito.
 // Tipos: porcentaje|monto_fijo|2x1|3x2|volumen|cupon|happy_hour
 // (semántica idéntica a Repository.apply_promo).
+// Fase 2 (cierre): importes en Money (céntimos); qty en double (granel),
+// value % en double (Promo::value polimórfico).
 struct CartLine
 {
     int productId = 0;
     QString sku;
     QString cat;
-    double price = 0.0;
+    Money price;
     double qty = 0.0; // Fase 2: decimal (2x1/3x2 solo cuentan unidades enteras)
-    double subtotal = 0.0;
+    Money subtotal;
 };
 
 struct PromoDiscount
 {
-    double discount = 0.0;
+    Money discount;
     QString promoName;
     QString promoCode;
 };

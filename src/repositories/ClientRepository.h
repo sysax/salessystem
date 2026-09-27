@@ -29,8 +29,8 @@ class ClientRepository : public QObject
     StatusResult remove(int id);
 
     // Crédito comercial (ventas a crédito y abonos CxC)
-    bool addCredit(const QString &name, double amount); // suma a credit+balance
-    bool payCredit(const QString &name, double amount); // resta con piso 0
+    bool addCredit(const QString &name, Money amount); // suma a credit+balance
+    bool payCredit(const QString &name, Money amount); // resta con piso 0
 
     static Client rowToClient(const QSqlQuery &q);
 

@@ -21,12 +21,12 @@ class InventoryService : public QObject
     struct StockResult
     {
         QString sku;
-        double newStock = 0.0;
-        double newCost = 0.0;
+        double newStock = 0.0; // cantidad — no es dinero
+        Money newCost; // costo promedio ponderado
     };
     struct Valuation
     {
-        double totalValue = 0.0;
+        Money totalValue;
         int productsCount = 0;
     };
 
@@ -36,7 +36,7 @@ class InventoryService : public QObject
 
     // Entrada por compra: costo promedio ponderado + movimiento "Entrada"
     // (Fase 5: también abre lote PEPS con el costo de la entrada).
-    Result<StockResult> registerPurchase(int productId, double qty, double cost,
+    Result<StockResult> registerPurchase(int productId, double qty, Money cost,
                                          const QString &supplier, const QString &invoice,
                                          const QString &user, const QString &lote = {},
                                          const QString &vencimiento = {});
@@ -46,9 +46,11 @@ class InventoryService : public QObject
     // Fase 4: merma (salida tipo "Merma" para el reporte de desperdicio).
     Result<StockResult> registerWaste(const QString &sku, double qty, const QString &reason,
                                       const QString &user);
-    // Cambio de ubicación (sin mover unidades)
-    StatusResult transfer(const QString &sku, double qty, const QString &toLocation,
-                          const QString &reason, const QString &user);
+    // Fase 6: traspaso real origen → destino (mueve unidades; el agregado
+    // global no cambia). El destino se crea si no existe; el motivo es
+    // obligatorio. products.location queda como etiqueta del último destino.
+    StatusResult transfer(const QString &sku, double qty, const QString &fromLocation,
+                          const QString &toLocation, const QString &reason, const QString &user);
     // Fase 3: apartar/liberar stock (no tocan el físico; el POS vende
     // contra disponible = físico − reservado).
     struct ReserveResult
@@ -68,7 +70,7 @@ class InventoryService : public QObject
     QList<InventoryMovement> movementsBySku(const QString &sku) const;
     // Fase 5: salida PEPS (consume lotes por vencimiento; devuelve costo
     // de lo consumido). No toca products.stock (lo hace el llamador).
-    Result<double> consumeFifo(const QString &sku, double qty);
+    Result<Money> consumeFifo(const QString &sku, double qty);
     // Fase 5: conteos cíclicos (conteo → diferencia → ajuste justificado).
     Result<InventoryCount> startCount(const QString &sku, double counted, const QString &reason,
                                      const QString &user);

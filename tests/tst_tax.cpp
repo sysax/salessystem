@@ -91,11 +91,11 @@ class TstTax : public QObject
             = m_svc->calculateTotals({SI{.productId = mkProduct("T0", "Excluido"), .qty = 1},
                                       SI{.productId = mkProduct("T19", "IVA 19%"), .qty = 1}});
         QCOMPARE(t.itemsCount, 2);
-        QCOMPARE(t.subtotal, 20000.0);
-        QCOMPARE(t.tax, 1900.0);
-        QCOMPARE(t.total, 21900.0);
+        QCOMPARE(t.subtotal, Money::fromCop(20000.0));
+        QCOMPARE(t.tax, Money::fromCop(1900.0));
+        QCOMPARE(t.total, Money::fromCop(21900.0));
         QCOMPARE(t.buckets.size(), 2);
-        double baseSum = 0.0, taxSum = 0.0;
+        Money baseSum, taxSum;
         for (const auto &b : t.buckets) {
             baseSum += b.base;
             taxSum += b.tax;
@@ -107,13 +107,13 @@ class TstTax : public QObject
         bool seen0 = false, seen19 = false;
         for (const auto &b : t.buckets) {
             if (qFuzzyCompare(b.rate + 1.0, 1.0)) {
-                QCOMPARE(b.base, 10000.0);
-                QCOMPARE(b.tax, 0.0);
+                QCOMPARE(b.base, Money::fromCop(10000.0));
+                QCOMPARE(b.tax, Money());
                 seen0 = true;
             }
             if (qFuzzyCompare(b.rate + 1.0, 20.0)) {
-                QCOMPARE(b.base, 10000.0);
-                QCOMPARE(b.tax, 1900.0);
+                QCOMPARE(b.base, Money::fromCop(10000.0));
+                QCOMPARE(b.tax, Money::fromCop(1900.0));
                 seen19 = true;
             }
         }
@@ -148,7 +148,7 @@ class TstTax : public QObject
                                QString(), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(r.value().buckets.size(), 2);
-        QCOMPARE(r.value().total, 21900.0);
+        QCOMPARE(r.value().total, Money::fromCop(21900.0));
         const auto s = m_saleRepo->find(r.value().id);
         QVERIFY(s.has_value());
         const auto buckets = SalesService::bucketsFromJson(s->taxBreakdown);
@@ -166,14 +166,14 @@ class TstTax : public QObject
                                       10.0, QStringLiteral("IVA 19%"), QStringLiteral("caja"));
         const auto t = m_svc->calculateTotals(
             {SI{.productId = tomato, .qty = 0.35}, SI{.productId = asp, .qty = 2.0}});
-        QCOMPARE(t.total, 3500.0 - 0.0 + 0.0 + 10000.0 + 1900.0); // 15400
+        QCOMPARE(t.total, Money::fromCop(3500.0 - 0.0 + 0.0 + 10000.0 + 1900.0)); // 15400
         QCOMPARE(t.buckets.size(), 2);
         auto r = m_svc->create(
             {SI{.productId = tomato, .qty = 0.35}, SI{.productId = asp, .qty = 2.0}},
             QStringLiteral("Mostrador"), {}, QStringLiteral("Efectivo"), QString(),
             QStringLiteral("tester"));
         QVERIFY(r.ok());
-        QVERIFY(qFuzzyCompare(r.value().total, 15400.0));
+        QCOMPARE(r.value().total, Money::fromCop(15400.0));
         QCOMPARE(m_products->findById(tomato)->stock, 5.0 - 0.35);
         QCOMPARE(m_products->findById(asp)->stock, 8.0);
         // Stock insuficiente decimal
@@ -201,12 +201,11 @@ class TstTax : public QObject
                     .toBool());
         const auto t = m_svc->calculateTotals(
             {SI{.productId = p1, .qty = 3.0}, SI{.productId = p2, .qty = 2.0}});
-        const auto toCents = [](double v) { return qint64(std::llround(v * 100.0)); };
-        QCOMPARE(toCents(t.subtotal + t.tax - t.discount), toCents(t.total));
+        QCOMPARE((t.subtotal + t.tax - t.discount).cents(), t.total.cents());
         // Total exacto en céntimos: bases 599997+66666, impuestos 113999+3333.
-        QCOMPARE(toCents(t.total), (qint64)783995);
+        QCOMPARE(t.total.cents(), (qint64)783995);
         // 5999.97 * 19 % = 1139.9943 → 1139.99 (half-up al céntimo).
-        QCOMPARE(toCents(t.lines[0].tax), (qint64)113999);
+        QCOMPARE(t.lines[0].tax.cents(), (qint64)113999);
         QVERIFY(m_settings
                     ->save({{QStringLiteral("tax_rates_json"),
                              QStringLiteral(
@@ -241,7 +240,7 @@ class TstTax : public QObject
         Product p;
         p.sku = sku;
         p.name = name;
-        p.price = price;
+        p.price = Money::fromCop(price);
         p.stock = stock;
         p.tax = tax;
         p.unit = unit;
@@ -262,7 +261,7 @@ class TstTax : public QObject
         Product p;
         p.sku = sku;
         p.name = QStringLiteral("Prod ") + suffix;
-        p.price = 10000.0;
+        p.price = Money::fromCop(10000.0);
         p.stock = 50;
         p.tax = tax;
         const auto r = m_products->add(p);

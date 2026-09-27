@@ -35,22 +35,27 @@ class TstInventoryService : public QObject
     {
         // P002: stock 45, costo 28000. +10 @30000 →
         // stock 55, costo (45*28000 + 10*30000)/55 = 28363.636...
-        auto r = m_svc->registerPurchase(2, 10, 30000, QStringLiteral("TecnoMayorista SAS"),
-                                         QStringLiteral("F-1"), QStringLiteral("tester"));
+        auto r = m_svc->registerPurchase(2, 10, Money::fromCop(30000),
+                                           QStringLiteral("TecnoMayorista SAS"),
+                                           QStringLiteral("F-1"), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(r.value().newStock, 55);
-        QVERIFY(qFuzzyCompare(r.value().newCost, 1560000.0 / 55.0));
+        // Costo promedio redondeado al céntimo: 1560000/55 = 28363.6363… → 28363.64.
+        QCOMPARE(r.value().newCost.cents(), (qint64)2836364);
         QCOMPARE(m_products->findById(2)->stock, 55);
 
-        QVERIFY(
-            !m_svc->registerPurchase(2, 0, 1, QStringLiteral("X"), QString(), QStringLiteral("t"))
-                 .ok());
-        QVERIFY(
-            !m_svc->registerPurchase(2, -3, 1, QStringLiteral("X"), QString(), QStringLiteral("t"))
-                 .ok());
-        QVERIFY(
-            !m_svc->registerPurchase(999, 1, 1, QStringLiteral("X"), QString(), QStringLiteral("t"))
-                 .ok());
+        QVERIFY(!m_svc
+                     ->registerPurchase(2, 0, Money::fromCop(1), QStringLiteral("X"), QString(),
+                                        QStringLiteral("t"))
+                     .ok());
+        QVERIFY(!m_svc
+                     ->registerPurchase(2, -3, Money::fromCop(1), QStringLiteral("X"), QString(),
+                                        QStringLiteral("t"))
+                     .ok());
+        QVERIFY(!m_svc
+                     ->registerPurchase(999, 1, Money::fromCop(1), QStringLiteral("X"), QString(),
+                                        QStringLiteral("t"))
+                     .ok());
     }
 
     void adjustmentRules()
@@ -86,26 +91,27 @@ class TstInventoryService : public QObject
     void transferRules()
     {
         QVERIFY(m_svc
-                    ->transfer(QStringLiteral("P006"), 5, QStringLiteral("B2-C1"),
-                               QStringLiteral("reubicación"), QStringLiteral("tester"))
+                    ->transfer(QStringLiteral("P006"), 5, QStringLiteral("Principal"),
+                               QStringLiteral("B2-C1"), QStringLiteral("reubicación"),
+                               QStringLiteral("tester"))
                     .ok());
         QCOMPARE(m_products->findBySku(QStringLiteral("P006"))->location, QStringLiteral("B2-C1"));
 
         QVERIFY(!m_svc
-                     ->transfer(QStringLiteral("P006"), 9999, QStringLiteral("B9"),
-                                QStringLiteral("x"), QStringLiteral("tester"))
+                     ->transfer(QStringLiteral("P006"), 9999, QStringLiteral("Principal"),
+                                QStringLiteral("B9"), QStringLiteral("x"), QStringLiteral("tester"))
                      .ok());
         QVERIFY(!m_svc
-                     ->transfer(QStringLiteral("P006"), 1, QStringLiteral("  "),
-                                QStringLiteral("x"), QStringLiteral("tester"))
+                     ->transfer(QStringLiteral("P006"), 1, QStringLiteral("Principal"),
+                                QStringLiteral("  "), QStringLiteral("x"), QStringLiteral("tester"))
                      .ok());
         QVERIFY(!m_svc
-                     ->transfer(QStringLiteral("P006"), 1, QStringLiteral("B9"), QStringLiteral(""),
-                                QStringLiteral("tester"))
+                     ->transfer(QStringLiteral("P006"), 1, QStringLiteral("Principal"),
+                                QStringLiteral("B9"), QStringLiteral(""), QStringLiteral("tester"))
                      .ok());
         QVERIFY(!m_svc
-                     ->transfer(QStringLiteral("NOPE"), 1, QStringLiteral("B9"),
-                                QStringLiteral("x"), QStringLiteral("tester"))
+                     ->transfer(QStringLiteral("NOPE"), 1, QStringLiteral("Principal"),
+                                QStringLiteral("B9"), QStringLiteral("x"), QStringLiteral("tester"))
                      .ok());
     }
 
@@ -114,7 +120,7 @@ class TstInventoryService : public QObject
         Product low;
         low.sku = QStringLiteral("LOW1");
         low.name = QStringLiteral("Casi agotado");
-        low.price = 1000;
+        low.price = Money::fromCop(1000);
         low.stock = 2;
         low.stockMin = 10;
         QVERIFY(m_products->add(low).ok());
@@ -128,7 +134,7 @@ class TstInventoryService : public QObject
         QVERIFY(found);
 
         const auto v = m_svc->valuation();
-        QVERIFY(v.totalValue > 0);
+        QVERIFY(v.totalValue.isPositive());
         QVERIFY(v.productsCount > 0);
         const auto val = m_inventory->value();
         QCOMPARE(val.costValue, v.totalValue);
@@ -141,7 +147,7 @@ class TstInventoryService : public QObject
         Product p;
         p.sku = QStringLiteral("RSV1");
         p.name = QStringLiteral("Reservable");
-        p.price = 1000;
+        p.price = Money::fromCop(1000);
         p.stock = 10;
         QVERIFY(m_products->add(p).ok());
         auto r = m_svc->reserveStock(QStringLiteral("RSV1"), 4, QStringLiteral("apartado"),

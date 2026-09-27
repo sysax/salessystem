@@ -166,28 +166,46 @@ ColumnLayout {
                 text: editDialog.fields.city || ""
                 placeholderText: qsTr("Ciudad")
             }
+            // Fase 2: límite de crédito >= 0, 2 decimales (Money backend).
+            MoneyField {
+                id: fCreditLimit
+                text: editDialog.fields.creditLimit !== undefined ? editDialog.fields.creditLimit : ""
+                placeholderText: qsTr("Límite de crédito")
+                label: qsTr("Límite de crédito")
+                Layout.fillWidth: true
+                maxValue: 999999999
+                allowNegative: false
+                maxDecimals: 2
+            }
             Label {
                 id: editErr
                 color: Theme.error
             }
             Label {
                 text: fName.text.trim() === "" ? qsTr("Ingrese el nombre") :
-                      !fPhone.acceptableInput ? qsTr("Teléfono inválido") : ""
+                      !fPhone.acceptableInput ? qsTr("Teléfono inválido") :
+                      !fCreditLimit.acceptableInput ? (fCreditLimit.errorText || qsTr("Límite inválido (≥ 0)")) : ""
                 color: Theme.error
                 visible: text !== ""
             }
         }
         Component.onCompleted: {
             editDialog.standardButton(Dialog.Save).enabled = Qt.binding(function() {
-                return fName.text.trim() !== "" && fPhone.acceptableInput;
+                return fName.text.trim() !== "" && fPhone.acceptableInput && fCreditLimit.acceptableInput;
             });
         }
         onAccepted: {
+            if (!fCreditLimit.isValid()) {
+                editErr.text = fCreditLimit.errorText || qsTr("Límite de crédito inválido");
+                open();
+                return;
+            }
             var f = {
                 "name": fName.text,
                 "nit": fNit.text,
                 "phone": fPhone.text,
-                "city": fCity.text
+                "city": fCity.text,
+                "creditLimit": fCreditLimit.text.trim() !== "" ? fCreditLimit.amount() : 0
             };
             var r = editDialog.clientId < 0 ? clientsCtl.add(f) : clientsCtl.update(editDialog.clientId, f);
             if (!r.ok) {
@@ -204,15 +222,29 @@ ColumnLayout {
         standardButtons: Dialog.Ok | Dialog.Cancel
         property string saleId: ""
         ColumnLayout {
-            TextField {
+            // Fase 2: abono >= 0.01, 2 decimales.
+            MoneyField {
                 id: payAmount
                 placeholderText: qsTr("Monto")
-                validator: DoubleValidator { bottom: 0.01 }
-                inputMethodHints: Qt.ImhFormattedNumbersOnly
+                label: qsTr("Monto")
+                Layout.fillWidth: true
+                maxValue: 999999999
+                allowNegative: false
+                maxDecimals: 2
+            }
+            Label {
+                visible: payAmount.errorText !== ""
+                text: payAmount.errorText
+                color: Theme.error
             }
         }
         onAccepted: {
-            var r = clientsCtl.pay(payDialog.saleId, parseFloat(payAmount.text) || 0, "Efectivo", auth.currentUser);
+            if (!payAmount.isValid()) {
+                payAmount.text = "";
+                open();
+                return;
+            }
+            var r = clientsCtl.pay(payDialog.saleId, payAmount.amount(), "Efectivo", auth.currentUser);
             if (!r.ok) {
                 payAmount.text = "";
                 open();

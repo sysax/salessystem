@@ -21,10 +21,10 @@ Client ClientRepository::rowToClient(const QSqlQuery &q)
     c.phone = q.value(QStringLiteral("phone")).toString();
     c.address = q.value(QStringLiteral("address")).toString();
     c.city = q.value(QStringLiteral("city")).toString();
-    c.credit = q.value(QStringLiteral("credit")).toDouble();
-    c.creditLimit = q.value(QStringLiteral("credit_limit")).toDouble();
+    c.credit = Money::fromCop(q.value(QStringLiteral("credit")).toDouble());
+    c.creditLimit = Money::fromCop(q.value(QStringLiteral("credit_limit")).toDouble());
     c.discount = q.value(QStringLiteral("discount")).toInt();
-    c.balance = q.value(QStringLiteral("balance")).toDouble();
+    c.balance = Money::fromCop(q.value(QStringLiteral("balance")).toDouble());
     c.priceList = q.value(QStringLiteral("price_list")).toString();
     c.status = q.value(QStringLiteral("status")).toString();
     return c;
@@ -140,10 +140,10 @@ Result<Client> ClientRepository::add(const Client &cin)
     q.addBindValue(c.phone);
     q.addBindValue(c.address);
     q.addBindValue(c.city);
-    q.addBindValue(c.credit);
-    q.addBindValue(c.creditLimit);
+    q.addBindValue(c.credit.toCop());
+    q.addBindValue(c.creditLimit.toCop());
     q.addBindValue(c.discount);
-    q.addBindValue(c.balance);
+    q.addBindValue(c.balance.toCop());
     q.addBindValue(c.priceList.isEmpty() ? QStringLiteral("detal") : c.priceList);
     q.addBindValue(c.status.isEmpty() ? QStringLiteral("activo") : c.status);
     if (!q.exec())
@@ -169,7 +169,7 @@ Result<Client> ClientRepository::update(int id, const Client &c)
     q.addBindValue(c.phone);
     q.addBindValue(c.city);
     q.addBindValue(c.address);
-    q.addBindValue(c.creditLimit);
+    q.addBindValue(c.creditLimit.toCop());
     q.addBindValue(c.discount);
     q.addBindValue(c.status);
     q.addBindValue(c.priceList);
@@ -191,20 +191,20 @@ StatusResult ClientRepository::remove(int id)
     return StatusResult::success({});
 }
 
-bool ClientRepository::addCredit(const QString &name, double amount)
+bool ClientRepository::addCredit(const QString &name, Money amount)
 {
     // Fase 1: incremento atómico (sin leer-luego-escribir: dos ventas
     // a crédito concurrentes del mismo cliente no se pisan).
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("UPDATE clients SET credit = credit + ?, balance = balance + ? "
                              "WHERE lower(name)=lower(?)"));
-    q.addBindValue(amount);
-    q.addBindValue(amount);
+    q.addBindValue(amount.toCop());
+    q.addBindValue(amount.toCop());
     q.addBindValue(name.trimmed());
     return q.exec() && q.numRowsAffected() > 0;
 }
 
-bool ClientRepository::payCredit(const QString &name, double amount)
+bool ClientRepository::payCredit(const QString &name, Money amount)
 {
     // Fase 1: decremento atómico con piso en 0.
     QSqlQuery q(m_db);
@@ -212,10 +212,10 @@ bool ClientRepository::payCredit(const QString &name, double amount)
         "UPDATE clients SET credit = CASE WHEN credit - ? < 0 THEN 0 ELSE credit - ? END, "
         "balance = CASE WHEN balance - ? < 0 THEN 0 ELSE balance - ? END "
         "WHERE lower(name)=lower(?)"));
-    q.addBindValue(amount);
-    q.addBindValue(amount);
-    q.addBindValue(amount);
-    q.addBindValue(amount);
+    q.addBindValue(amount.toCop());
+    q.addBindValue(amount.toCop());
+    q.addBindValue(amount.toCop());
+    q.addBindValue(amount.toCop());
     q.addBindValue(name.trimmed());
     return q.exec() && q.numRowsAffected() > 0;
 }
@@ -241,7 +241,7 @@ Supplier SupplierRepository::rowToSupplier(const QSqlQuery &q)
     s.catalog = q.value(QStringLiteral("catalog")).toString();
     s.leadTime = q.value(QStringLiteral("lead_time")).toString();
     s.paymentTerms = q.value(QStringLiteral("payment_terms")).toString();
-    s.balance = q.value(QStringLiteral("balance")).toDouble();
+    s.balance = Money::fromCop(q.value(QStringLiteral("balance")).toDouble());
     return s;
 }
 
@@ -325,7 +325,7 @@ Result<Supplier> SupplierRepository::add(const Supplier &sin)
     q.addBindValue(s.catalog);
     q.addBindValue(s.leadTime);
     q.addBindValue(s.paymentTerms);
-    q.addBindValue(s.balance);
+    q.addBindValue(s.balance.toCop());
     if (!q.exec())
         return Result<Supplier>::failure(q.lastError().text());
     return Result<Supplier>::success(*findByName(s.name));

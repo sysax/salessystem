@@ -1,6 +1,27 @@
 #include "MgmtControllers.h"
 
+#include <cmath>
+
 // ── Clients ───────────────────────────────────────────────────────────────
+
+namespace
+{
+// Frontera QML: QML solo maneja double; el dominio usa Money (céntimos).
+// Entradas double → Money::fromCop + validación fail-closed (finito,
+// no negativo; >2 decimales por redondeo half-up en fromCop).
+bool checkCopInput(double cop, QString &error)
+{
+    if (!std::isfinite(cop)) {
+        error = QStringLiteral("Importe inválido");
+        return false;
+    }
+    if (cop < 0.0) {
+        error = QStringLiteral("El importe no puede ser negativo");
+        return false;
+    }
+    return true;
+}
+} // namespace
 
 ClientsController::ClientsController(ClientRepository *clients, ReceivablesService *cxc,
                                      QObject *parent)
@@ -17,10 +38,10 @@ QVariantMap ClientsController::toMap(const Client &c)
             {"email", c.email},
             {"phone", c.phone},
             {"city", c.city},
-            {"credit", c.credit},
-            {"creditLimit", c.creditLimit},
+            {"credit", c.credit.toCop()},
+            {"creditLimit", c.creditLimit.toCop()},
             {"discount", c.discount},
-            {"balance", c.balance},
+            {"balance", c.balance.toCop()},
             {"priceList", c.priceList},
             {"status", c.status},
             {"regimen", c.regimen}};
@@ -40,7 +61,7 @@ Client ClientsController::fromMap(const QVariantMap &m, const Client &base)
     if (m.contains(QStringLiteral("city")))
         c.city = m[QStringLiteral("city")].toString();
     if (m.contains(QStringLiteral("creditLimit")))
-        c.creditLimit = m[QStringLiteral("creditLimit")].toDouble();
+        c.creditLimit = Money::fromCop(m[QStringLiteral("creditLimit")].toDouble());
     if (m.contains(QStringLiteral("discount")))
         c.discount = m[QStringLiteral("discount")].toInt();
     if (m.contains(QStringLiteral("status")))
@@ -165,10 +186,13 @@ QVariantList ClientsController::statement(const QString &name) const
 QVariantMap ClientsController::pay(const QString &saleId, double amount, const QString &method,
                                    const QString &user)
 {
-    const auto r = m_cxc->pay(saleId, amount, method, user);
+    QString err;
+    if (!checkCopInput(amount, err))
+        return {{"ok", false}, {"error", QStringLiteral("Abono: ") + err}};
+    const auto r = m_cxc->pay(saleId, Money::fromCop(amount), method, user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
-    return {{"ok", true}, {"balance", r.value().balance}};
+    return {{"ok", true}, {"balance", r.value().balance.toCop()}};
 }
 
 // ── Suppliers ─────────────────────────────────────────────────────────────
@@ -182,7 +206,7 @@ SuppliersController::SuppliersController(SupplierRepository *suppliers, QObject 
 QVariantMap SuppliersController::toMap(const Supplier &s)
 {
     return {{"id", s.id},       {"name", s.name},   {"nit", s.nit},   {"contact", s.contact},
-            {"phone", s.phone}, {"email", s.email}, {"city", s.city}, {"balance", s.balance}};
+            {"phone", s.phone}, {"email", s.email}, {"city", s.city}, {"balance", s.balance.toCop()}};
 }
 
 Supplier SuppliersController::fromMap(const QVariantMap &m, const Supplier &base)

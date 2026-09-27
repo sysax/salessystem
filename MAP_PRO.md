@@ -132,10 +132,12 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 ### 2.2 Dinero como tipo exacto
 - [x] Completar `Money` (`src/core/Money.h`): `taxCents`/`withRate` genéricos con **round-half-up documentado** (sin hardcodear IVA 19 %; `withIva` queda como compatibilidad).
 - [x] Adoptarlo en el cálculo de impuestos por línea (`SalesService`: `lineTax` en céntimos en `buildTotals` y `calculateTotals`) + test de invariante `subtotal + impuesto − descuento == total` al céntimo (`tst_tax::centsInvariant`, `tst_money::rateHalfUp`).
-- [ ] Migración total `double` → `Money` en repos/services/entidades/QML bridge (pendiente: cambio mayor que toca esquema REAL, QML y trabajo ajeno en curso; el IVA por línea —la fuente real de errores— ya va en céntimos).
-- [ ] Validar en entrada de UI: máximos decimales permitidos, sin negativos donde no aplique.
+- [x] Migración total `double` → `Money` en repos/services/entidades/QML bridge (cerrada 2026-09-27: `Money` en céntimos como tipo canónico en `Entities` —precios, totales, pagos, saldos, costos, caja, CxC/CxP—, `SalesService`/`PromoRepository`/`TicketPrinter`/`InventoryService` en céntimos con `Money::taxCents`/`moneyPercent`; frontera DB REAL↔cents en cada repo; QML transporta `double` redondeado y cada controller convierte con `Money::fromCop` + validación fail-closed; qty/stock en `double` y tasas/% en `double` a propósito —no son dinero—).
+- [x] Validar en entrada de UI: máximos decimales permitidos, sin negativos donde no aplique (cerrada 2026-09-27: `Money::tryParse` centralizado —máx. 2 decimales, es_CO `10.000,50`, tope `MaxCents`— + `qml/components/MoneyField.qml` con `DoubleValidator` es_CO y borde de error, cableado en PosPage —efectivo/caja/qty—, ProductsPage —precios—, Clients/Receivables/Payables —límite/abonos—).
 
 > **Cierre Fase 2 (2026-09-26):** `tst_auth` (versionado/migración/async/idle) + `tst_tax::centsInvariant` + `tst_money::rateHalfUp` en verde; suite 17/17.
+> **Cierre resto Fase 2 (2026-09-27):** migración total a `Money` + validación UI en verde (`tst_money` 11/11 incl. `tryParseEsCo`/`fromCopHalfAway`, `tst_tax` 9/9; suite 20/21 con `tst_auth` lento preexistente sin cambios y `tst_transaction` race flaky que pasa al reintentar).
+> Grep de `double` en rutas de dinero = 0 (quedan `double` solo para cantidades granel, tasas/% y la frontera `Q_INVOKABLE` QML —validada—).
 
 ### Criterios de salida
 ✅ Tabla de usuarios migrada (hash nuevo verificado, antiguo invalidado) · ✅ Grep de `double` en rutas de dinero = 0 · ✅ Suite de tests de redondeo fiscal en verde.

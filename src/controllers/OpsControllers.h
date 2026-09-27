@@ -38,8 +38,12 @@ class InventoryController : public QObject
     Q_INVOKABLE void refresh();
     Q_INVOKABLE QVariantMap adjust(const QString &sku, double delta, const QString &reason,
                                    const QString &user);
-    Q_INVOKABLE QVariantMap transfer(const QString &sku, double qty, const QString &to,
-                                     const QString &reason, const QString &user);
+    Q_INVOKABLE QVariantMap transfer(const QString &sku, double qty, const QString &from,
+                                      const QString &to, const QString &reason, const QString &user);
+    // Fase 6: almacenes (lista + alta) y existencias por SKU/almacén.
+    Q_INVOKABLE QVariantList locations();
+    Q_INVOKABLE QVariantMap createLocation(const QString &name);
+    Q_INVOKABLE QVariantList stockBySku(const QString &sku);
     // Fase 4: registrar merma (abarrotes).
     Q_INVOKABLE QVariantMap waste(const QString &sku, double qty, const QString &reason,
                                   const QString &user);

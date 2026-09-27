@@ -72,7 +72,7 @@ class TstVertical : public QObject
         Product p;
         p.sku = QStringLiteral("AT1");
         p.name = QStringLiteral("Con attrs");
-        p.price = 1000.0;
+        p.price = Money::fromCop(1000.0);
         p.stock = 5.0;
         p.attrsJson = a;
         QVERIFY(m_products->add(p).ok());
@@ -132,7 +132,7 @@ class TstVertical : public QObject
         Product v;
         v.sku = QStringLiteral("VENC");
         v.name = QStringLiteral("Vencido");
-        v.price = 2000.0;
+        v.price = Money::fromCop(2000.0);
         v.stock = 10.0;
         v.lote = QStringLiteral("LV");
         v.vencimiento = past;
@@ -140,7 +140,7 @@ class TstVertical : public QObject
         Product f;
         f.sku = QStringLiteral("VIG");
         f.name = QStringLiteral("Vigente");
-        f.price = 2000.0;
+        f.price = Money::fromCop(2000.0);
         f.stock = 10.0;
         f.lote = QStringLiteral("LF");
         f.vencimiento = future;
@@ -163,14 +163,14 @@ class TstVertical : public QObject
         Product rx;
         rx.sku = QStringLiteral("RX1");
         rx.name = QStringLiteral("Con receta");
-        rx.price = 15000.0;
+        rx.price = Money::fromCop(15000.0);
         rx.stock = 5.0;
         rx.attrsJson = Attrs::set(QStringLiteral("{}"), Attrs::KRequiresPrescription, true);
         QVERIFY(m_products->add(rx).ok());
         Product ct;
         ct.sku = QStringLiteral("CT1");
         ct.name = QStringLiteral("Controlado");
-        ct.price = 50000.0;
+        ct.price = Money::fromCop(50000.0);
         ct.stock = 5.0;
         ct.attrsJson = Attrs::set(QStringLiteral("{}"), Attrs::KControlled, true);
         QVERIFY(m_products->add(ct).ok());
@@ -213,7 +213,7 @@ class TstVertical : public QObject
         Product eq;
         eq.sku = QStringLiteral("EQ1");
         eq.name = QStringLiteral("Equipo X");
-        eq.price = 500000.0;
+        eq.price = Money::fromCop(500000.0);
         eq.stock = 2.0;
         eq.attrsJson = Attrs::set(Attrs::set(QStringLiteral("{}"), Attrs::KTrackSerial, true),
                                   Attrs::KWarrantyMonths, 12);
@@ -273,8 +273,8 @@ class TstVertical : public QObject
         Product g;
         g.sku = QStringLiteral("MERMA1");
         g.name = QStringLiteral("Perecedero");
-        g.price = 5000.0;
-        g.priceBuy = 3000.0;
+        g.price = Money::fromCop(5000.0);
+        g.priceBuy = Money::fromCop(3000.0);
         g.stock = 10.0;
         g.unit = QStringLiteral("kg");
         QVERIFY(m_products->add(g).ok());
@@ -310,7 +310,7 @@ class TstVertical : public QObject
         Product se;
         se.sku = QStringLiteral("EQC");
         se.name = QStringLiteral("Equipo Ctl");
-        se.price = 300000.0;
+        se.price = Money::fromCop(300000.0);
         se.stock = 3.0;
         se.attrsJson = Attrs::set(QStringLiteral("{}"), Attrs::KTrackSerial, true);
         QVERIFY(m_products->add(se).ok());
@@ -339,7 +339,7 @@ class TstVertical : public QObject
         Product eq;
         eq.sku = QStringLiteral("EQ-QTY");
         eq.name = QStringLiteral("Equipo Qty");
-        eq.price = 400000.0;
+        eq.price = Money::fromCop(400000.0);
         eq.stock = 5.0;
         eq.attrsJson = Attrs::set(QStringLiteral("{}"), Attrs::KTrackSerial, true);
         QVERIFY(m_products->add(eq).ok());
@@ -378,8 +378,8 @@ class TstVertical : public QObject
         Product p;
         p.sku = QStringLiteral("AB-GRANO");
         p.name = QStringLiteral("Grano");
-        p.price = 1000.0;
-        p.priceWholesale = 800.0;
+        p.price = Money::fromCop(1000.0);
+        p.priceWholesale = Money::fromCop(800.0);
         p.stock = 100.0;
         p.tax = QStringLiteral("Excluido");
         QVERIFY(m_products->add(p).ok());
@@ -387,11 +387,11 @@ class TstVertical : public QObject
         auto w = m_svc->create({SI{.productId = pid, .qty = 2.0}}, QStringLiteral("MAYORISTA-TEST"),
                                {}, QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
         QVERIFY(w.ok());
-        QCOMPARE(w.value().total, 1600.0);
+        QCOMPARE(w.value().total, Money::fromCop(1600.0));
         auto d = m_svc->create({SI{.productId = pid, .qty = 2.0}}, QStringLiteral("Mostrador"), {},
                                QStringLiteral("Efectivo"), QString(), QStringLiteral("t"));
         QVERIFY(d.ok());
-        QCOMPARE(d.value().total, 2000.0);
+        QCOMPARE(d.value().total, Money::fromCop(2000.0));
     }
 
     void crossVerticalBlocked()
@@ -401,7 +401,7 @@ class TstVertical : public QObject
         Product p;
         p.sku = QStringLiteral("CEL-X");
         p.name = QStringLiteral("Equipo ajeno");
-        p.price = 100000.0;
+        p.price = Money::fromCop(100000.0);
         p.stock = 5.0;
         p.businessType = QStringLiteral("celulares");
         QVERIFY(m_products->add(p).ok());
@@ -435,7 +435,7 @@ class TstVertical : public QObject
         Product a;
         a.sku = QStringLiteral("SA-AB");
         a.name = QStringLiteral("Venta Ab");
-        a.price = 5000.0;
+        a.price = Money::fromCop(5000.0);
         a.stock = 10.0;
         a.tax = QStringLiteral("Excluido");
         a.businessType = QStringLiteral("abarrotes");
@@ -443,7 +443,7 @@ class TstVertical : public QObject
         Product c;
         c.sku = QStringLiteral("SA-CE");
         c.name = QStringLiteral("Venta Ce");
-        c.price = 7000.0;
+        c.price = Money::fromCop(7000.0);
         c.stock = 10.0;
         c.tax = QStringLiteral("Excluido");
         c.businessType = QStringLiteral("celulares");
@@ -506,7 +506,7 @@ class TstVertical : public QObject
         Product p;
         p.sku = QStringLiteral("EAN-BAD");
         p.name = QStringLiteral("Ean malo");
-        p.price = 1000.0;
+        p.price = Money::fromCop(1000.0);
         p.stock = 1.0;
         p.barcode = QStringLiteral("7701234560010");
         if (ProductRepository::isValidEan13(p.barcode))
@@ -516,7 +516,7 @@ class TstVertical : public QObject
         Product u;
         u.sku = QStringLiteral("UPC-OK");
         u.name = QStringLiteral("Upc");
-        u.price = 1000.0;
+        u.price = Money::fromCop(1000.0);
         u.stock = 1.0;
         u.barcode = QStringLiteral("123456789012");
         QVERIFY(m_products->add(u).ok());

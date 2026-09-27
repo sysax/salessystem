@@ -27,7 +27,7 @@ Result<Purchase> PurchaseService::create(const QString &supplierName, const QStr
         return Result<Purchase>::failure(QStringLiteral("SKU %1 no encontrado").arg(sku));
     if (qty <= 0)
         return Result<Purchase>::failure(QStringLiteral("Cantidad >0"));
-    const double unitCost = prod->priceBuy > 0 ? prod->priceBuy : prod->price * 0.7;
+    const Money unitCost = prod->priceBuy.isPositive() ? prod->priceBuy : prod->price * 0.7;
     Purchase p;
     p.id = Counters::next(m_db, QStringLiteral("PURCHASE_COUNTER"), QStringLiteral("OC"));
     p.date = QDate::currentDate().toString(Qt::ISODate);
@@ -44,7 +44,7 @@ Result<Purchase> PurchaseService::create(const QString &supplierName, const QStr
                      QStringLiteral("%1 %2 %3 x%4 $%5")
                          .arg(p.id, sup->name, sku)
                          .arg(qty)
-                         .arg(p.total, 0, 'f', 0));
+                          .arg(p.total.toCop(), 0, 'f', 0));
     return r;
 }
 
@@ -81,7 +81,7 @@ Result<Purchase> PurchaseService::receive(const QString &folio,
 
     // Validar contra lo pedido (sin exceder por línea, SKUs de la orden).
     QMap<QString, double> ordered;
-    QMap<QString, double> unitCost;
+    QMap<QString, Money> unitCost;
     for (const PurchaseItem &it : po->items) {
         ordered[it.sku] = ordered.value(it.sku, 0.0) + it.qty;
         if (!unitCost.contains(it.sku))
@@ -109,7 +109,7 @@ Result<Purchase> PurchaseService::receive(const QString &folio,
     Transaction tx(m_db);
     if (!tx.isValid())
         return Result<Purchase>::failure(QStringLiteral("No se pudo iniciar la transacción"));
-    double deliveryValue = 0.0;
+    Money deliveryValue;
     QMap<QString, double> received = po->received;
     for (auto it = delivery.begin(); it != delivery.end(); ++it) {
         const auto prod = m_products->findBySku(it.key());
@@ -127,7 +127,7 @@ Result<Purchase> PurchaseService::receive(const QString &folio,
                 QStringLiteral("No se pudo registrar el movimiento de %1").arg(it.key()));
         }
         received[it.key()] = received.value(it.key(), 0.0) + it.value();
-        deliveryValue += unitCost.value(it.key(), 0.0) * it.value();
+        deliveryValue += unitCost.value(it.key()) * it.value();
     }
     if (!m_purchases->setReceived(folio, received))
         return Result<Purchase>::failure(
@@ -154,8 +154,8 @@ Result<Purchase> PurchaseService::receive(const QString &folio,
         grow.balance += deliveryValue;
         QSqlQuery up(m_db);
         up.prepare(QStringLiteral("UPDATE payables SET amount=?, balance=? WHERE id=?"));
-        up.addBindValue(grow.amount);
-        up.addBindValue(grow.balance);
+        up.addBindValue(grow.amount.toCop());
+        up.addBindValue(grow.balance.toCop());
         up.addBindValue(folio);
         if (!up.exec())
             return Result<Purchase>::failure(
@@ -166,9 +166,11 @@ Result<Purchase> PurchaseService::receive(const QString &folio,
         cxp.supplier = po->supplier;
         cxp.due = QDate::currentDate().addDays(30).toString(Qt::ISODate);
         cxp.amount = deliveryValue;
-        cxp.paid = 0.0;
+        cxp.paid = Money();
         cxp.balance = deliveryValue;
-        cxp.discountEarly = po->supplier.contains(QLatin1String("TecnoMayorista")) ? 2.0 : 0.0;
+        cxp.discountEarly = po->supplier.contains(QLatin1String("TecnoMayorista"))
+                                ? Money::fromCop(2.0)
+                                : Money();
         cxp.status = QStringLiteral("Pendiente");
         if (!m_payables->create(cxp).ok())
             return Result<Purchase>::failure(
@@ -179,7 +181,7 @@ Result<Purchase> PurchaseService::receive(const QString &folio,
         m_audit->log(user, QStringLiteral("compra_recibida"),
                      QStringLiteral("%1 %2 $%3 %4")
                          .arg(folio, po->supplier)
-                         .arg(deliveryValue, 0, 'f', 0)
+                          .arg(deliveryValue.toCop(), 0, 'f', 0)
                          .arg(complete ? QStringLiteral("total")
                                        : QStringLiteral("parcial")));
     if (!tx.commit())

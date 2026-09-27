@@ -15,12 +15,13 @@ InventoryRepository::InventoryRepository(QSqlDatabase db, AuditRepository *audit
 
 bool InventoryRepository::record(const QString &sku, const QString &productName,
                                  const QString &type, double qty, double before, double after,
-                                 const QString &reason, const QString &user)
+                                 const QString &reason, const QString &user,
+                                 const QString &fromLocation, const QString &toLocation)
 {
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
         "INSERT INTO inventory_movements (ts, sku, product, type, qty, before_qty, after_qty, "
-        "reason, user) VALUES (?,?,?,?,?,?,?,?,?)"));
+        "reason, user, from_location, to_location) VALUES (?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm")));
     q.addBindValue(sku);
     q.addBindValue(productName.left(18));
@@ -30,6 +31,8 @@ bool InventoryRepository::record(const QString &sku, const QString &productName,
     q.addBindValue(after);
     q.addBindValue(reason.left(40));
     q.addBindValue(user);
+    q.addBindValue(fromLocation.left(40));
+    q.addBindValue(toLocation.left(40));
     return q.exec();
 }
 
@@ -46,6 +49,8 @@ InventoryMovement InventoryRepository::rowToMovement(const QSqlQuery &q)
     m.after = q.value(QStringLiteral("after_qty")).toDouble();
     m.reason = q.value(QStringLiteral("reason")).toString();
     m.user = q.value(QStringLiteral("user")).toString();
+    m.fromLocation = q.value(QStringLiteral("from_location")).toString();
+    m.toLocation = q.value(QStringLiteral("to_location")).toString();
     return m;
 }
 
@@ -85,9 +90,9 @@ InventoryValue InventoryRepository::value() const
                            "COALESCE(SUM(stock),0) FROM products")))
         return v;
     if (q.next()) {
-        v.costValue = q.value(0).toDouble();
-        v.saleValue = q.value(1).toDouble();
-        v.units = q.value(2).toLongLong();
+        v.costValue = Money::fromCop(q.value(0).toDouble());
+        v.saleValue = Money::fromCop(q.value(1).toDouble());
+        v.units = q.value(2).toDouble();
     }
     return v;
 }
@@ -157,13 +162,13 @@ Lot InventoryRepository::rowToLot(const QSqlQuery &q)
     l.lote = q.value(QStringLiteral("lote")).toString();
     l.vencimiento = q.value(QStringLiteral("vencimiento")).toString();
     l.qty = q.value(QStringLiteral("qty")).toDouble();
-    l.cost = q.value(QStringLiteral("cost")).toDouble();
+    l.cost = Money::fromCop(q.value(QStringLiteral("cost")).toDouble());
     l.createdTs = q.value(QStringLiteral("created_ts")).toString();
     return l;
 }
 
 Result<Lot> InventoryRepository::addLot(const QString &sku, const QString &lote,
-                                        const QString &vencimiento, double qty, double cost)
+                                        const QString &vencimiento, double qty, Money cost)
 {
     if (sku.trimmed().isEmpty())
         return Result<Lot>::failure(QStringLiteral("SKU requerido"));
@@ -176,7 +181,7 @@ Result<Lot> InventoryRepository::addLot(const QString &sku, const QString &lote,
     q.addBindValue(lote.trimmed());
     q.addBindValue(vencimiento.trimmed());
     q.addBindValue(qty);
-    q.addBindValue(cost);
+    q.addBindValue(cost.toCop());
     q.addBindValue(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
     if (!q.exec())
         return Result<Lot>::failure(q.lastError().text());
@@ -214,20 +219,20 @@ bool InventoryRepository::reduceLot(int lotId, double qty)
     return q.exec() && q.numRowsAffected() == 1;
 }
 
-double InventoryRepository::lotsValue(const QString &sku) const
+Money InventoryRepository::lotsValue(const QString &sku) const
 {
     QSqlQuery q(m_db);
     if (sku.trimmed().isEmpty()) {
         if (!q.exec(QStringLiteral("SELECT COALESCE(SUM(qty*cost),0) FROM lots WHERE qty>0"))
             || !q.next())
-            return 0.0;
+            return Money();
     } else {
         q.prepare(QStringLiteral("SELECT COALESCE(SUM(qty*cost),0) FROM lots WHERE sku=? AND qty>0"));
         q.addBindValue(sku.trimmed());
         if (!q.exec() || !q.next())
-            return 0.0;
+            return Money();
     }
-    return q.value(0).toDouble();
+    return Money::fromCop(q.value(0).toDouble());
 }
 
 QList<Lot> InventoryRepository::expiringLots(int days) const

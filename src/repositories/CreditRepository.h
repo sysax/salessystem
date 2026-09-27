@@ -23,12 +23,12 @@ class ReceivablesRepository : public QObject
     QList<Sale> statement(const QString &clientName) const;
     QList<CxcPayment> paymentsFor(const QString &saleId) const;
 
-    // Abono validado; liquida a Pagada si saldo <= 0.01 y descuenta crédito.
-    Result<Sale> addPayment(const QString &saleId, double amount, const QString &method,
+    // Abono validado; liquida a Pagada si saldo <= 1 cent y descuenta crédito.
+    Result<Sale> addPayment(const QString &saleId, Money amount, const QString &method,
                             const QString &user);
 
-    // Interés moratorio sobre saldo vencido (0 si no vencida o sin saldo)
-    static double mora(const Sale &s, double rate = MoraRate);
+    // Interés moratorio sobre saldo vencido (cero si no vencida o sin saldo)
+    static Money mora(const Sale &s, double rate = MoraRate);
 
   private:
     QSqlDatabase m_db;
@@ -55,9 +55,9 @@ class PayablesRepository : public QObject
     struct PaymentResult
     {
         Payable payable;
-        double earlyDiscount = 0.0; // descuento pronto pago aplicado
+        Money earlyDiscount; // descuento pronto pago aplicado
     };
-    Result<PaymentResult> addPayment(const QString &payableId, double amount, const QString &method,
+    Result<PaymentResult> addPayment(const QString &payableId, Money amount, const QString &method,
                                      const QString &user);
 
     // Alta de CxP (usada por PurchaseService al recibir OC)

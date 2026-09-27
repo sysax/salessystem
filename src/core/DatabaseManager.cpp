@@ -227,6 +227,12 @@ bool DatabaseManager::migrateLegacyColumns()
         {"sales", "reason", "reason TEXT DEFAULT ''"},       // Fase 5: motivo NC/ND/cancelación
         {"purchases", "received_json",
          "received_json TEXT DEFAULT '{}'"}, // Fase 5: recepción parcial acumulada
+        {"outbox", "next_retry_at",
+         "next_retry_at TEXT DEFAULT ''"},  // Fase 6: backoff persistente
+        {"outbox", "priority", "priority INTEGER DEFAULT 0"}, // Fase 6: prioridad de lote
+        {"inventory_movements", "from_location",
+         "from_location TEXT DEFAULT ''"}, // Fase 6: traspasos con origen/destino
+        {"inventory_movements", "to_location", "to_location TEXT DEFAULT ''"},
     };
     for (const Column &c : kColumns) {
         if (!ensureColumn(QString::fromLatin1(c.table), QString::fromLatin1(c.name),
@@ -265,6 +271,27 @@ bool DatabaseManager::migrateLegacyColumns()
         || !lotIdx.exec(
             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_counts_sku ON inventory_counts(sku)"))) {
         m_status = QStringLiteral("migrate: ") + lotIdx.lastError().text();
+        return false;
+    }
+    // Fase 6: almacenes (tablas aditivas) + backfill del ledger.
+    // products.stock es el agregado; cada SKU con existencias nace en
+    // "Principal" (id 1). Idempotente: solo inserta lo que falta.
+    QSqlQuery loc(m_db);
+    if (!loc.exec(QStringLiteral("CREATE TABLE IF NOT EXISTS locations (id INTEGER PRIMARY KEY "
+                                 "AUTOINCREMENT, name TEXT UNIQUE NOT NULL)"))
+        || !loc.exec(QStringLiteral("INSERT OR IGNORE INTO locations (id, name) VALUES "
+                                    "(1, 'Principal')"))
+        || !loc.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS stock_by_location (sku TEXT NOT NULL, location_id "
+            "INTEGER NOT NULL, qty REAL DEFAULT 0, UNIQUE(sku, location_id))"))
+        || !loc.exec(QStringLiteral(
+            "CREATE INDEX IF NOT EXISTS idx_stock_loc ON stock_by_location(location_id)"))
+        || !loc.exec(QStringLiteral(
+            "CREATE INDEX IF NOT EXISTS idx_stock_sku ON stock_by_location(sku)"))
+        || !loc.exec(QStringLiteral(
+            "INSERT OR IGNORE INTO stock_by_location (sku, location_id, qty) SELECT sku, 1, stock "
+            "FROM products WHERE stock IS NOT NULL AND ABS(stock) > 1e-9"))) {
+        m_status = QStringLiteral("migrate: ") + loc.lastError().text();
         return false;
     }
     // Fase 4: soltar índices redundantes (el UNIQUE ya crea autoindex).

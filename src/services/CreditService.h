@@ -21,9 +21,9 @@ class ReceivablesService : public QObject
 
     Q_INVOKABLE QVariantList pending() const;
     Q_INVOKABLE QVariantList statement(const QString &client) const;
-    Result<Sale> pay(const QString &saleId, double amount, const QString &method,
+    Result<Sale> pay(const QString &saleId, Money amount, const QString &method,
                      const QString &user);
-    static double mora(const Sale &s);
+    static Money mora(const Sale &s);
 
   private:
     ReceivablesRepository *m_repos = nullptr;
@@ -42,7 +42,7 @@ class PayablesService : public QObject
     // Fase 5: vencidas, estado por proveedor e historial de abonos.
     Q_INVOKABLE QVariantList overdue() const;
     Q_INVOKABLE QVariantList statement(const QString &supplier) const;
-    Result<PayablesRepository::PaymentResult> pay(const QString &payableId, double amount,
+    Result<PayablesRepository::PaymentResult> pay(const QString &payableId, Money amount,
                                                   const QString &method, const QString &user);
 
   private:

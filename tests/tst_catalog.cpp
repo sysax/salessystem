@@ -83,7 +83,7 @@ class TstCatalog : public QObject
         Product p;
         p.sku = QStringLiteral("CAT1");
         p.name = QStringLiteral("Prod Cat");
-        p.price = 1000.0;
+        p.price = Money::fromCop(1000.0);
         p.stock = 5;
         p.cat = QStringLiteral("Hija");
         QVERIFY(m_products->add(p).ok());
@@ -168,7 +168,7 @@ class TstCatalog : public QObject
             Product p;
             p.sku = QStringLiteral("PX%1").arg(i);
             p.name = QStringLiteral("Paged %1").arg(i);
-            p.price = 1000.0;
+            p.price = Money::fromCop(1000.0);
             p.stock = 5.0;
             QVERIFY(m_products->add(p).ok());
         }
@@ -200,7 +200,7 @@ class TstCatalog : public QObject
             Product p;
             p.sku = QStringLiteral("PY%1").arg(i);
             p.name = QStringLiteral("PagedY %1").arg(i);
-            p.price = 1000.0;
+            p.price = Money::fromCop(1000.0);
             p.stock = 5.0;
             QVERIFY(m_products->add(p).ok());
         }
@@ -236,7 +236,7 @@ class TstCatalog : public QObject
         Product p;
         p.sku = QStringLiteral("UNIT1");
         p.name = QStringLiteral("Prod Unidad");
-        p.price = 1000.0;
+        p.price = Money::fromCop(1000.0);
         p.stock = 5.0;
         p.unit = QStringLiteral("tonelada");
         QVERIFY(!m_products->add(p).ok()); // alta exige unidad válida
@@ -247,7 +247,7 @@ class TstCatalog : public QObject
         Product g;
         g.sku = QStringLiteral("UNIT2");
         g.name = QStringLiteral("Granel");
-        g.price = 2000.0;
+        g.price = Money::fromCop(2000.0);
         g.stock = 4.75;
         g.unit = QStringLiteral("kg");
         QVERIFY(m_products->add(g).ok());
@@ -260,8 +260,8 @@ class TstCatalog : public QObject
         auto upd = m_products->findBySku(QStringLiteral("LEGACY1"));
         QVERIFY(upd.has_value());
         Product u = *upd;
-        u.price = 600.0;
-        u.priceBuy = 400.0; // el INSERT crudo dejó price_buy en 0 (update exige >0)
+        u.price = Money::fromCop(600.0);
+        u.priceBuy = Money::fromCop(400.0); // el INSERT crudo dejó price_buy en 0 (update exige >0)
         QVERIFY(m_products->update(QStringLiteral("LEGACY1"), u).ok());
         QCOMPARE(m_products->findBySku(QStringLiteral("LEGACY1"))->unit, QStringLiteral("pieza"));
         u.unit = QStringLiteral("tonelada");

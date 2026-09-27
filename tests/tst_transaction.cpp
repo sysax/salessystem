@@ -68,13 +68,13 @@ SaleRepository::NewSale oneUnitSale(int productId)
     SaleRepository::NewSale ns;
     ns.clientName = QStringLiteral("Mostrador");
     ns.vendedor = QStringLiteral("race");
-    ns.subtotal = 1000.0;
-    ns.total = 1000.0;
+    ns.subtotal = Money::fromCop(1000.0);
+    ns.total = Money::fromCop(1000.0);
     ns.paymentMethod = QStringLiteral("Efectivo");
     SaleItem it;
     it.productId = productId;
     it.qty = 1.0;
-    it.subtotal = 1000.0;
+    it.subtotal = Money::fromCop(1000.0);
     ns.items << it;
     return ns;
 }
@@ -214,7 +214,7 @@ class TstTransaction : public QObject
         // Sobregiro imposible: falla en el decremento atómico.
         SaleRepository::NewSale ns = oneUnitSale(m_productId);
         ns.items[0].qty = stockBefore + 1000.0;
-        ns.total = ns.subtotal = 1000.0 * ns.items[0].qty;
+        ns.total = ns.subtotal = Money::fromCop(1000.0 * ns.items[0].qty);
         QVERIFY(!sales.create(ns).ok());
 
         QCOMPARE(tableCount(m_db, "sales"), salesBefore);

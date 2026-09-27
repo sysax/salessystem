@@ -362,12 +362,16 @@ ColumnLayout {
                 placeholderText: qsTr("Nombre")
             }
             RowLayout {
-                TextField {
+                // Fase 2: importes >= 0 con máx. 2 decimales (MoneyField + Money backend).
+                MoneyField {
                     id: fPrice
                     text: editDialog.fields.price !== undefined ? editDialog.fields.price : ""
                     placeholderText: qsTr("Precio")
-                    validator: DoubleValidator { bottom: 0 }
-                    inputMethodHints: Qt.ImhFormattedNumbersOnly
+                    label: qsTr("Precio")
+                    maxValue: 999999999
+                    allowNegative: false
+                    maxDecimals: 2
+                    Layout.fillWidth: true
                 }
                 TextField {
                     id: fStock
@@ -383,12 +387,39 @@ ColumnLayout {
                     ToolTip.visible: hovered
                 }
             }
+            RowLayout {
+                MoneyField {
+                    id: fPriceBuy
+                    text: editDialog.fields.priceBuy !== undefined ? editDialog.fields.priceBuy : ""
+                    placeholderText: qsTr("P. compra")
+                    label: qsTr("P. compra")
+                    ToolTip.text: qsTr("Precio de compra (≥ 0, 2 decimales)")
+                    ToolTip.visible: hovered
+                    maxValue: 999999999
+                    allowNegative: false
+                    maxDecimals: 2
+                    Layout.fillWidth: true
+                }
+                MoneyField {
+                    id: fPriceWholesale
+                    text: editDialog.fields.priceWholesale !== undefined ? editDialog.fields.priceWholesale : ""
+                    placeholderText: qsTr("P. mayoreo")
+                    label: qsTr("P. mayoreo")
+                    ToolTip.text: qsTr("Precio mayoreo (≥ 0, 2 decimales)")
+                    ToolTip.visible: hovered
+                    maxValue: 999999999
+                    allowNegative: false
+                    maxDecimals: 2
+                    Layout.fillWidth: true
+                }
+            }
             Label {
                 // Fase 2: precio por kilo informativo para granel.
                 visible: fUnit.currentText === "g" || fUnit.currentText === "kg"
                          || fUnit.currentText === "ml" || fUnit.currentText === "l"
                 text: {
-                    var p = parseFloat(fPrice.text) || 0;
+                    var p = 0;
+                    try { p = fPrice.amount(); } catch (e) { p = parseFloat(fPrice.text) || 0; }
                     var u = fUnit.currentText;
                     var perKg = (u === "g") ? p * 1000 : (u === "ml" ? p * 1000 : p);
                     return qsTr("Equivale a %1 por %2").arg(money(perKg)).arg(u === "ml" || u === "l" ? "L" : "kg");
@@ -503,7 +534,9 @@ ColumnLayout {
             Label {
                 // Ayuda reactiva: primer problema del formulario (validación en vivo)
                 text: fName.text.trim() === "" ? qsTr("Ingrese el nombre") :
-                      !fPrice.acceptableInput ? qsTr("Precio inválido (≥ 0)") :
+                      !fPrice.acceptableInput ? (fPrice.errorText || qsTr("Precio inválido (≥ 0, 2 decimales)")) :
+                      !fPriceBuy.acceptableInput ? (fPriceBuy.errorText || qsTr("P. compra inválido (≥ 0)")) :
+                      !fPriceWholesale.acceptableInput ? (fPriceWholesale.errorText || qsTr("P. mayoreo inválido (≥ 0)")) :
                       !fStock.acceptableInput ? qsTr("Stock inválido (≥ 0, admite decimales)") : ""
                 color: Theme.error
                 visible: text !== ""
@@ -512,10 +545,17 @@ ColumnLayout {
         Component.onCompleted: {
             // Guardar solo con formulario válido (el chequeo backend en onAccepted se conserva)
             editDialog.standardButton(Dialog.Save).enabled = Qt.binding(function() {
-                return fName.text.trim() !== "" && fPrice.acceptableInput && fStock.acceptableInput;
+                return fName.text.trim() !== "" && fPrice.acceptableInput && fPriceBuy.acceptableInput
+                    && fPriceWholesale.acceptableInput && fStock.acceptableInput;
             });
         }
         onAccepted: {
+            if (!fPrice.isValid() || !fPriceBuy.isValid() || !fPriceWholesale.isValid()) {
+                editErr.text = fPrice.errorText || fPriceBuy.errorText || fPriceWholesale.errorText
+                    || qsTr("Revise los importes (≥ 0, 2 decimales).");
+                open();
+                return;
+            }
             var taxVal = fTax.editText !== "" ? fTax.editText : fTax.currentText;
             var catVal = fCat.editText !== "" ? fCat.editText : fCat.currentText;
             var subVal = fSubcat.editText !== "" ? fSubcat.editText : fSubcat.currentText;
@@ -535,7 +575,7 @@ ColumnLayout {
                 venc = "";
             var fields = {
                 "name": fName.text,
-                "price": parseFloat(fPrice.text) || 0,
+                "price": fPrice.amount(),
                 "stock": parseFloat(fStock.text) || 0,
                 "cat": catVal || "General",
                 "subcat": subVal || "",
@@ -545,6 +585,11 @@ ColumnLayout {
                 "vencimiento": venc,
                 "attrsJson": JSON.stringify(at)
             };
+            // Solo enviar costos opcionales si se diligenciaron (≥ 0, 2 decimales).
+            if (fPriceBuy.text.trim() !== "")
+                fields["priceBuy"] = fPriceBuy.amount();
+            if (fPriceWholesale.text.trim() !== "")
+                fields["priceWholesale"] = fPriceWholesale.amount();
             var r;
             if (editDialog.sku === "") {
                 fields.sku = "P" + Date.now().toString().slice(-6);

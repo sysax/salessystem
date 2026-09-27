@@ -14,15 +14,15 @@ CajaRepository::CajaRepository(QSqlDatabase db, AuditRepository *audit, QObject 
 {
 }
 
-static QList<CajaSale> parseSales(const QString &json, double &total)
+static QList<CajaSale> parseSales(const QString &json, Money &total)
 {
     QList<CajaSale> out;
-    total = 0.0;
+    total = Money();
     const QJsonArray arr = QJsonDocument::fromJson(json.toUtf8()).array();
     for (const auto &v : arr) {
         CajaSale s;
         s.id = v.toObject().value(QStringLiteral("id")).toString();
-        s.total = v.toObject().value(QStringLiteral("total")).toDouble();
+        s.total = Money::fromCop(v.toObject().value(QStringLiteral("total")).toDouble());
         total += s.total;
         out << s;
     }
@@ -36,17 +36,17 @@ CajaStatus CajaRepository::status() const
     if (!q.exec(QStringLiteral("SELECT * FROM caja WHERE id=1")) || !q.next())
         return st;
     st.open = q.value(QStringLiteral("open")).toInt() != 0;
-    st.openingAmount = q.value(QStringLiteral("opening_amount")).toDouble();
+    st.openingAmount = Money::fromCop(q.value(QStringLiteral("opening_amount")).toDouble());
     st.openingTs = q.value(QStringLiteral("opening_ts")).toString();
     st.openingUser = q.value(QStringLiteral("opening_user")).toString();
-    double total = 0.0;
+    Money total;
     st.salesToday = parseSales(q.value(QStringLiteral("sales_today_json")).toString(), total);
     st.totalSales = total;
     st.expected = st.openingAmount + total;
     return st;
 }
 
-Result<CajaStatus> CajaRepository::open(double amount, const QString &user)
+Result<CajaStatus> CajaRepository::open(Money amount, const QString &user)
 {
     QSqlQuery q(m_db);
     if (!q.exec(QStringLiteral("SELECT open FROM caja WHERE id=1")))
@@ -61,12 +61,12 @@ Result<CajaStatus> CajaRepository::open(double amount, const QString &user)
     up.prepare(
         QStringLiteral("UPDATE caja SET open=1, opening_amount=?, opening_ts=?, opening_user=?, "
                        "sales_today_json='[]', expected=? WHERE id=1"));
-    up.addBindValue(amount);
+    up.addBindValue(amount.toCop());
     // Fase 3: turno con precisión de ms (evita colisiones entre turnos del
     // mismo segundo al filtrar movimientos por turno).
     up.addBindValue(QDateTime::currentDateTime().toString(Qt::ISODateWithMs));
     up.addBindValue(user);
-    up.addBindValue(amount);
+    up.addBindValue(amount.toCop());
     if (!up.exec())
         return Result<CajaStatus>::failure(up.lastError().text());
     // Fase 3: movimiento de apertura (atómico con el UPDATE: misma tx).
@@ -75,13 +75,13 @@ Result<CajaStatus> CajaRepository::open(double amount, const QString &user)
         return Result<CajaStatus>::failure(QStringLiteral("No se pudo registrar la apertura"));
     if (m_audit)
         m_audit->log(user, QStringLiteral("caja_apertura"),
-                     QStringLiteral("$%1").arg(amount, 0, 'f', 2));
+                     QStringLiteral("$%1").arg(amount.toCop(), 0, 'f', 2));
     if (!tx.commit())
         return Result<CajaStatus>::failure(QStringLiteral("No se pudo confirmar la apertura"));
     return Result<CajaStatus>::success(status());
 }
 
-Result<CajaCloseResult> CajaRepository::close(double counted, const QString &user,
+Result<CajaCloseResult> CajaRepository::close(Money counted, const QString &user,
                                               const QString &reason)
 {
     const CajaStatus st = status();
@@ -94,9 +94,9 @@ Result<CajaCloseResult> CajaRepository::close(double counted, const QString &use
     r.salesCount = st.salesToday.size();
     r.totalSales = st.totalSales;
     // Fase 5: sobra/falta sin justificar no cierra.
-    if (qAbs(r.diff) > 1e-9 && reason.trimmed().isEmpty())
+    if (!r.diff.isZero() && reason.trimmed().isEmpty())
         return Result<CajaCloseResult>::failure(
-            QStringLiteral("Diferencia de %1: indique el motivo").arg(r.diff, 0, 'f', 0));
+            QStringLiteral("Diferencia de %1: indique el motivo").arg(r.diff.toCop(), 0, 'f', 0));
     // Fase 1: auditoría + reseteo del turno en una transacción (el
     // UPDATE antes se ejecutaba sin verificar: un fallo dejaba la caja
     // abierta con arqueo ya reportado).
@@ -107,10 +107,10 @@ Result<CajaCloseResult> CajaRepository::close(double counted, const QString &use
     if (m_audit)
         m_audit->log(user, QStringLiteral("caja_cierre"),
                      QStringLiteral("esperado $%1 contado $%2 diff %3%4 ventas %5%6")
-                         .arg(r.expected, 0, 'f', 2)
-                         .arg(counted, 0, 'f', 2)
-                         .arg(r.diff >= 0 ? QStringLiteral("+") : QString())
-                         .arg(r.diff, 0, 'f', 2)
+                         .arg(r.expected.toCop(), 0, 'f', 2)
+                         .arg(counted.toCop(), 0, 'f', 2)
+                         .arg(!r.diff.isNegative() ? QStringLiteral("+") : QString())
+                         .arg(r.diff.toCop(), 0, 'f', 2)
                          .arg(r.salesCount)
                          .arg(reason.trimmed().isEmpty()
                                   ? QString()
@@ -130,7 +130,7 @@ Result<CajaCloseResult> CajaRepository::close(double counted, const QString &use
     return Result<CajaCloseResult>::success(r);
 }
 
-bool CajaRepository::recordSale(const QString &saleId, double total)
+bool CajaRepository::recordSale(const QString &saleId, Money total)
 {
     const CajaStatus st = status();
     if (!st.open)
@@ -139,18 +139,18 @@ bool CajaRepository::recordSale(const QString &saleId, double total)
     for (const CajaSale &s : st.salesToday) {
         QJsonObject o;
         o[QStringLiteral("id")] = s.id;
-        o[QStringLiteral("total")] = s.total;
+        o[QStringLiteral("total")] = s.total.toCop();
         arr << o;
     }
     QJsonObject o;
     o[QStringLiteral("id")] = saleId;
-    o[QStringLiteral("total")] = total;
+    o[QStringLiteral("total")] = total.toCop();
     arr << o;
-    const double expected = st.openingAmount + st.totalSales + total;
+    const Money expected = st.openingAmount + st.totalSales + total;
     QSqlQuery up(m_db);
     up.prepare(QStringLiteral("UPDATE caja SET sales_today_json=?, expected=? WHERE id=1"));
     up.addBindValue(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
-    up.addBindValue(expected);
+    up.addBindValue(expected.toCop());
     if (!up.exec())
         return false;
     // Fase 3: movimiento de venta (método desde payments_json de la venta).
@@ -173,9 +173,9 @@ bool CajaRepository::reverseSale(const QString &saleId)
     if (!st.open)
         return true; // turno cerrado: nada que retirar del turno actual
     bool found = false;
-    double removed = 0.0;
+    Money removed;
     QJsonArray arr;
-    double total = 0.0;
+    Money total;
     for (const CajaSale &s : st.salesToday) {
         if (s.id == saleId) {
             found = true;
@@ -184,7 +184,7 @@ bool CajaRepository::reverseSale(const QString &saleId)
         }
         QJsonObject o;
         o[QStringLiteral("id")] = s.id;
-        o[QStringLiteral("total")] = s.total;
+        o[QStringLiteral("total")] = s.total.toCop();
         arr << o;
         total += s.total;
     }
@@ -193,14 +193,14 @@ bool CajaRepository::reverseSale(const QString &saleId)
     QSqlQuery up(m_db);
     up.prepare(QStringLiteral("UPDATE caja SET sales_today_json=?, expected=? WHERE id=1"));
     up.addBindValue(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
-    up.addBindValue(st.openingAmount + total);
+    up.addBindValue((st.openingAmount + total).toCop());
     if (!up.exec())
         return false;
     // Fase 3: la devolución queda en movimientos (monto negativo).
     return logMovement(QStringLiteral("devolucion"), -removed, QString(), saleId, st.openingUser);
 }
 
-bool CajaRepository::logMovement(const QString &type, double amount, const QString &method,
+bool CajaRepository::logMovement(const QString &type, Money amount, const QString &method,
                                  const QString &saleId, const QString &user)
 {
     QSqlQuery q(m_db);
@@ -210,7 +210,7 @@ bool CajaRepository::logMovement(const QString &type, double amount, const QStri
     q.addBindValue(QDateTime::currentDateTime().toString(Qt::ISODateWithMs).left(19));
     q.addBindValue(currentTurno());
     q.addBindValue(type.trimmed());
-    q.addBindValue(amount);
+    q.addBindValue(amount.toCop());
     q.addBindValue(method.trimmed());
     q.addBindValue(saleId.trimmed().isEmpty() ? QVariant() : saleId.trimmed());
     q.addBindValue(user.trimmed().isEmpty() ? QVariant() : user.trimmed());
@@ -253,7 +253,7 @@ QList<CajaRepository::Movement> CajaRepository::movements(const QString &turno) 
         m.ts = q.value(QStringLiteral("ts")).toString();
         m.turno = q.value(QStringLiteral("turno")).toString();
         m.type = q.value(QStringLiteral("tipo")).toString();
-        m.amount = q.value(QStringLiteral("monto")).toDouble();
+        m.amount = Money::fromCop(q.value(QStringLiteral("monto")).toDouble());
         m.method = q.value(QStringLiteral("metodo_pago")).toString();
         m.saleId = q.value(QStringLiteral("sale_id")).toString();
         m.user = q.value(QStringLiteral("user_id")).toString();
@@ -262,14 +262,14 @@ QList<CajaRepository::Movement> CajaRepository::movements(const QString &turno) 
     return out;
 }
 
-double CajaRepository::expectedFromMovements() const
+Money CajaRepository::expectedFromMovements() const
 {
     // Cuadra por construcción: apertura + ventas − devoluciones del turno
     // actual (el cierre es informativo y no suma). Sin turno abierto → 0.
     const QString turno = currentTurno();
     if (turno.isEmpty())
-        return 0.0;
-    double expected = 0.0;
+        return Money();
+    Money expected;
     for (const Movement &m : movements(turno)) {
         if (m.type == QLatin1String("cierre"))
             continue;

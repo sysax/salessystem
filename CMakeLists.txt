@@ -67,6 +67,8 @@ add_library(
     src/repositories/SaleRepository.cpp
     src/repositories/InventoryRepository.h
     src/repositories/InventoryRepository.cpp
+    src/repositories/LocationRepository.h
+    src/repositories/LocationRepository.cpp
     src/repositories/PurchaseRepository.h
     src/repositories/PurchaseRepository.cpp
     src/repositories/CreditRepository.h
@@ -209,6 +211,7 @@ qt_add_qml_module(
     qml/components/EmptyState.qml
     qml/components/ConfirmDialog.qml
     qml/components/BusinessBadge.qml
+    qml/components/MoneyField.qml
 )
 
 target_link_libraries(

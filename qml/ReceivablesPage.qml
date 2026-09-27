@@ -58,13 +58,28 @@ ColumnLayout {
         standardButtons: Dialog.Ok | Dialog.Cancel
         property string saleId: ""
         ColumnLayout {
-            TextField {
+            // Fase 2: abono >= 0, 2 decimales (MoneyField + Money backend).
+            MoneyField {
                 id: payAmount
                 placeholderText: qsTr("Monto")
+                label: qsTr("Monto")
+                Layout.fillWidth: true
+                maxValue: 999999999
+                allowNegative: false
+                maxDecimals: 2
+            }
+            Label {
+                visible: payAmount.errorText !== ""
+                text: payAmount.errorText
+                color: Theme.error
             }
         }
         onAccepted: {
-            var r = cxcCtl.pay(payDialog.saleId, parseFloat(payAmount.text) || 0, "Efectivo", auth.currentUser);
+            if (!payAmount.isValid()) {
+                open();
+                return;
+            }
+            var r = cxcCtl.pay(payDialog.saleId, payAmount.amount(), "Efectivo", auth.currentUser);
             msg.text = r.ok ? qsTr("Abono registrado, saldo: ") + money(r.balance) : r.error;
             if (!r.ok)
                 open();

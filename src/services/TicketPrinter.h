@@ -6,6 +6,7 @@
 #include <QList>
 #include <QMap>
 
+#include "../core/Money.h"
 #include "../core/Result.h"
 
 // Ticket de venta en texto (.txt) + señal de cajón.
@@ -36,9 +37,9 @@ class TicketPrinter : public QObject
         struct Line
         {
             QString name;
-            double qty = 0.0; // Fase 2: decimal (granel)
-            double price = 0.0;
-            double subtotal = 0.0;
+            double qty = 0.0; // Fase 2: decimal (granel) — cantidad, no dinero
+            Money price;
+            Money subtotal;
             QString serial; // Fase 3: IMEI/serial (solo líneas tracked)
         };
         // Fase 1: desglose por tasa (los rellena PosController desde
@@ -46,17 +47,17 @@ class TicketPrinter : public QObject
         struct TaxLine
         {
             QString label;
-            double base = 0.0;
-            double tax = 0.0;
+            Money base;
+            Money tax;
         };
         QList<Line> lines;
         QList<TaxLine> taxLines;
-        double discount = 0.0;
+        Money discount;
         QString promoCode;
-        double tax = 0.0;
-        double total = 0.0;
-        QMap<QString, double> payments;
-        double change = 0.0;
+        Money tax;
+        Money total;
+        QMap<QString, Money> payments;
+        Money change;
     };
     struct PrintResult
     {

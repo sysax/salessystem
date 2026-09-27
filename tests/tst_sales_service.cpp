@@ -65,7 +65,7 @@ class TstSalesService : public QObject
                                QStringLiteral("Efectivo"), QString(), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(r.value().status, QStringLiteral("Pagada"));
-        QVERIFY(qFuzzyCompare(r.value().total, 107100.0));
+        QCOMPARE(r.value().total, Money::fromCop(107100.0));
         QVERIFY(!r.value().cufe.isEmpty());
         QCOMPARE(m_products->findById(2)->stock, 45 - 2);
         QCOMPARE(salesEvents, 1);
@@ -87,7 +87,7 @@ class TstSalesService : public QObject
                                QStringLiteral("Efectivo"), QStringLiteral("ELEC10"),
                                QStringLiteral("tester"));
         QVERIFY(r.ok());
-        QVERIFY(qFuzzyCompare(r.value().total, 2016500.0));
+        QCOMPARE(r.value().total, Money::fromCop(2016500.0));
         QCOMPARE(m_products->findById(1)->stock, 12 - 1);
     }
 
@@ -96,19 +96,20 @@ class TstSalesService : public QObject
         // Fase 4: María López es mayorista → price_wholesale 480000
         // + IVA 104500... recalculado: 480000 + 91200 = 571200;
         // 50000 efectivo + resto crédito.
-        QMap<QString, double> pay{{"efectivo", 50000.0}, {"credito", 521200.0}};
+        QMap<QString, Money> pay{{QStringLiteral("efectivo"), Money::fromCop(50000.0)},
+                                  {QStringLiteral("credito"), Money::fromCop(521200.0)}};
         auto r = m_svc->create({SI{.productId = 4, .qty = 1}}, QStringLiteral("María López"), pay,
                                QStringLiteral("Mixto"), QString(), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(r.value().status, QStringLiteral("Pendiente"));
         const auto s = m_sales->find(r.value().id);
         QVERIFY(s.has_value());
-        QCOMPARE(s->paid, 50000.0);
-        QCOMPARE(s->balance, 521200.0);
+        QCOMPARE(s->paid, Money::fromCop(50000.0));
+        QCOMPARE(s->balance, Money::fromCop(521200.0));
         // Crédito cargado al cliente (500000 seed + 521200)
         const auto c = m_clients->findByName(QStringLiteral("María López"));
         QVERIFY(c.has_value());
-        QCOMPARE(c->balance, 500000.0 + 521200.0);
+        QCOMPARE(c->balance, Money::fromCop(500000.0 + 521200.0));
     }
 
     void validationErrors()
@@ -139,7 +140,7 @@ class TstSalesService : public QObject
         // Fase 3: saldo + nuevo crédito <= límite (P002: 45000 + IVA = 53550).
         Client c;
         c.name = QStringLiteral("LIMIT-TEST");
-        c.creditLimit = 100000.0;
+        c.creditLimit = Money::fromCop(100000.0);
         QVERIFY(m_clients->add(c).ok());
         auto okSale
             = m_svc->create({SI{.productId = 2, .qty = 1.0}}, QStringLiteral("LIMIT-TEST"), {},
@@ -153,7 +154,7 @@ class TstSalesService : public QObject
         // Sin límite asignado (0) → crédito bloqueado; contado sí pasa.
         Client z;
         z.name = QStringLiteral("NOLIMIT");
-        z.creditLimit = 0.0;
+        z.creditLimit = Money();
         QVERIFY(m_clients->add(z).ok());
         QVERIFY(!m_svc
                      ->create({SI{.productId = 2, .qty = 1.0}}, QStringLiteral("NOLIMIT"), {},
@@ -216,17 +217,17 @@ class TstSalesService : public QObject
         QSKIP("pendiente de integrar reversión crédito/caja de Fase 1");
         // Fase 1: la cancelación revierte EXACTAMENTE todas las escrituras
         // de la venta (stock + crédito del cliente + turno de caja).
-        QVERIFY(m_caja->open(100000.0, QStringLiteral("tester")).ok());
-        const double cajaBefore = m_caja->status().expected;
+        QVERIFY(m_caja->open(Money::fromCop(100000.0), QStringLiteral("tester")).ok());
+        const Money cajaBefore = m_caja->status().expected;
         const double stockBefore = m_products->findById(6)->stock;
-        const double creditBefore = m_clients->findByName(QStringLiteral("Juan Pérez"))->balance;
+        const Money creditBefore = m_clients->findByName(QStringLiteral("Juan Pérez"))->balance;
 
         // Venta 100 % a crédito (2 uds. producto 6).
         auto r = m_svc->create({SI{.productId = 6, .qty = 2}}, QStringLiteral("Juan Pérez"), {},
                                QStringLiteral("Credito"), QString(), QStringLiteral("tester"));
         QVERIFY(r.ok());
         QCOMPARE(r.value().status, QStringLiteral("Pendiente"));
-        const double total = r.value().total;
+        const Money total = r.value().total;
         QCOMPARE(m_clients->findByName(QStringLiteral("Juan Pérez"))->balance,
                  creditBefore + total);
         QCOMPARE(m_caja->status().expected, cajaBefore + total);
@@ -241,11 +242,11 @@ class TstSalesService : public QObject
         QCOMPARE(m_caja->status().expected, cajaBefore);
         const auto s = m_sales->find(r.value().id);
         QVERIFY(s.has_value());
-        QCOMPARE(s->balance, 0.0);
+        QCOMPARE(s->balance, Money());
         // Cerrar el turno abierto por este test (conteo exacto, diff 0).
         auto closed = m_caja->close(cajaBefore, QStringLiteral("tester"));
         QVERIFY(closed.ok());
-        QCOMPARE(closed.value().diff, 0.0);
+        QCOMPARE(closed.value().diff, Money());
     }
 
     void totalsDryRun()
@@ -253,7 +254,7 @@ class TstSalesService : public QObject
         const auto t = m_svc->calculateTotals({SI{.productId = 3, .qty = 2}});
         // Teclado 145000×2=290000, IVA 19 % = 55100 → 345100
         QCOMPARE(t.itemsCount, 1);
-        QVERIFY(qFuzzyCompare(t.total, 345100.0));
+        QCOMPARE(t.total, Money::fromCop(345100.0));
         QCOMPARE(m_products->findById(3)->stock, 20); // sin efecto
     }
 

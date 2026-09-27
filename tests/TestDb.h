@@ -46,6 +46,19 @@ inline bool loadFixture(const QSqlDatabase &db, const QString &path, QString *er
 
 inline bool loadDemo(const QSqlDatabase &db, QString *error = nullptr)
 {
-    return loadFixture(db, demoFixturePath(), error);
+    if (!loadFixture(db, demoFixturePath(), error))
+        return false;
+    // Fase 6: el seed entra por SQL crudo (sin ProductRepository::add, que sí
+    // escribe el ledger). Backfill idempotente para que stock_by_location
+    // coincida con products.stock antes de operar.
+    QSqlQuery q(db);
+    if (!q.exec(QStringLiteral(
+            "INSERT OR IGNORE INTO stock_by_location (sku, location_id, qty) "
+            "SELECT sku, 1, stock FROM products WHERE stock IS NOT NULL"))) {
+        if (error)
+            *error = q.lastError().text();
+        return false;
+    }
+    return true;
 }
 } // namespace TestDb

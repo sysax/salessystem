@@ -17,6 +17,7 @@
 
 #include <algorithm>
 
+#include "../core/Money.h"
 #include "../domain/Attrs.h"
 
 ReportService::ReportService(QSqlDatabase db, SettingsService *settings, QObject *parent)
@@ -56,6 +57,16 @@ static double scalar(QSqlDatabase db, const QString &sql)
     return q.value(0).toDouble();
 }
 
+// Frontera SQL: la BD guarda REAL; el dominio calcula en Money (céntimos).
+// Solo importes de dinero usan moneyScalar; qty/conteos/tasas % siguen en double.
+static Money moneyScalar(QSqlDatabase db, const QString &sql)
+{
+    QSqlQuery q(db);
+    if (!q.exec(sql) || !q.next())
+        return Money();
+    return Money::fromCop(q.value(0).toDouble());
+}
+
 QVariantMap ReportService::stats(const QString &businessType) const
 {
     // Multitienda: ventas por rubro ('' = mixtas/legacy, visibles en todos);
@@ -77,11 +88,23 @@ QVariantMap ReportService::stats(const QString &businessType) const
         }
         return q.value(0).toDouble();
     };
+    auto salesMoney = [&](const QString &sql) -> Money {
+        QSqlQuery q(m_db);
+        if (sf.isEmpty()) {
+            if (!q.exec(sql) || !q.next())
+                return Money();
+        } else {
+            q.prepare(sql + sf);
+            q.addBindValue(bt);
+            if (!q.exec() || !q.next())
+                return Money();
+        }
+        return Money::fromCop(q.value(0).toDouble());
+    };
+    const Money totalSales = salesMoney(
+        QStringLiteral("SELECT COALESCE(SUM(total),0) FROM sales WHERE status='Pagada'"));
     return {
-        {"totalSales",
-         salesScalar(
-             QStringLiteral("SELECT COALESCE(SUM(total),0) FROM sales WHERE status='Pagada'"),
-             true)},
+        {"totalSales", totalSales.toCop()},
         {"totalProducts", salesScalar(QStringLiteral("SELECT COUNT(*) FROM products"), false)},
         {"totalClients", scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM clients"))},
         {"pendingOrders",
@@ -214,7 +237,7 @@ QVariantList ReportService::topClients(int n, const QString &businessType) const
     while (q.next())
         out << QVariantMap{{"client", q.value(0).toString()},
                            {"orders", q.value(1).toInt()},
-                           {"total", q.value(2).toDouble()}};
+                           {"total", Money::fromCop(q.value(2).toDouble()).toCop()}};
     return out;
 }
 
@@ -241,7 +264,7 @@ QVariantList ReportService::topSellers(int n, const QString &businessType) const
     while (q.next())
         out << QVariantMap{{"seller", q.value(0).toString()},
                            {"sales", q.value(1).toInt()},
-                           {"total", q.value(2).toDouble()}};
+                           {"total", Money::fromCop(q.value(2).toDouble()).toCop()}};
     return out;
 }
 
@@ -281,21 +304,23 @@ QVariantList ReportService::marginPerProduct(const QString &businessType) const
     }
     while (p.next()) {
         const int pid = p.value(0).toInt();
-        const double price = p.value(3).toDouble();
-        double cost = p.value(4).toDouble();
-        if (cost <= 0)
+        const Money price = Money::fromCop(p.value(3).toDouble());
+        Money cost = Money::fromCop(p.value(4).toDouble());
+        if (!cost.isPositive())
             cost = price * 0.7;
-        const double mu = price - cost;
+        const Money mu = price - cost;
         const double s = sold.value(pid, 0.0);
+        const Money marginTotal = mu * s;
+        const double priceCop = price.toCop();
         out << QVariantMap{{"id", pid},
                            {"sku", p.value(1).toString()},
                            {"name", p.value(2).toString()},
                            {"sold", s},
-                           {"price", price},
-                           {"cost", cost},
-                           {"marginUnit", mu},
-                           {"marginTotal", mu * s},
-                           {"marginPct", price > 0 ? mu / price * 100.0 : 0.0}};
+                           {"price", price.toCop()},
+                           {"cost", cost.toCop()},
+                           {"marginUnit", mu.toCop()},
+                           {"marginTotal", marginTotal.toCop()},
+                           {"marginPct", priceCop > 0 ? mu.toCop() / priceCop * 100.0 : 0.0}};
     }
     std::sort(out.begin(), out.end(), [](const QVariant &a, const QVariant &b) {
         return a.toMap()["marginTotal"].toDouble() > b.toMap()["marginTotal"].toDouble();
@@ -305,16 +330,18 @@ QVariantList ReportService::marginPerProduct(const QString &businessType) const
 
 double ReportService::averageTicket(const QString &businessType) const
 {
+    // QML necesita double: se calcula en Money y se expone con .toCop().
     const QString bt = effectiveBt(businessType);
     if (bt.isEmpty())
-        return scalar(m_db, QStringLiteral("SELECT AVG(total) FROM sales WHERE status='Pagada'"));
+        return moneyScalar(m_db, QStringLiteral("SELECT AVG(total) FROM sales WHERE status='Pagada'"))
+            .toCop();
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("SELECT AVG(total) FROM sales WHERE status='Pagada' AND "
                              "(business_type IS NULL OR business_type='' OR business_type=?)"));
     q.addBindValue(bt);
     if (!q.exec() || !q.next())
         return 0.0;
-    return q.value(0).toDouble();
+    return Money::fromCop(q.value(0).toDouble()).toCop();
 }
 
 QVariantMap ReportService::salesForPeriod(const QString &range, const QString &businessType) const
@@ -340,20 +367,20 @@ QVariantMap ReportService::salesForPeriod(const QString &range, const QString &b
         q.addBindValue(QStringLiteral("-%1 days").arg(d - 1));
         q.addBindValue(bt);
     }
-    double total = 0;
+    Money total;
     int count = 0;
     if (q.exec() && q.next()) {
-        total = q.value(0).toDouble();
+        total = Money::fromCop(q.value(0).toDouble());
         count = q.value(1).toInt();
     }
-    return {{"total", total}, {"count", count}, {"rango", range}};
+    return {{"total", total.toCop()}, {"count", count}, {"rango", range}};
 }
 
 QVariantList ReportService::salesByDay(int days, const QString &businessType) const
 {
     QVariantList out;
     const QString bt = effectiveBt(businessType);
-    QMap<QString, double> byDate;
+    QMap<QString, Money> byDate;
     QSqlQuery q(m_db);
     if (bt.isEmpty()) {
         if (!q.exec(QStringLiteral(
@@ -368,14 +395,14 @@ QVariantList ReportService::salesByDay(int days, const QString &businessType) co
             return out;
     }
     while (q.next())
-        byDate[q.value(0).toString()] = q.value(1).toDouble();
+        byDate[q.value(0).toString()] = Money::fromCop(q.value(1).toDouble());
     const QDate today = QDate::currentDate();
     for (int i = days - 1; i >= 0; --i) {
         const QDate d = today.addDays(-i);
         const QString key = d.toString(Qt::ISODate);
         out << QVariantMap{{"day", d.toString(QStringLiteral("MM/dd"))},
                            {"date", key},
-                           {"total", byDate.value(key, 0.0)}};
+                           {"total", byDate.value(key).toCop()}};
     }
     return out;
 }
@@ -404,24 +431,24 @@ QVariantMap ReportService::salesSummary(const QString &businessType) const
 QVariantMap ReportService::incomeStatement(const QString &businessType) const
 {
     const QString bt = effectiveBt(businessType);
-    auto salesScalar = [&](const QString &sql) -> double {
+    auto salesMoney = [&](const QString &sql) -> Money {
         QSqlQuery q(m_db);
         if (bt.isEmpty()) {
             if (!q.exec(sql) || !q.next())
-                return 0.0;
+                return Money();
         } else {
             q.prepare(sql
                       + QStringLiteral(" AND (business_type IS NULL OR business_type='' OR "
                                        "business_type=?)"));
             q.addBindValue(bt);
             if (!q.exec() || !q.next())
-                return 0.0;
+                return Money();
         }
-        return q.value(0).toDouble();
+        return Money::fromCop(q.value(0).toDouble());
     };
-    const double ingresos = salesScalar(
+    const Money ingresos = salesMoney(
         QStringLiteral("SELECT COALESCE(SUM(total),0) FROM sales WHERE status='Pagada'"));
-    double costo = 0.0;
+    Money costo;
     QSqlQuery q(m_db);
     if (bt.isEmpty()) {
         if (!q.exec(QStringLiteral(
@@ -429,11 +456,11 @@ QVariantMap ReportService::incomeStatement(const QString &businessType) const
                 "JOIN sales ON sale_items.sale_id=sales.id "
                 "JOIN products ON sale_items.product_id=products.id "
                 "WHERE sales.status='Pagada'")))
-            return {{"ingresos", ingresos},
+            return {{"ingresos", ingresos.toCop()},
                     {"costo", 0.0},
-                    {"bruto", ingresos},
+                    {"bruto", ingresos.toCop()},
                     {"impuestos", 0.0},
-                    {"neto", ingresos}};
+                    {"neto", ingresos.toCop()}};
     } else {
         q.prepare(QStringLiteral(
             "SELECT sale_items.qty, products.price_buy, products.price FROM sale_items "
@@ -443,35 +470,35 @@ QVariantMap ReportService::incomeStatement(const QString &businessType) const
             "sales.business_type='' OR sales.business_type=?)"));
         q.addBindValue(bt);
         if (!q.exec())
-            return {{"ingresos", ingresos},
+            return {{"ingresos", ingresos.toCop()},
                     {"costo", 0.0},
-                    {"bruto", ingresos},
+                    {"bruto", ingresos.toCop()},
                     {"impuestos", 0.0},
-                    {"neto", ingresos}};
+                    {"neto", ingresos.toCop()}};
     }
     while (q.next()) {
-        double c = q.value(1).toDouble();
-        if (c <= 0)
-            c = q.value(2).toDouble() * 0.7;
+        Money c = Money::fromCop(q.value(1).toDouble());
+        if (!c.isPositive())
+            c = Money::fromCop(q.value(2).toDouble()) * 0.7;
         costo += c * q.value(0).toDouble();
     }
-    const double impuestos = salesScalar(
+    const Money impuestos = salesMoney(
         QStringLiteral("SELECT COALESCE(SUM(tax),0) FROM sales WHERE status='Pagada'"));
-    const double bruto = ingresos - costo;
-    return {{"ingresos", ingresos},
-            {"costo", costo},
-            {"bruto", bruto},
-            {"impuestos", impuestos},
-            {"neto", bruto - impuestos * 0.1}};
+    const Money bruto = ingresos - costo;
+    const Money neto = bruto - impuestos * 0.1;
+    return {{"ingresos", ingresos.toCop()},
+            {"costo", costo.toCop()},
+            {"bruto", bruto.toCop()},
+            {"impuestos", impuestos.toCop()},
+            {"neto", neto.toCop()}};
 }
 
 QVariantMap ReportService::cashFlow(const QString &businessType) const
 {
     const QString bt = effectiveBt(businessType);
-    double entradas = 0.0;
+    Money entradas;
     if (bt.isEmpty()) {
-        entradas
-            = scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(paid),0) FROM sales WHERE status IN "
+        entradas = moneyScalar(m_db, QStringLiteral("SELECT COALESCE(SUM(paid),0) FROM sales WHERE status IN "
                                           "('Pagada','Entregada','Facturada')"));
     } else {
         QSqlQuery q(m_db);
@@ -480,12 +507,12 @@ QVariantMap ReportService::cashFlow(const QString &businessType) const
                                  "business_type='' OR business_type=?)"));
         q.addBindValue(bt);
         if (q.exec() && q.next())
-            entradas = q.value(0).toDouble();
+            entradas = Money::fromCop(q.value(0).toDouble());
     }
     // Multitienda: las CxP (proveedores) no llevan rubro → salidas globales.
-    const double salidas
-        = scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(paid),0) FROM payables"));
-    return {{"entradas", entradas}, {"salidas", salidas}, {"neto", entradas - salidas}};
+    const Money salidas
+        = moneyScalar(m_db, QStringLiteral("SELECT COALESCE(SUM(paid),0) FROM payables"));
+    return {{"entradas", entradas.toCop()}, {"salidas", salidas.toCop()}, {"neto", (entradas - salidas).toCop()}};
 }
 
 QVariantMap ReportService::taxes(const QString &businessType) const
@@ -494,7 +521,7 @@ QVariantMap ReportService::taxes(const QString &businessType) const
     // Ventas históricas sin breakdown caen al bucket legacy iva_19 (compat).
     // Multitienda: '' = mixtas/legacy, visibles en todos los rubros.
     const QString bt = effectiveBt(businessType);
-    QMap<double, double> byRate;
+    QMap<double, Money> byRate;
     QMap<double, QString> names;
     QSqlQuery q(m_db);
     if (bt.isEmpty()) {
@@ -509,7 +536,7 @@ QVariantMap ReportService::taxes(const QString &businessType) const
     }
     bool hasColumn = true;
     while (q.next()) {
-        const double legacy = q.value(0).toDouble();
+        const Money legacy = Money::fromCop(q.value(0).toDouble());
         const int col = q.record().indexOf(QStringLiteral("tax_breakdown"));
         if (col < 0) {
             hasColumn = false;
@@ -532,7 +559,7 @@ QVariantMap ReportService::taxes(const QString &businessType) const
                 continue;
             const auto o = v.toObject();
             const double rate = o.value(QStringLiteral("rate")).toDouble();
-            const double tax = o.value(QStringLiteral("tax")).toDouble();
+            const Money tax = Money::fromCop(o.value(QStringLiteral("tax")).toDouble());
             byRate[rate] += tax;
             const QString nm = o.value(QStringLiteral("name")).toString();
             if (!nm.isEmpty() && !names.contains(rate))
@@ -541,25 +568,27 @@ QVariantMap ReportService::taxes(const QString &businessType) const
     }
     Q_UNUSED(hasColumn);
     QVariantList breakdown;
-    double total = 0.0;
+    Money total;
     for (auto it = byRate.begin(); it != byRate.end(); ++it) {
         total += it.value();
         breakdown << QVariantMap{
             {"name", names.value(it.key(), QStringLiteral("%1%").arg(it.key()))},
             {"rate", it.key()},
-            {"tax", it.value()}};
+            {"tax", it.value().toCop()}};
     }
-    return {{"iva_19", byRate.value(19.0, 0.0)}, {"total", total}, {"breakdown", breakdown}};
+    return {{"iva_19", byRate.value(19.0).toCop()}, {"total", total.toCop()}, {"breakdown", breakdown}};
 }
 
 QVariantMap ReportService::kpis(const QString &businessType) const
 {
     const QString bt = effectiveBt(businessType);
     const QVariantMap estado = incomeStatement(bt);
-    const double costo = estado["costo"].toDouble();
-    const double invVal
-        = scalar(m_db, QStringLiteral("SELECT COALESCE(SUM(price_buy*stock),0) FROM products"));
-    const double rotacion = costo / (invVal > 0 ? invVal : 1.0);
+    const Money costo = Money::fromCop(estado["costo"].toDouble());
+    const Money invVal = moneyScalar(
+        m_db, QStringLiteral("SELECT COALESCE(SUM(price_buy*stock),0) FROM products"));
+    const double costoCop = costo.toCop();
+    const double invCop = invVal.toCop();
+    const double rotacion = costoCop / (invCop > 0 ? invCop : 1.0);
     const double totalDocs
         = scalar(m_db, QStringLiteral("SELECT COUNT(*) FROM sales WHERE status IN "
                                       "('Pagada','Cotización','Pedido')"));
@@ -568,15 +597,15 @@ QVariantMap ReportService::kpis(const QString &businessType) const
     const double ingresos = estado["ingresos"].toDouble();
     const double brutoPct = ingresos > 0 ? estado["bruto"].toDouble() / ingresos * 100.0 : 0.0;
     const double netoPct = ingresos > 0 ? estado["neto"].toDouble() / ingresos * 100.0 : 0.0;
-    constexpr double costosFijos = 5000000.0;
+    const Money costosFijos = Money::fromCop(5000000.0);
     const double margen = brutoPct / 100.0 > 0 ? brutoPct / 100.0 : 0.01;
     return {{"rotacion", rotacion},
             {"dias_inventario", rotacion > 0 ? 365.0 / rotacion : 0.0},
             {"conversion", totalDocs > 0 ? pagadas / totalDocs * 100.0 : 0.0},
             {"margen_bruto_pct", brutoPct},
             {"margen_neto_pct", netoPct},
-            {"punto_equilibrio", costosFijos / margen},
-            {"costos_fijos", costosFijos}};
+            {"punto_equilibrio", costosFijos.toCop() / margen},
+            {"costos_fijos", costosFijos.toCop()}};
 }
 
 QVariantList ReportService::expiringProducts(int days, const QString &businessType) const
@@ -681,13 +710,13 @@ QVariantList ReportService::wasteReport(const QString &businessType) const
     }
     while (q.next()) {
         const double qty = q.value(2).toDouble();
-        double cost = q.value(3).toDouble();
-        if (cost <= 0)
-            cost = 0.0;
+        Money cost = Money::fromCop(q.value(3).toDouble());
+        if (!cost.isPositive())
+            cost = Money();
         out << QVariantMap{{"sku", q.value(0).toString()},
                            {"product", q.value(1).toString()},
                            {"qty", qty},
-                           {"cost", qty * cost}};
+                           {"cost", (cost * qty).toCop()}};
     }
     return out;
 }
@@ -714,7 +743,8 @@ QVariantList ReportService::rotationByCategory(const QString &businessType) cons
                                   "WHERE s.status!='Cancelada' GROUP BY p.cat"))) {
             while (q.next()) {
                 sold[normCat(q.value(0).toString())]
-                    = {{"sold", q.value(1).toDouble()}, {"revenue", q.value(2).toDouble()}};
+                    = {{"sold", q.value(1).toDouble()},
+                       {"revenue", Money::fromCop(q.value(2).toDouble()).toCop()}};
             }
         }
     } else {
@@ -727,7 +757,8 @@ QVariantList ReportService::rotationByCategory(const QString &businessType) cons
         if (q.exec()) {
             while (q.next()) {
                 sold[normCat(q.value(0).toString())]
-                    = {{"sold", q.value(1).toDouble()}, {"revenue", q.value(2).toDouble()}};
+                    = {{"sold", q.value(1).toDouble()},
+                       {"revenue", Money::fromCop(q.value(2).toDouble()).toCop()}};
             }
         }
     }
@@ -780,8 +811,8 @@ QVariantMap ReportService::inventoryValue(const QString &businessType) const
         if (!q.exec() || !q.next())
             return {{"cost", 0.0}, {"sale", 0.0}, {"units", 0.0}, {"items", 0}};
     }
-    return {{"cost", q.value(0).toDouble()},
-            {"sale", q.value(1).toDouble()},
+    return {{"cost", Money::fromCop(q.value(0).toDouble()).toCop()},
+            {"sale", Money::fromCop(q.value(1).toDouble()).toCop()},
             {"units", q.value(2).toDouble()},
             {"items", q.value(3).toInt()}};
 }
@@ -894,8 +925,9 @@ QVariantList ReportService::bulkPerformance(const QString &businessType) const
         QString unit = q.value(0).toString().trimmed();
         if (unit.isEmpty())
             unit = QStringLiteral("unidad");
-        out << QVariantMap{
-            {"unit", unit}, {"qty", q.value(1).toDouble()}, {"revenue", q.value(2).toDouble()}};
+        out << QVariantMap{{"unit", unit},
+                           {"qty", q.value(1).toDouble()},
+                           {"revenue", Money::fromCop(q.value(2).toDouble()).toCop()}};
     }
     return out;
 }

@@ -81,8 +81,8 @@ QString SalesService::bucketsToJson(const QList<TaxBucket> &buckets)
     for (const TaxBucket &b : buckets) {
         arr << QJsonObject{{QStringLiteral("name"), b.name},
                            {QStringLiteral("rate"), b.rate},
-                           {QStringLiteral("base"), b.base},
-                           {QStringLiteral("tax"), b.tax}};
+                           {QStringLiteral("base"), b.base.toCop()},
+                           {QStringLiteral("tax"), b.tax.toCop()}};
     }
     return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
 }
@@ -103,17 +103,17 @@ QList<SalesService::TaxBucket> SalesService::bucketsFromJson(const QString &json
         TaxBucket b;
         b.name = o.value(QStringLiteral("name")).toString();
         b.rate = o.value(QStringLiteral("rate")).toDouble();
-        b.base = o.value(QStringLiteral("base")).toDouble();
-        b.tax = o.value(QStringLiteral("tax")).toDouble();
+        b.base = Money::fromCop(o.value(QStringLiteral("base")).toDouble());
+        b.tax = Money::fromCop(o.value(QStringLiteral("tax")).toDouble());
         out << b;
     }
     return out;
 }
 
-double SalesService::priceFor(const Product &p, double priceOverride,
+Money SalesService::priceFor(const Product &p, Money priceOverride,
                               const QString &clientName) const
 {
-    if (priceOverride > 0)
+    if (!priceOverride.isZero() && priceOverride.isPositive())
         return priceOverride;
     // Fase 4 (abarrotes): clientes mayoristas pagan price_wholesale.
     if (!clientName.trimmed().isEmpty() && m_clients) {
@@ -122,7 +122,7 @@ double SalesService::priceFor(const Product &p, double priceOverride,
             const QString pl = c->priceList.trimmed().toLower();
             if ((pl == QLatin1String("mayorista") || pl == QLatin1String("mayoreo")
                  || pl == QLatin1String("wholesale"))
-                && p.priceWholesale > 0)
+                && p.priceWholesale.isPositive())
                 return p.priceWholesale;
         }
     }
@@ -131,24 +131,28 @@ double SalesService::priceFor(const Product &p, double priceOverride,
 
 namespace
 {
-// Fase 2: impuesto de línea en céntimos exactos (round-half-up).
-double lineTax(double base, double ratePct)
+// Fase 2 (cierre): todo impuesto/descuento de línea en céntimos exactos.
+Money lineTax(Money base, double ratePct)
 {
-    return Money::taxCents(Money::fromCop(base).cents(), ratePct)
-           / static_cast<double>(Money::CentsPerCop);
+    return Money::fromCents(Money::taxCents(base.cents(), ratePct));
+}
+Money moneyPercent(Money base, double pct)
+{
+    return Money::fromCents(
+        static_cast<qint64>(std::llround(static_cast<double>(base.cents()) * pct / 100.0)));
 }
 // Agrega una línea al bucket de su tasa (agregación, sin recalcular).
 void accumulateBucket(QList<SalesService::TaxBucket> &buckets, const QString &name, double rate,
-                      double lineBase, double lineTax)
+                      Money lineBase, Money lineTaxVal)
 {
     for (SalesService::TaxBucket &b : buckets) {
         if (qFuzzyCompare(b.rate + 1.0, rate + 1.0)) {
             b.base += lineBase;
-            b.tax += lineTax;
+            b.tax += lineTaxVal;
             return;
         }
     }
-    buckets << SalesService::TaxBucket{name, rate, lineBase, lineTax};
+    buckets << SalesService::TaxBucket{name, rate, lineBase, lineTaxVal};
 }
 } // namespace
 
@@ -268,7 +272,7 @@ Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> 
         // Fase 4: precio según lista del cliente (mayorista → mayoreo).
         l.unitPrice = priceFor(*p, it.priceOverride, clientName);
         l.subtotal = l.unitPrice * it.qty;
-        l.discount = l.subtotal * it.discountPct / 100.0;
+        l.discount = moneyPercent(l.subtotal, it.discountPct);
         l.taxRate = resolveTaxRate(p->tax);
         l.taxName = resolveTaxName(p->tax);
         l.tax = lineTax(l.subtotal - l.discount, l.taxRate);
@@ -300,9 +304,9 @@ SalesService::Totals SalesService::calculateTotals(const QList<ServiceItem> &ite
         l.qty = it.qty;
         l.serial = it.serial.trimmed();
         l.receta = it.receta.trimmed();
-        l.unitPrice = it.priceOverride > 0 ? it.priceOverride : p->price;
+        l.unitPrice = !it.priceOverride.isZero() ? it.priceOverride : p->price;
         l.subtotal = l.unitPrice * it.qty;
-        l.discount = l.subtotal * it.discountPct / 100.0;
+        l.discount = moneyPercent(l.subtotal, it.discountPct);
         l.taxRate = resolveTaxRate(p->tax);
         l.taxName = resolveTaxName(p->tax);
         l.tax = lineTax(l.subtotal - l.discount, l.taxRate);
@@ -320,7 +324,7 @@ SalesService::Totals SalesService::calculateTotals(const QList<ServiceItem> &ite
 
 Result<SalesService::CreatedSale>
 SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
-                     const QMap<QString, double> &payments, const QString &paymentMethod,
+                     const QMap<QString, Money> &payments, const QString &paymentMethod,
                      const QString &promoCode, const QString &vendedor, bool offline,
                      const QString &role)
 {
@@ -343,7 +347,7 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
     }
 
     // Promo (código vacío → sin descuento, sin error)
-    double promoDiscount = 0.0;
+    Money promoDiscount;
     QString promoUsed;
     if (!promoCode.trimmed().isEmpty()) {
         QList<CartLine> cart;
@@ -363,32 +367,32 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
         promoDiscount = promo.value().discount;
         promoUsed = promo.value().promoCode;
     }
-    const double total = totals.value().total - promoDiscount;
+    const Money total = totals.value().total - promoDiscount;
 
     // Fase 3: la venta a crédito no puede superar el límite del cliente
     // (saldo pendiente + nuevo crédito <= límite). Cliente desconocido
     // (Mostrador sin ficha) no se valida: no hay límite contra qué.
     if (m_clients) {
-        const double creditPart = payments.value(QStringLiteral("credito"), 0.0);
+        const Money creditPart = payments.value(QStringLiteral("credito"), Money());
         const bool toCredit
-            = creditPart > 0
+            = !creditPart.isZero()
               || (payments.isEmpty() && paymentMethod.trimmed() == QLatin1String("Credito"));
         if (toCredit) {
-            const double newCredit = payments.isEmpty() ? total : creditPart;
+            const Money newCredit = payments.isEmpty() ? total : creditPart;
             if (const auto c = m_clients->findByName(clientName.trimmed())) {
-                if (c->creditLimit <= 0) {
+                if (c->creditLimit.isZero() || c->creditLimit.isNegative()) {
                     return Result<CreatedSale>::failure(
                         QStringLiteral("'%1' no tiene crédito asignado").arg(c->name));
                 }
-                if (c->balance + newCredit > c->creditLimit + 1e-9) {
+                if (c->balance + newCredit > c->creditLimit) {
                     return Result<CreatedSale>::failure(
                         QStringLiteral(
                             "Límite de crédito excedido para '%1' (saldo %2 + venta %3 > "
                             "límite %4)")
                             .arg(c->name)
-                            .arg(c->balance, 0, 'f', 0)
-                            .arg(newCredit, 0, 'f', 0)
-                            .arg(c->creditLimit, 0, 'f', 0));
+                            .arg(c->balance.toCop(), 0, 'f', 0)
+                            .arg(newCredit.toCop(), 0, 'f', 0)
+                            .arg(c->creditLimit.toCop(), 0, 'f', 0));
                 }
             }
         }
@@ -505,7 +509,7 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
     }
     if (m_bus)
         m_bus->publish(EventBus::SaleCreated,
-                       {{"sale_id", s.id}, {"total", s.total}, {"client", clientName}});
+                       {{"sale_id", s.id}, {"total", s.total.toCop()}, {"client", clientName}});
 
     CreatedSale out;
     out.id = s.id;
@@ -564,7 +568,7 @@ Result<SalesService::CreatedSale> SalesService::cancel(const QString &saleId, co
     // Fase 1: revertir el crédito cargado al crear la venta (si la venta
     // quedó Pendiente con saldo, ese saldo se restaura al cliente).
     // Debe ir ANTES de advanceStatus, que pone balance=0.
-    if (m_clients && s->status == QLatin1String("Pendiente") && s->balance > 0
+    if (m_clients && s->status == QLatin1String("Pendiente") && s->balance.isPositive()
         && !m_clients->payCredit(s->client, s->balance)) {
         return Result<CreatedSale>::failure(
             QStringLiteral("No se pudo revertir el crédito del cliente"));

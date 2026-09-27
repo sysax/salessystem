@@ -10,11 +10,13 @@
 
 #include <limits>
 
+#include "../core/Transaction.h"
 #include "../domain/Attrs.h"
 
 ProductRepository::ProductRepository(QSqlDatabase db, AuditRepository *audit, QObject *parent)
     : QObject(parent), m_db(std::move(db)), m_audit(audit)
 {
+    m_locations = new LocationRepository(m_db, m_audit, this);
 }
 
 const QStringList ProductRepository::Units = {
@@ -66,9 +68,9 @@ Product ProductRepository::rowToProduct(const QSqlQuery &q)
     p.subcat = q.value(QStringLiteral("subcat")).toString();
     p.brand = q.value(QStringLiteral("brand")).toString();
     p.supplier = q.value(QStringLiteral("supplier")).toString();
-    p.price = q.value(QStringLiteral("price")).toDouble();
-    p.priceBuy = q.value(QStringLiteral("price_buy")).toDouble();
-    p.priceWholesale = q.value(QStringLiteral("price_wholesale")).toDouble();
+    p.price = Money::fromCop(q.value(QStringLiteral("price")).toDouble());
+    p.priceBuy = Money::fromCop(q.value(QStringLiteral("price_buy")).toDouble());
+    p.priceWholesale = Money::fromCop(q.value(QStringLiteral("price_wholesale")).toDouble());
     p.tax = q.value(QStringLiteral("tax")).toString();
     p.unit = q.value(QStringLiteral("unit")).toString();
     p.stock = q.value(QStringLiteral("stock")).toDouble();
@@ -277,7 +279,7 @@ Result<Product> ProductRepository::add(const Product &pin)
     p.name = p.name.trimmed();
     if (p.name.size() < 2)
         return Result<Product>::failure(QStringLiteral("Nombre mínimo 2 caracteres"));
-    if (p.price <= 0 || p.stock < 0)
+    if (!p.price.isPositive() || p.stock < 0)
         return Result<Product>::failure(QStringLiteral("Precio >0 y stock >=0"));
     // Fase 3: vencimiento con formato válido si se informa; attrs JSON objeto.
     if (!p.vencimiento.trimmed().isEmpty()
@@ -299,9 +301,9 @@ Result<Product> ProductRepository::add(const Product &pin)
     } else {
         p.unit = QStringLiteral("unidad");
     }
-    if (p.priceBuy <= 0)
+    if (!p.priceBuy.isPositive())
         p.priceBuy = p.price * 0.7;
-    if (p.priceWholesale <= 0)
+    if (!p.priceWholesale.isPositive())
         p.priceWholesale = p.price * 0.9;
     // Fase 3: sin auto-vencimientos (el +180d anterior inventaba fechas y
     // sabotea require_expiry; el vencimiento lo informa el usuario).
@@ -335,9 +337,9 @@ Result<Product> ProductRepository::add(const Product &pin)
     q.addBindValue(p.subcat);
     q.addBindValue(p.brand);
     q.addBindValue(p.supplier);
-    q.addBindValue(p.price);
-    q.addBindValue(p.priceBuy);
-    q.addBindValue(p.priceWholesale);
+    q.addBindValue(p.price.toCop());
+    q.addBindValue(p.priceBuy.toCop());
+    q.addBindValue(p.priceWholesale.toCop());
     q.addBindValue(p.tax.isEmpty() ? QStringLiteral("IVA 19%") : p.tax);
     q.addBindValue(p.unit.isEmpty() ? QStringLiteral("unidad") : p.unit);
     q.addBindValue(p.stock);
@@ -352,8 +354,16 @@ Result<Product> ProductRepository::add(const Product &pin)
     q.addBindValue(p.isKit ? 1 : 0);
     q.addBindValue(p.kitJson);
     q.addBindValue(p.attrsJson.trimmed().isEmpty() ? QStringLiteral("{}") : p.attrsJson);
+    // Fase 6: alta + fila del ledger en Principal en una transacción.
+    Transaction tx(m_db);
+    if (!tx.isValid())
+        return Result<Product>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     if (!q.exec())
         return Result<Product>::failure(q.lastError().text());
+    if (p.stock > 1e-9 && !m_locations->writeLedger(p.sku, LocationRepository::kPrincipalId, p.stock))
+        return Result<Product>::failure(QStringLiteral("No se pudo abrir el ledger de %1").arg(p.sku));
+    if (!tx.commit())
+        return Result<Product>::failure(QStringLiteral("No se pudo confirmar el alta"));
     return Result<Product>::success(*findBySku(p.sku));
 }
 
@@ -362,7 +372,8 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p, 
     const auto cur = findBySku(sku);
     if (!cur)
         return Result<Product>::failure(QStringLiteral("Producto SKU %1 no encontrado").arg(sku));
-    if (p.price <= 0 || p.priceBuy <= 0 || p.stock < 0 || p.stockMin < 0 || p.stockMax < 0)
+    if (!p.price.isPositive() || !p.priceBuy.isPositive() || p.stock < 0 || p.stockMin < 0
+        || p.stockMax < 0)
         return Result<Product>::failure(QStringLiteral("Precio >0 y stocks >=0"));
     if (!p.vencimiento.trimmed().isEmpty()
         && !QDate::fromString(p.vencimiento.trimmed(), Qt::ISODate).isValid())
@@ -390,9 +401,9 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p, 
     q.addBindValue(p.brand);
     q.addBindValue(p.supplier);
     q.addBindValue(p.description);
-    q.addBindValue(p.price);
-    q.addBindValue(p.priceBuy);
-    q.addBindValue(p.priceWholesale);
+    q.addBindValue(p.price.toCop());
+    q.addBindValue(p.priceBuy.toCop());
+    q.addBindValue(p.priceWholesale.toCop());
     q.addBindValue(p.tax);
     q.addBindValue(unit);
     q.addBindValue(p.stock);
@@ -409,6 +420,20 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p, 
     q.addBindValue(sku);
     if (!q.exec())
         return Result<Product>::failure(q.lastError().text());
+    // Fase 6: el agregado cambió a p.stock; Principal absorbe la diferencia
+    // (otros almacenes intactos). Sin esto el ledger diverge del agregado.
+    if (qAbs(p.stock - cur->stock) > 1e-9) {
+        double others = 0.0;
+        const auto perLoc = m_locations->stockBySku(sku);
+        for (auto it = perLoc.begin(); it != perLoc.end(); ++it) {
+            if (it.key() != LocationRepository::kPrincipalId)
+                others += it.value();
+        }
+        if (!m_locations->writeLedger(sku, LocationRepository::kPrincipalId,
+                                      qMax(0.0, p.stock - others)))
+            return Result<Product>::failure(
+                QStringLiteral("No se pudo conciliar el ledger de %1").arg(sku));
+    }
     // Fase 5: auditar cambios relevantes (antes/después) para responder
     // "¿quién cambió este precio y cuándo?".
     if (!user.trimmed().isEmpty() && m_audit) {
@@ -419,9 +444,10 @@ Result<Product> ProductRepository::update(const QString &sku, const Product &p, 
                 after[k] = QJsonValue::fromVariant(b);
             }
         };
-        put(QStringLiteral("price"), cur->price, p.price);
-        put(QStringLiteral("priceBuy"), cur->priceBuy, p.priceBuy);
-        put(QStringLiteral("priceWholesale"), cur->priceWholesale, p.priceWholesale);
+        put(QStringLiteral("price"), cur->price.toCop(), p.price.toCop());
+        put(QStringLiteral("priceBuy"), cur->priceBuy.toCop(), p.priceBuy.toCop());
+        put(QStringLiteral("priceWholesale"), cur->priceWholesale.toCop(),
+            p.priceWholesale.toCop());
         put(QStringLiteral("stock"), cur->stock, p.stock);
         put(QStringLiteral("cat"), cur->cat, p.cat);
         put(QStringLiteral("name"), cur->name, p.name);
@@ -441,44 +467,49 @@ StatusResult ProductRepository::remove(const QString &sku)
     q.addBindValue(sku);
     if (!q.exec() || q.numRowsAffected() == 0)
         return StatusResult::failure(QStringLiteral("Producto SKU %1 no encontrado").arg(sku));
+    // Fase 6: sin huérfanos en el ledger.
+    QSqlQuery del(m_db);
+    del.prepare(QStringLiteral("DELETE FROM stock_by_location WHERE sku=?"));
+    del.addBindValue(sku);
+    if (!del.exec())
+        return StatusResult::failure(del.lastError().text());
     return StatusResult::success({});
 }
 
 bool ProductRepository::setStockById(int id, double stock)
 {
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("UPDATE products SET stock=? WHERE id=?"));
-    q.addBindValue(stock);
-    q.addBindValue(id);
-    return q.exec() && q.numRowsAffected() > 0;
+    const auto cur = findById(id);
+    if (!cur)
+        return false;
+    // Fase 6: vía ledger (mantiene el agregado + Principal).
+    return m_locations->setStock(cur->sku, LocationRepository::kPrincipalId, stock);
 }
 
 bool ProductRepository::setStockBySku(const QString &sku, double stock)
 {
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("UPDATE products SET stock=? WHERE sku=?"));
-    q.addBindValue(stock);
-    q.addBindValue(sku);
-    return q.exec() && q.numRowsAffected() > 0;
+    // Fase 6: vía ledger (mantiene el agregado + Principal).
+    return m_locations->setStock(sku, LocationRepository::kPrincipalId, stock);
 }
 
 bool ProductRepository::decrementStockAtomic(int id, double qty)
 {
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?"));
-    q.addBindValue(qty);
-    q.addBindValue(id);
-    q.addBindValue(qty);
-    return q.exec() && q.numRowsAffected() == 1;
+    const auto cur = findById(id);
+    if (!cur)
+        return false;
+    // Fase 6: descuento en Principal con guarda de existencias (además del
+    // agregado: en mono-almacén coinciden; con traspasos, Principal manda).
+    if (!m_locations->takeStock(cur->sku, LocationRepository::kPrincipalId, qty))
+        return false;
+    return true;
 }
 
 bool ProductRepository::incrementStockAtomic(int id, double qty)
 {
-    QSqlQuery q(m_db);
-    q.prepare(QStringLiteral("UPDATE products SET stock = stock + ? WHERE id = ?"));
-    q.addBindValue(qty);
-    q.addBindValue(id);
-    return q.exec() && q.numRowsAffected() == 1;
+    const auto cur = findById(id);
+    if (!cur)
+        return false;
+    // Fase 6: devolución a Principal.
+    return m_locations->addStock(cur->sku, LocationRepository::kPrincipalId, qty);
 }
 
 bool ProductRepository::reserveAtomic(int id, double qty)
@@ -545,20 +576,20 @@ double ProductRepository::kitStock(const QList<KitComponent> &components) const
 
 Result<Product> ProductRepository::createKit(const QString &sku, const QString &name,
                                              const QList<KitComponent> &components,
-                                             double priceOverride, const QString &user)
+                                             Money priceOverride, const QString &user)
 {
     if (findBySku(sku))
         return Result<Product>::failure(QStringLiteral("SKU %1 ya existe").arg(sku));
     if (components.isEmpty())
         return Result<Product>::failure(QStringLiteral("Componentes lista requerida"));
-    double totalCost = 0.0, totalSale = 0.0;
+    Money totalCost, totalSale;
     for (const KitComponent &c : components) {
         const auto prod = findBySku(c.sku);
         if (!prod)
             return Result<Product>::failure(QStringLiteral("Componente %1 no existe").arg(c.sku));
         if (c.qty <= 0)
             return Result<Product>::failure(QStringLiteral("Qty >0"));
-        totalCost += (prod->priceBuy > 0 ? prod->priceBuy : prod->price * 0.7) * c.qty;
+        totalCost += (prod->priceBuy.isPositive() ? prod->priceBuy : prod->price * 0.7) * c.qty;
         totalSale += prod->price * c.qty;
     }
     QJsonArray arr;
@@ -573,7 +604,8 @@ Result<Product> ProductRepository::createKit(const QString &sku, const QString &
     p.name = name;
     p.cat = QStringLiteral("Kits");
     p.description = QStringLiteral("Kit %1 productos").arg(components.size());
-    p.price = priceOverride > 0 ? priceOverride : totalSale * 0.95;
+    p.price = !priceOverride.isZero() && priceOverride.isPositive() ? priceOverride
+                                                                    : totalSale * 0.95;
     p.priceBuy = totalCost;
     p.stock = kitStock(components);
     p.isKit = true;

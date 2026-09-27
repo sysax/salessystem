@@ -1,5 +1,7 @@
 #include "PosController.h"
 
+#include <cmath>
+
 #include "../domain/Attrs.h"
 
 namespace
@@ -10,6 +12,25 @@ bool lineTracked(const Product &p, const SerialRepository *serials)
     if (Attrs::boolean(p.attrsJson, Attrs::KTrackSerial))
         return true;
     return serials && serials->hasSerials(p.sku);
+}
+// Frontera QML: QML solo maneja double; el dominio usa Money (céntimos).
+// Entradas double → Money::fromCop + validación fail-closed (finito,
+// no negativo; >2 decimales por redondeo half-up en fromCop).
+bool checkCopInput(double cop, bool requirePositive, QString &error)
+{
+    if (!std::isfinite(cop)) {
+        error = QStringLiteral("Importe inválido");
+        return false;
+    }
+    if (cop < 0.0) {
+        error = QStringLiteral("El importe no puede ser negativo");
+        return false;
+    }
+    if (requirePositive && !Money::fromCop(cop).isPositive()) {
+        error = QStringLiteral("El importe debe ser >0");
+        return false;
+    }
+    return true;
 }
 } // namespace
 
@@ -44,8 +65,8 @@ QVariantMap PosController::addToCart(int productId, double qty)
             return {{"ok", false},
                     {"error", QStringLiteral("Stock insuficiente: %1").arg(p->available())}};
         m_cart << QVariantMap{{"productId", p->id},   {"sku", p->sku},       {"name", p->name},
-                              {"price", p->price},    {"unit", p->unit},     {"qty", 1.0},
-                              {"subtotal", p->price}, {"serial", QString()}, {"receta", QString()}};
+                              {"price", p->price.toCop()},    {"unit", p->unit},     {"qty", 1.0},
+                              {"subtotal", p->price.toCop()}, {"serial", QString()}, {"receta", QString()}};
         recompute();
         QVariantMap ok{{"ok", true}};
         ok["needsSerial"] = true;
@@ -60,7 +81,7 @@ QVariantMap PosController::addToCart(int productId, double qty)
                 return {{"ok", false},
                         {"error", QStringLiteral("Stock insuficiente: %1").arg(p->available())}};
             line["qty"] = q;
-            line["subtotal"] = p->price * q;
+            line["subtotal"] = (p->price * q).toCop();
             v = line;
             recompute();
             return {{"ok", true}};
@@ -71,8 +92,8 @@ QVariantMap PosController::addToCart(int productId, double qty)
                 {"error", QStringLiteral("Stock insuficiente: %1").arg(p->available())}};
     m_cart << QVariantMap{
         {"productId", p->id},         {"sku", p->sku},       {"name", p->name},
-        {"price", p->price},          {"unit", p->unit},     {"qty", qty},
-        {"subtotal", p->price * qty}, {"serial", QString()}, {"receta", QString()}};
+        {"price", p->price.toCop()},          {"unit", p->unit},     {"qty", qty},
+        {"subtotal", (p->price * qty).toCop()}, {"serial", QString()}, {"receta", QString()}};
     recompute();
     return {{"ok", true}};
 }
@@ -89,7 +110,7 @@ void PosController::setQty(int index, double qty)
         p && lineTracked(*p, m_serials))
         return;
     line["qty"] = qty;
-    line["subtotal"] = line["price"].toDouble() * qty;
+    line["subtotal"] = (Money::fromCop(line["price"].toDouble()) * qty).toCop();
     m_cart[index] = line;
     recompute();
 }
@@ -194,7 +215,7 @@ void PosController::recompute()
         items << si;
     }
     SalesService::Totals t = m_sales->calculateTotals(items);
-    double promoDiscount = 0.0;
+    Money promoDiscount;
     if (!m_promoCode.isEmpty()) {
         QList<CartLine> cart;
         for (const auto &l : t.lines)
@@ -211,12 +232,12 @@ void PosController::recompute()
     QVariantList buckets;
     for (const auto &b : t.buckets) {
         buckets << QVariantMap{
-            {"name", b.name}, {"rate", b.rate}, {"base", b.base}, {"tax", b.tax}};
+            {"name", b.name}, {"rate", b.rate}, {"base", b.base.toCop()}, {"tax", b.tax.toCop()}};
     }
-    m_totals = {{"subtotal", t.subtotal},
-                {"discount", t.discount + promoDiscount},
-                {"tax", t.tax},
-                {"total", t.total - promoDiscount},
+    m_totals = {{"subtotal", t.subtotal.toCop()},
+                {"discount", (t.discount + promoDiscount).toCop()},
+                {"tax", t.tax.toCop()},
+                {"total", (t.total - promoDiscount).toCop()},
                 {"taxBreakdown", buckets}};
     emit cartChanged();
 }
@@ -251,7 +272,7 @@ QVariantMap PosController::applyPromo(const QString &code)
         return {{"ok", false}, {"error", pr.error()}};
     m_promoCode = pr.value().promoCode;
     recompute();
-    return {{"ok", true}, {"discount", pr.value().discount}};
+    return {{"ok", true}, {"discount", pr.value().discount.toCop()}};
 }
 
 QVariantMap PosController::checkout(const QString &client, const QVariantMap &payments,
@@ -269,9 +290,17 @@ QVariantMap PosController::checkout(const QString &client, const QVariantMap &pa
         si.receta = line.value(QStringLiteral("receta")).toString();
         items << si;
     }
-    QMap<QString, double> pay;
-    for (auto it = payments.begin(); it != payments.end(); ++it)
-        pay[it.key().toLower()] = it.value().toDouble();
+    QMap<QString, Money> pay;
+    for (auto it = payments.begin(); it != payments.end(); ++it) {
+        // Pagos mixtos: cada medio valida >= 0 fail-closed (un negativo
+        // anula todo el checkout en vez de redondearse a 0).
+        QString perr;
+        const double v = it.value().toDouble();
+        if (!checkCopInput(v, false, perr))
+            return {{"ok", false},
+                    {"error", QStringLiteral("Pago '%1': %2").arg(it.key(), perr)}};
+        pay[it.key().toLower()] = Money::fromCop(v);
+    }
 
     const auto r = m_sales->create(items, client.isEmpty() ? QStringLiteral("Mostrador") : client,
                                    pay, method, m_promoCode, user, false, role);
@@ -279,8 +308,8 @@ QVariantMap PosController::checkout(const QString &client, const QVariantMap &pa
         return {{"ok", false}, {"error", r.error()}};
 
     // Cambio: efectivo entregado − total (si hay pago en efectivo)
-    const double cash = pay.value(QStringLiteral("efectivo"), 0.0);
-    const double change = cash > r.value().total ? cash - r.value().total : 0.0;
+    const Money cash = pay.value(QStringLiteral("efectivo"));
+    const Money change = cash > r.value().total ? cash - r.value().total : Money();
 
     // Ticket .txt (offline-first: siempre se guarda). Cabecera del negocio
     // desde SettingsService (Fase 0 multinegocio).
@@ -301,14 +330,14 @@ QVariantMap PosController::checkout(const QString &client, const QVariantMap &pa
         TicketPrinter::Ticket::Line tl;
         tl.name = line["name"].toString();
         tl.qty = line["qty"].toDouble();
-        tl.price = line["price"].toDouble();
-        tl.subtotal = line["subtotal"].toDouble();
+        tl.price = Money::fromCop(line["price"].toDouble());
+        tl.subtotal = Money::fromCop(line["subtotal"].toDouble());
         tl.serial = line.value(QStringLiteral("serial")).toString();
         ticket.lines << tl;
     }
-    ticket.discount = m_totals["discount"].toDouble();
+    ticket.discount = Money::fromCop(m_totals["discount"].toDouble());
     ticket.promoCode = m_promoCode;
-    ticket.tax = m_totals["tax"].toDouble();
+    ticket.tax = Money::fromCop(m_totals["tax"].toDouble());
     ticket.total = r.value().total;
     // Fase 1: desglose por tasa (desde el create, ya validado contra settings).
     for (const auto &b : r.value().buckets) {
@@ -327,7 +356,7 @@ QVariantMap PosController::checkout(const QString &client, const QVariantMap &pa
     // Encolar para sincronizar al reconectar
     if (m_sync) {
         m_sync->queueOperation(QStringLiteral("sale"),
-                               {{"folio", r.value().id}, {"total", r.value().total}});
+                               {{"folio", r.value().id}, {"total", r.value().total.toCop()}});
         emit syncChanged();
     }
 
@@ -335,14 +364,17 @@ QVariantMap PosController::checkout(const QString &client, const QVariantMap &pa
     refreshCaja();
     return {{"ok", true},
             {"saleId", r.value().id},
-            {"total", r.value().total},
-            {"change", change},
+            {"total", r.value().total.toCop()},
+            {"change", change.toCop()},
             {"ticket", ticketPath}};
 }
 
 QVariantMap PosController::openCaja(double amount, const QString &user)
 {
-    const auto r = m_caja->open(amount, user);
+    QString err;
+    if (!checkCopInput(amount, true, err))
+        return {{"ok", false}, {"error", QStringLiteral("Apertura: ") + err}};
+    const auto r = m_caja->open(Money::fromCop(amount), user);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     refreshCaja();
@@ -351,13 +383,16 @@ QVariantMap PosController::openCaja(double amount, const QString &user)
 
 QVariantMap PosController::closeCaja(double counted, const QString &user, const QString &reason)
 {
-    const auto r = m_caja->close(counted, user, reason);
+    QString err;
+    if (!checkCopInput(counted, false, err))
+        return {{"ok", false}, {"error", QStringLiteral("Cierre: ") + err}};
+    const auto r = m_caja->close(Money::fromCop(counted), user, reason);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     refreshCaja();
     return {{"ok", true},
-            {"expected", r.value().expected},
-            {"diff", r.value().diff},
+            {"expected", r.value().expected.toCop()},
+            {"diff", r.value().diff.toCop()},
             {"sales", r.value().salesCount}};
 }
 
@@ -365,10 +400,10 @@ void PosController::refreshCaja()
 {
     const CajaStatus st = m_caja->status();
     m_cajaStatus = {{"open", st.open},
-                    {"openingAmount", st.openingAmount},
+                    {"openingAmount", st.openingAmount.toCop()},
                     {"openingUser", st.openingUser},
-                    {"totalSales", st.totalSales},
-                    {"expected", st.expected},
+                    {"totalSales", st.totalSales.toCop()},
+                    {"expected", st.expected.toCop()},
                     {"salesCount", st.salesToday.size()}};
     emit cajaChanged();
 }

@@ -63,22 +63,24 @@ class TstFase5 : public QObject
     void docFoliosPerType()
     {
         auto rem = m_sales->createDocument(QStringLiteral("Remisión"), QStringLiteral("Juan Pérez"),
-                                           1000.0, QStringLiteral("tester"));
+                                           Money::fromCop(1000.0), QStringLiteral("tester"));
         QVERIFY(rem.ok());
         QVERIFY(rem.value().id.startsWith(QStringLiteral("REM")));
         auto fe = m_sales->createDocument(QStringLiteral("Factura"), QStringLiteral("Juan Pérez"),
-                                          2000.0, QStringLiteral("tester"));
+                                          Money::fromCop(2000.0), QStringLiteral("tester"));
         QVERIFY(fe.ok());
         QVERIFY(fe.value().id.startsWith(QStringLiteral("FE")));
         // Contadores independientes: REM y FE no colisionan con ventas POS (V*).
         QVERIFY(!rem.value().id.startsWith(QStringLiteral("V")));
         QVERIFY(!fe.value().id.startsWith(QStringLiteral("V")));
         auto nc = m_sales->createDocument(QStringLiteral("Nota crédito"),
-                                          QStringLiteral("Juan Pérez"), 100.0, QStringLiteral("t"));
+                                          QStringLiteral("Juan Pérez"), Money::fromCop(100.0),
+                                          QStringLiteral("t"));
         QVERIFY(nc.ok());
         QVERIFY(nc.value().id.startsWith(QStringLiteral("NC")));
         auto nd = m_sales->createDocument(QStringLiteral("Nota cargo"),
-                                          QStringLiteral("Juan Pérez"), 100.0, QStringLiteral("t"));
+                                          QStringLiteral("Juan Pérez"), Money::fromCop(100.0),
+                                          QStringLiteral("t"));
         QVERIFY(nd.ok());
         QVERIFY(nd.value().id.startsWith(QStringLiteral("ND")));
     }
@@ -95,7 +97,7 @@ class TstFase5 : public QObject
                                                    QStringLiteral("Cotización")));
         // advanceStatus aplica la máquina: salto directo COT→Facturada falla.
         auto cot = m_sales->createDocument(QStringLiteral("Cotización"),
-                                           QStringLiteral("Ana Martínez"), 500.0,
+                                           QStringLiteral("Ana Martínez"), Money::fromCop(500.0),
                                            QStringLiteral("tester"));
         QVERIFY(cot.ok());
         QVERIFY(!m_sales->advanceStatus(cot.value().id, QStringLiteral("Facturada"),
@@ -109,7 +111,7 @@ class TstFase5 : public QObject
     void docConvertTraces()
     {
         auto cot = m_sales->createDocument(QStringLiteral("Cotización"),
-                                           QStringLiteral("Luis García"), 700.0,
+                                           QStringLiteral("Luis García"), Money::fromCop(700.0),
                                            QStringLiteral("tester"));
         QVERIFY(cot.ok());
         auto ped = m_sales->convertDocument(cot.value().id, QStringLiteral("Pedido"),
@@ -126,7 +128,7 @@ class TstFase5 : public QObject
         QVERIFY(fe.value().id.startsWith(QStringLiteral("FE")));
         // Conversión inválida: COT directo a Factura.
         auto cot2 = m_sales->createDocument(QStringLiteral("Cotización"),
-                                            QStringLiteral("Luis García"), 50.0,
+                                            QStringLiteral("Luis García"), Money::fromCop(50.0),
                                             QStringLiteral("tester"));
         QVERIFY(cot2.ok());
         QVERIFY(!m_sales->convertDocument(cot2.value().id, QStringLiteral("Factura"),
@@ -137,7 +139,7 @@ class TstFase5 : public QObject
     void cancelNeedsServiceWithReason()
     {
         auto fe = m_sales->createDocument(QStringLiteral("Factura"), QStringLiteral("Juan Pérez"),
-                                          3000.0, QStringLiteral("tester"));
+                                          Money::fromCop(3000.0), QStringLiteral("tester"));
         QVERIFY(fe.ok());
         // Bypass directo bloqueado.
         auto direct = m_sales->advanceStatus(fe.value().id, QStringLiteral("Cancelada"),
@@ -162,33 +164,33 @@ class TstFase5 : public QObject
     void creditNotesLinkedAndCapped()
     {
         auto fe = m_sales->createDocument(QStringLiteral("Factura"), QStringLiteral("María López"),
-                                          10000.0, QStringLiteral("tester"));
+                                          Money::fromCop(10000.0), QStringLiteral("tester"));
         QVERIFY(fe.ok());
         // NC sobre cotización: rechazada.
         auto cot = m_sales->createDocument(QStringLiteral("Cotización"),
-                                           QStringLiteral("María López"), 10000.0,
+                                           QStringLiteral("María López"), Money::fromCop(10000.0),
                                            QStringLiteral("tester"));
         QVERIFY(cot.ok());
         QVERIFY(!m_sales
-                     ->createCreditNote(cot.value().id, 1000.0, QStringLiteral("motivo"),
-                                        QStringLiteral("tester"))
+                     ->createCreditNote(cot.value().id, Money::fromCop(1000.0),
+                                        QStringLiteral("motivo"), QStringLiteral("tester"))
                      .ok());
         // NC ligada con motivo persistido.
-        auto nc1 = m_sales->createCreditNote(fe.value().id, 4000.0, QStringLiteral("devolución"),
-                                             QStringLiteral("tester"));
+        auto nc1 = m_sales->createCreditNote(fe.value().id, Money::fromCop(4000.0),
+                                             QStringLiteral("devolución"), QStringLiteral("tester"));
         QVERIFY(nc1.ok());
         QCOMPARE(nc1.value().parentId, fe.value().id);
         QCOMPARE(nc1.value().reason, QStringLiteral("devolución"));
-        QCOMPARE(m_sales->creditNotesTotal(fe.value().id), 4000.0);
+        QCOMPARE(m_sales->creditNotesTotal(fe.value().id), Money::fromCop(4000.0));
         // Segunda NC que excede el total: rechazada (4000 + 7000 > 10000).
         QVERIFY(!m_sales
-                     ->createCreditNote(fe.value().id, 7000.0, QStringLiteral("otra"),
-                                        QStringLiteral("tester"))
+                     ->createCreditNote(fe.value().id, Money::fromCop(7000.0),
+                                        QStringLiteral("otra"), QStringLiteral("tester"))
                      .ok());
         // NC complementaria exacta sí pasa (4000 + 6000 = 10000).
         QVERIFY(m_sales
-                    ->createCreditNote(fe.value().id, 6000.0, QStringLiteral("resto"),
-                                       QStringLiteral("tester"))
+                    ->createCreditNote(fe.value().id, Money::fromCop(6000.0),
+                                       QStringLiteral("resto"), QStringLiteral("tester"))
                     .ok());
     }
 
@@ -209,7 +211,7 @@ class TstFase5 : public QObject
         // CxP proporcional a lo recibido (4 × costo), no al total de la OC.
         const auto cxp1 = m_payables->find(oc.value().id);
         QVERIFY(cxp1.has_value());
-        QVERIFY(qAbs(cxp1->amount - 4.0 * oc.value().items.first().priceBuy) < 1.0);
+        QVERIFY(qAbs((cxp1->amount - oc.value().items.first().priceBuy * 4.0).toCop()) < 1.0);
         // Exceder lo pedido falla.
         QVERIFY(!m_purSvc->receive(oc.value().id, {{"P002", 7.0}}, QStringLiteral("tester")).ok());
         // Segunda entrega completa el resto: 6 de 10 → Recibida.
@@ -219,7 +221,7 @@ class TstFase5 : public QObject
         QCOMPARE(m_products->findBySku(QStringLiteral("P002"))->stock, stockBefore + 10.0);
         const auto cxp2 = m_payables->find(oc.value().id);
         QVERIFY(cxp2.has_value());
-        QVERIFY(qAbs(cxp2->amount - 10.0 * oc.value().items.first().priceBuy) < 1.0);
+        QVERIFY(qAbs((cxp2->amount - oc.value().items.first().priceBuy * 10.0).toCop()) < 1.0);
         // Recibir de más u ordenar cancelada falla.
         QVERIFY(!m_purSvc->receive(oc.value().id, {{"P002", 1.0}}, QStringLiteral("tester")).ok());
     }
@@ -230,9 +232,9 @@ class TstFase5 : public QObject
         p.id = QStringLiteral("CXPF5-1");
         p.supplier = QStringLiteral("Proveedor Fase5");
         p.due = QStringLiteral("2000-01-01"); // vencida
-        p.amount = 5000.0;
-        p.paid = 0.0;
-        p.balance = 5000.0;
+        p.amount = Money::fromCop(5000.0);
+        p.paid = Money();
+        p.balance = Money::fromCop(5000.0);
         p.status = QStringLiteral("Pendiente");
         QVERIFY(m_payables->create(p).ok());
         bool found = false;
@@ -249,12 +251,12 @@ class TstFase5 : public QObject
                 inStatement = true;
         }
         QVERIFY(inStatement);
-        auto pay = m_payables->addPayment(QStringLiteral("CXPF5-1"), 2000.0,
+        auto pay = m_payables->addPayment(QStringLiteral("CXPF5-1"), Money::fromCop(2000.0),
                                           QStringLiteral("Efectivo"), QStringLiteral("tester"));
         QVERIFY(pay.ok());
         const auto hist = m_payables->paymentsFor(QStringLiteral("CXPF5-1"));
         QVERIFY(!hist.isEmpty());
-        QCOMPARE(hist.first().amount, 2000.0);
+        QCOMPARE(hist.first().amount, Money::fromCop(2000.0));
     }
 
     // ── Lotes PEPS + conteos ──────────────────────────────────────
@@ -264,28 +266,31 @@ class TstFase5 : public QObject
         const QString sku = QStringLiteral("P006");
         // Dos entradas: lote viejo barato + lote nuevo caro.
         QVERIFY(m_invSvc
-                    ->registerPurchase(6, 10.0, 100.0, QStringLiteral("Prov"), QStringLiteral("L1"),
-                                       QStringLiteral("tester"), QStringLiteral("LOTE-A"),
-                                       QStringLiteral("2027-01-01"))
+                    ->registerPurchase(6, 10.0, Money::fromCop(100.0), QStringLiteral("Prov"),
+                                       QStringLiteral("L1"), QStringLiteral("tester"),
+                                       QStringLiteral("LOTE-A"), QStringLiteral("2027-01-01"))
                     .ok());
         QVERIFY(m_invSvc
-                    ->registerPurchase(6, 10.0, 200.0, QStringLiteral("Prov"), QStringLiteral("L2"),
-                                       QStringLiteral("tester"), QStringLiteral("LOTE-B"),
-                                       QStringLiteral("2028-01-01"))
+                    ->registerPurchase(6, 10.0, Money::fromCop(200.0), QStringLiteral("Prov"),
+                                       QStringLiteral("L2"), QStringLiteral("tester"),
+                                       QStringLiteral("LOTE-B"), QStringLiteral("2028-01-01"))
                     .ok());
         // Consumo 12: agota LOTE-A (10×100) + 2 del B (2×200) = 1400.
         auto cogs = m_invSvc->consumeFifo(sku, 12.0);
         QVERIFY(cogs.ok());
-        QCOMPARE(cogs.value(), 1400.0);
+        QCOMPARE(cogs.value(), Money::fromCop(1400.0));
         // Sin vencimiento '' va al final: crear lote sin fecha y verificar
         // que el orden PEPS lo deja último (queda con stock).
-        QVERIFY(m_inventory->addLot(sku, QStringLiteral("LOTE-SF"), QString(), 5.0, 50.0).ok());
+        QVERIFY(m_inventory
+                    ->addLot(sku, QStringLiteral("LOTE-SF"), QString(), 5.0,
+                             Money::fromCop(50.0))
+                    .ok());
         const auto lots = m_inventory->lotsBySku(sku);
         QVERIFY(!lots.isEmpty());
         QCOMPARE(lots.last().lote, QStringLiteral("LOTE-SF"));
         // Valuación PEPS > 0 y distinta del promedio si hay mezcla.
-        QVERIFY(m_inventory->lotsValue(sku) > 0);
-        QVERIFY(m_invSvc->valuation(QStringLiteral("peps")).totalValue > 0);
+        QVERIFY(m_inventory->lotsValue(sku).isPositive());
+        QVERIFY(m_invSvc->valuation(QStringLiteral("peps")).totalValue.isPositive());
     }
 
     void cyclicCountApplies()

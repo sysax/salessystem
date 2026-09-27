@@ -121,8 +121,8 @@ ColumnLayout {
     }
     Dialog {
         id: transferDialog
-        onOpened: tSku.forceActiveFocus()
-        title: qsTr("Transferir ubicación")
+        onOpened: { tSku.forceActiveFocus(); tFrom.model = inventoryCtl.locations(); tDest.model = inventoryCtl.locations(); }
+        title: qsTr("Traspaso entre almacenes")
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
         ColumnLayout {
@@ -134,9 +134,15 @@ ColumnLayout {
                 id: tQty
                 placeholderText: qsTr("Cantidad")
             }
-            TextField {
+            ComboBox {
+                id: tFrom
+                editable: true
+                textRole: "name"
+            }
+            ComboBox {
                 id: tDest
-                placeholderText: qsTr("Ubicación destino")
+                editable: true
+                textRole: "name"
             }
             TextField {
                 id: tReason
@@ -148,7 +154,7 @@ ColumnLayout {
             }
         }
         onAccepted: {
-            var r = inventoryCtl.transfer(tSku.text, parseFloat(tQty.text) || 0, tDest.text, tReason.text, auth.currentUser);
+            var r = inventoryCtl.transfer(tSku.text, parseFloat(tQty.text) || 0, tFrom.editText || tFrom.currentText, tDest.editText || tDest.currentText, tReason.text, auth.currentUser);
             if (!r.ok) {
                 tErr.text = r.error;
                 open();
