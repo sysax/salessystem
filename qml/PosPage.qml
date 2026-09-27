@@ -285,6 +285,44 @@ RowLayout {
                 font.pixelSize: Theme.fontML
                 Layout.fillWidth: true
             }
+            // Fase 6: sucursal origen de la venta (pos.saleLocationId).
+            ComboBox {
+                id: locationBox
+                implicitHeight: root.touchH
+                Layout.preferredWidth: 170
+                Accessible.name: qsTr("Sucursal de venta")
+                function syncLocation() {
+                    var locs = inventoryCtl.locations();
+                    locationBox.model = locs;
+                    for (var i = 0; i < locs.length; ++i) {
+                        if (locs[i].id === pos.saleLocationId) {
+                            locationBox.currentIndex = i;
+                            return;
+                        }
+                    }
+                }
+                textRole: "name"
+                Component.onCompleted: syncLocation()
+                Connections {
+                    target: inventoryCtl
+                    function onMovementsChanged() { locationBox.syncLocation(); }
+                }
+                Connections {
+                    target: pos
+                    function onSaleLocationChanged() { locationBox.syncLocation(); }
+                }
+                onActivated: function (idx) {
+                    var id = locationBox.model[idx].id;
+                    if (id === pos.saleLocationId)
+                        return;
+                    if (pos.cart.length > 0) {
+                        pos.clearCart();
+                        Utils.showToast("info", qsTr("Sucursal cambiada: carrito vaciado"), 2500);
+                    }
+                    pos.saleLocationId = id;
+                    syncLocation();
+                }
+            }
             Button {
                 text: qsTr("Vaciar")
                 implicitHeight: root.touchH

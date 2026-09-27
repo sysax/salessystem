@@ -11,6 +11,7 @@
 #include "../repositories/InventoryRepository.h"
 #include "../repositories/ProductRepository.h"
 #include "../repositories/PromoRepository.h"
+#include "../repositories/LocationRepository.h"
 #include "../repositories/SaleRepository.h"
 #include "../repositories/SerialRepository.h"
 #include "../repositories/AuditRepository.h"
@@ -98,10 +99,12 @@ class SalesService : public QObject
     Result<CreatedSale> create(const QList<ServiceItem> &items, const QString &clientName,
                                const QMap<QString, Money> &payments, const QString &paymentMethod,
                                const QString &promoCode, const QString &vendedor,
-                               bool offline = false, const QString &role = {});
+                               bool offline = false, const QString &role = {},
+                               int locationId = LocationRepository::kPrincipalId);
     Result<CreatedSale> cancel(const QString &saleId, const QString &reason, const QString &user,
                                const QString &role = {});
-    Totals calculateTotals(const QList<ServiceItem> &items) const;
+    Totals calculateTotals(const QList<ServiceItem> &items,
+                           int locationId = LocationRepository::kPrincipalId) const;
 
     // Impuesto desde texto BD ("IVA 19%"→19, "19"→19, otro→0). Legacy: se
     // conserva para compatibilidad; el cálculo usa resolveTaxRate().
@@ -116,7 +119,8 @@ class SalesService : public QObject
 
   private:
     Result<Totals> buildTotals(const QList<ServiceItem> &items, QString &error,
-                               const QString &clientName = {}) const;
+                               const QString &clientName = {},
+                               int locationId = LocationRepository::kPrincipalId) const;
     // Fase 4: precio según lista del cliente (mayorista → price_wholesale).
     Money priceFor(const Product &p, Money priceOverride, const QString &clientName) const;
     // Fase 3: producto con seguimiento de serial (flag attrs o seriales registrados).

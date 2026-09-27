@@ -174,9 +174,9 @@ QVariantMap PurchasesController::create(const QString &supplier, const QString &
     return {{"ok", true}, {"id", r.value().id}};
 }
 
-QVariantMap PurchasesController::receive(const QString &folio, const QString &user)
+QVariantMap PurchasesController::receive(const QString &folio, const QString &user, int locationId)
 {
-    const auto r = m_service->receive(folio, user);
+    const auto r = m_service->receive(folio, user, locationId);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
     refresh();

@@ -82,7 +82,8 @@ class PurchasesController : public QObject
     Q_INVOKABLE void refresh();
     Q_INVOKABLE QVariantMap create(const QString &supplier, const QString &sku, double qty,
                                     const QString &user);
-    Q_INVOKABLE QVariantMap receive(const QString &folio, const QString &user);
+    // Fase 6: almacén destino de la recepción (default Principal).
+    Q_INVOKABLE QVariantMap receive(const QString &folio, const QString &user, int locationId = 1);
     // Fase 5: recepción parcial (sku → qty de esta entrega).
     Q_INVOKABLE QVariantMap receivePartial(const QString &folio, const QVariantMap &delivery,
                                            const QString &user);

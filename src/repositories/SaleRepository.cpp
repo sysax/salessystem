@@ -80,6 +80,14 @@ Sale SaleRepository::rowToSale(const QSqlQuery &q)
     // Fase 5: trazabilidad documental (columnas aditivas; '' en legadas).
     s.parentId = q.value(QStringLiteral("parent_id")).toString();
     s.reason = q.value(QStringLiteral("reason")).toString();
+    // Fase 6: almacén origen (columna aditiva; QVariant inválido en BDs
+    // viejas → Principal).
+    {
+        const QVariant lv = q.value(QStringLiteral("location_id"));
+        s.locationId = lv.isValid() && !lv.isNull() ? lv.toInt() : LocationRepository::kPrincipalId;
+        if (s.locationId <= 0)
+            s.locationId = LocationRepository::kPrincipalId;
+    }
     return s;
 }
 
@@ -274,11 +282,13 @@ Result<Sale> SaleRepository::create(const NewSale &s)
         return Result<Sale>::failure(QStringLiteral("No se pudo iniciar la transacción"));
     const QString folio = Counters::next(m_db, QStringLiteral("SALE_COUNTER"), QStringLiteral("V"));
     const QString cufe = Dian::generateCufe(m_db, folio);
+    // Fase 6: la venta descuenta el almacén indicado (default Principal).
+    const int saleLoc = s.locationId > 0 ? s.locationId : LocationRepository::kPrincipalId;
     q.prepare(QStringLiteral(
         "INSERT INTO sales (id, date, client, vendedor, total, subtotal, tax, discount, promo, "
         "status, doc_type, payment, payments_json, paid, balance, due, estado, dian_cufe, "
-        "dian_status, tax_breakdown, business_type) VALUES "
-        "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
+        "dian_status, tax_breakdown, business_type, location_id) VALUES "
+        "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(folio);
     q.addBindValue(today);
     q.addBindValue(s.clientName);
@@ -300,14 +310,15 @@ Result<Sale> SaleRepository::create(const NewSale &s)
     q.addBindValue(dianStatus);
     q.addBindValue(s.taxBreakdownJson);
     q.addBindValue(s.businessType.trimmed());
+    q.addBindValue(saleLoc);
     if (!q.exec())
         return Result<Sale>::failure(q.lastError().text());
 
     for (const SaleItem &it : s.items) {
         // Fase 1: decremento atómico (sin TOCTOU leer-luego-escribir).
         // 0 filas => otro hilo/caja vendió primero o no hay stock.
-        // Fase 6: además del agregado, se descuenta el ledger de Principal
-        // (misma tx): la venta consume existencias del almacén por defecto.
+        // Fase 6: además del agregado, se descuenta el ledger del almacén
+        // de la venta (misma tx): la venta consume sus existencias.
         QSqlQuery skuQ(m_db);
         skuQ.prepare(QStringLiteral("SELECT sku FROM products WHERE id=?"));
         skuQ.addBindValue(it.productId);
@@ -315,7 +326,7 @@ Result<Sale> SaleRepository::create(const NewSale &s)
             return Result<Sale>::failure(
                 QStringLiteral("Producto ID %1 no existe").arg(it.productId));
         const QString sku = skuQ.value(0).toString();
-        if (!m_locations->takeLedger(sku, LocationRepository::kPrincipalId, it.qty))
+        if (!m_locations->takeLedger(sku, saleLoc, it.qty))
             return Result<Sale>::failure(
                 QStringLiteral("Stock insuficiente (producto ID %1)").arg(it.productId));
         QSqlQuery up(m_db);
@@ -398,8 +409,8 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
         "INSERT INTO sales (id, date, client, vendedor, total, subtotal, tax, discount, status, "
-        "doc_type, payment, payments_json, paid, balance, estado, parent_id, reason) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
+        "doc_type, payment, payments_json, paid, balance, estado, parent_id, reason, location_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"));
     q.addBindValue(folio);
     q.addBindValue(today);
     q.addBindValue(client);
@@ -417,6 +428,7 @@ Result<Sale> SaleRepository::createDocument(const QString &docType, const QStrin
     q.addBindValue(docType);
     q.addBindValue(parentId);
     q.addBindValue(reason.trimmed().left(280));
+    q.addBindValue(LocationRepository::kPrincipalId);
     if (!q.exec())
         return Result<Sale>::failure(q.lastError().text());
     if (m_audit)

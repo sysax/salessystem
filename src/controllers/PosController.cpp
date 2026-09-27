@@ -49,6 +49,17 @@ int PosController::pendingSync() const
     return m_sync ? m_sync->pendingCount() : 0;
 }
 
+void PosController::setSaleLocationId(int id)
+{
+    // Fase 6: fail-closed (>0); el QML confirma el vaciado del carrito
+    // antes de llamar (aquí solo se setea y se recalcula).
+    if (id <= 0 || id == m_saleLocationId)
+        return;
+    m_saleLocationId = id;
+    emit saleLocationChanged();
+    recompute();
+}
+
 QVariantMap PosController::addToCart(int productId, double qty)
 {
     if (qty <= 1e-9)
@@ -56,6 +67,21 @@ QVariantMap PosController::addToCart(int productId, double qty)
     const auto p = m_products->findById(productId);
     if (!p)
         return {{"ok", false}, {"error", QStringLiteral("Producto no existe")}};
+    // Fase 6: la ubicación de venta también limita (además del global).
+    auto locStock = [&](double want) -> QVariantMap {
+        auto *ledger = m_products ? m_products->locations() : nullptr;
+        if (!ledger)
+            return {{"ok", true}};
+        const double at = ledger->stockAt(p->sku, m_saleLocationId);
+        if (at < want - 1e-9) {
+            QString locName = QString::number(m_saleLocationId);
+            if (const auto found = ledger->findLocation(m_saleLocationId))
+                locName = found->name;
+            return {{"ok", false},
+                    {"error", QStringLiteral("Sin existencias en %1: %2").arg(locName).arg(at)}};
+        }
+        return {{"ok", true}};
+    };
     // Fase 3: productos tracked van 1 por línea (un serial por unidad).
     if (lineTracked(*p, m_serials)) {
         if (m_serials && m_serials->inStockCount(p->sku) <= cartSerialLines(productId))
@@ -64,6 +90,8 @@ QVariantMap PosController::addToCart(int productId, double qty)
         if (p->available() < cartQtyFor(productId) + 1.0 - 1e-9)
             return {{"ok", false},
                     {"error", QStringLiteral("Stock insuficiente: %1").arg(p->available())}};
+        if (const auto lr = locStock(cartQtyFor(productId) + 1.0); !lr["ok"].toBool())
+            return lr;
         m_cart << QVariantMap{{"productId", p->id},   {"sku", p->sku},       {"name", p->name},
                               {"price", p->price.toCop()},    {"unit", p->unit},     {"qty", 1.0},
                               {"subtotal", p->price.toCop()}, {"serial", QString()}, {"receta", QString()}};
@@ -80,6 +108,8 @@ QVariantMap PosController::addToCart(int productId, double qty)
             if (p->available() < q - 1e-9)
                 return {{"ok", false},
                         {"error", QStringLiteral("Stock insuficiente: %1").arg(p->available())}};
+            if (const auto lr = locStock(q); !lr["ok"].toBool())
+                return lr;
             line["qty"] = q;
             line["subtotal"] = (p->price * q).toCop();
             v = line;
@@ -90,6 +120,8 @@ QVariantMap PosController::addToCart(int productId, double qty)
     if (p->available() < qty - 1e-9)
         return {{"ok", false},
                 {"error", QStringLiteral("Stock insuficiente: %1").arg(p->available())}};
+    if (const auto lr = locStock(qty); !lr["ok"].toBool())
+        return lr;
     m_cart << QVariantMap{
         {"productId", p->id},         {"sku", p->sku},       {"name", p->name},
         {"price", p->price.toCop()},          {"unit", p->unit},     {"qty", qty},
@@ -214,7 +246,8 @@ void PosController::recompute()
         si.receta = line.value(QStringLiteral("receta")).toString();
         items << si;
     }
-    SalesService::Totals t = m_sales->calculateTotals(items);
+    // Fase 6: totales contra la ubicación de venta.
+    SalesService::Totals t = m_sales->calculateTotals(items, m_saleLocationId);
     Money promoDiscount;
     if (!m_promoCode.isEmpty()) {
         QList<CartLine> cart;
@@ -258,7 +291,7 @@ QVariantMap PosController::applyPromo(const QString &code)
         si.receta = line.value(QStringLiteral("receta")).toString();
         items << si;
     }
-    const SalesService::Totals t = m_sales->calculateTotals(items);
+    const SalesService::Totals t = m_sales->calculateTotals(items, m_saleLocationId);
     QList<CartLine> cart;
     for (const auto &l : t.lines)
         cart << CartLine{.productId = l.productId,
@@ -303,7 +336,7 @@ QVariantMap PosController::checkout(const QString &client, const QVariantMap &pa
     }
 
     const auto r = m_sales->create(items, client.isEmpty() ? QStringLiteral("Mostrador") : client,
-                                   pay, method, m_promoCode, user, false, role);
+                                   pay, method, m_promoCode, user, false, role, m_saleLocationId);
     if (!r.ok())
         return {{"ok", false}, {"error", r.error()}};
 

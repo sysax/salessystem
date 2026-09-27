@@ -50,7 +50,8 @@ Result<Purchase> PurchaseService::create(const QString &supplierName, const QStr
     return r;
 }
 
-Result<Purchase> PurchaseService::receive(const QString &folio, const QString &user)
+Result<Purchase> PurchaseService::receive(const QString &folio, const QString &user,
+                                          int locationId)
 {
     const auto po = m_purchases->find(folio);
     if (!po)
@@ -64,12 +65,12 @@ Result<Purchase> PurchaseService::receive(const QString &folio, const QString &u
     }
     if (rest.isEmpty())
         return Result<Purchase>::failure(QStringLiteral("Orden %1 ya recibida").arg(folio));
-    return receive(folio, rest, user);
+    return receive(folio, rest, user, locationId);
 }
 
 Result<Purchase> PurchaseService::receive(const QString &folio,
                                           const QMap<QString, double> &delivery,
-                                          const QString &user)
+                                          const QString &user, int locationId)
 {
     const auto po = m_purchases->find(folio);
     if (!po)
@@ -111,6 +112,12 @@ Result<Purchase> PurchaseService::receive(const QString &folio,
     Transaction tx(m_db);
     if (!tx.isValid())
         return Result<Purchase>::failure(QStringLiteral("No se pudo iniciar la transacción"));
+    // Fase 6: la entrega entra al almacén indicado (el ledger mantiene el
+    // agregado products.stock); default Principal.
+    const int loc = locationId > 0 ? locationId : LocationRepository::kPrincipalId;
+    auto *ledger = m_products ? m_products->locations() : nullptr;
+    if (!ledger)
+        return Result<Purchase>::failure(QStringLiteral("Sin acceso al ledger de ubicaciones"));
     Money deliveryValue;
     QMap<QString, double> received = po->received;
     for (auto it = delivery.begin(); it != delivery.end(); ++it) {
@@ -119,7 +126,7 @@ Result<Purchase> PurchaseService::receive(const QString &folio,
             return Result<Purchase>::failure(
                 QStringLiteral("SKU %1 de la orden ya no existe").arg(it.key()));
         const double before = prod->stock;
-        if (!m_products->setStockBySku(it.key(), before + it.value()))
+        if (!ledger->addStock(it.key(), loc, it.value()))
             return Result<Purchase>::failure(
                 QStringLiteral("No se pudo actualizar el stock de %1").arg(it.key()));
         if (!m_inventory->record(it.key(), prod->name, QStringLiteral("Entrada"), it.value(),

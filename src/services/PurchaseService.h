@@ -8,6 +8,7 @@
 #include "../repositories/AuditRepository.h"
 #include "../repositories/InventoryRepository.h"
 #include "../repositories/CreditRepository.h"
+#include "../repositories/LocationRepository.h"
 #include "../repositories/ProductRepository.h"
 #include "../repositories/PurchaseRepository.h"
 #include "../repositories/ClientRepository.h" // Client + Supplier
@@ -29,11 +30,14 @@ class PurchaseService : public QObject
 
     Result<Purchase> create(const QString &supplierName, const QString &sku, double qty,
                              const QString &user);
-    Result<Purchase> receive(const QString &folio, const QString &user);
+    Result<Purchase> receive(const QString &folio, const QString &user,
+                             int locationId = LocationRepository::kPrincipalId);
     // Fase 5: recepción parcial (sku → qty de ESTA entrega; se acumula en
     // received_json; N entregas hasta completar; estado Parcial/Recibida).
+    // Fase 6: la entrega entra al almacén indicado (default Principal).
     Result<Purchase> receive(const QString &folio, const QMap<QString, double> &delivery,
-                             const QString &user);
+                             const QString &user,
+                             int locationId = LocationRepository::kPrincipalId);
     Result<Purchase> cancel(const QString &folio, const QString &user);
 
   private:

@@ -5,6 +5,7 @@
 #include <QVariantMap>
 
 #include "../repositories/CajaRepository.h"
+#include "../repositories/LocationRepository.h"
 #include "../repositories/SerialRepository.h"
 #include "../services/SalesService.h"
 #include "../services/SettingsService.h"
@@ -21,6 +22,10 @@ class PosController : public QObject
     Q_PROPERTY(QVariantMap totals READ totals NOTIFY cartChanged)
     Q_PROPERTY(QVariantMap caja READ caja NOTIFY cajaChanged)
     Q_PROPERTY(int pendingSync READ pendingSync NOTIFY syncChanged)
+    // Fase 6: almacén origen de la venta (default Principal). El QML lo
+    // cambia con el ComboBox de sucursal y confirma el vaciado del carrito.
+    Q_PROPERTY(int saleLocationId READ saleLocationId WRITE setSaleLocationId NOTIFY
+                   saleLocationChanged)
 
   public:
     explicit PosController(SalesService *sales, ProductRepository *products,
@@ -41,6 +46,11 @@ class PosController : public QObject
         return m_cajaStatus;
     }
     int pendingSync() const;
+    int saleLocationId() const
+    {
+        return m_saleLocationId;
+    }
+    void setSaleLocationId(int id);
 
     // Fase 2: cantidades decimales (granel).
     Q_INVOKABLE QVariantMap addToCart(int productId, double qty);
@@ -66,6 +76,7 @@ class PosController : public QObject
     void cartChanged();
     void cajaChanged();
     void syncChanged();
+    void saleLocationChanged();
 
   private:
     void recompute();
@@ -89,4 +100,6 @@ class PosController : public QObject
                             {"taxBreakdown", QVariantList{}}};
     QString m_promoCode;
     QVariantMap m_cajaStatus;
+    // Fase 6: almacén origen de la venta (default Principal).
+    int m_saleLocationId = LocationRepository::kPrincipalId;
 };

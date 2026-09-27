@@ -212,10 +212,11 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 ### Tareas
 - [x] Cola de outbox persistente con `device_id` + `seq` (= rowid, secuencia por dispositivo de un solo escritor) e idempotencia por clave; reconciliación simulada sin pérdida ni duplicados.
 - [x] Estrategia de resolución de conflictos definida por entidad (`SyncService::conflictStrategy`: LWW para catálogo, solo-agrega para movimientos). Aplicación en servidor pendiente (sin backend real).
-- [ ] Soporte multi-almacén/sucursal con traspasos y stock por ubicación. (Requiere tabla stock-por-ubicación; `transfer` hoy cambia ubicación sin mover unidades.)
+- [x] Soporte multi-almacén/sucursal con traspasos y stock por ubicación. (Cerrado 2026-09-27: `sales.location_id` + `NewSale::locationId`; ventas y recepciones operan en la ubicación indicada con validación por ubicación; `transferStock` mueve unidades con agregado invariante; selector de sucursal en POS y almacén destino en Compras; `tst_fase6` 8/8 incl. carrera 20 hilos.)
 - [x] Estado de sincronización visible en UI (pendientes clicables, último sync, error, online) con reintento manual y backoff/circuit breaker existentes.
 
 > **Cierre Fase 6 (2026-09-26, parcial):** origen de eventos + estado visible + política documentada en verde; suite 20/20.
+> **Cierre resto Fase 6 (2026-09-27):** multi-almacén real en verde (`tst_fase6` 8/8: ubicaciones, traspaso invariante, venta/recepción por ubicación, rechazo por ubicación corta, carrera concurrente misma ubicación; suite 23/23). La resolución en servidor sigue pendiente por no haber backend real (sin cambio).
 
 ### Criterios de salida
 ✅ 24 h offline → sync sin pérdida ni duplicados · ✅ Venta concurrente del mismo SKU en dos cajas resuelta correctamente.

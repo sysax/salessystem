@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS sales (
     tax REAL, discount REAL, promo TEXT, status TEXT, doc_type TEXT, payment TEXT,
     payments_json TEXT, paid REAL, balance REAL, due TEXT, estado TEXT, dian_cufe TEXT, dian_status TEXT,
     tax_breakdown TEXT DEFAULT '', business_type TEXT DEFAULT '',
-    parent_id TEXT DEFAULT '', reason TEXT DEFAULT ''
+    parent_id TEXT DEFAULT '', reason TEXT DEFAULT '',
+    location_id INTEGER DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS sale_items (

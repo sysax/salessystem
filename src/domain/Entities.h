@@ -135,6 +135,8 @@ struct Sale
     // Fase 5: trazabilidad documental (folio origen) + motivo (NC/ND/cancelación).
     QString parentId;
     QString reason;
+    // Fase 6: almacén origen de la venta (1 = Principal; BDs viejas → 1).
+    int locationId = 1;
 };
 
 struct PurchaseItem

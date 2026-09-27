@@ -49,6 +49,8 @@ class SaleRepository : public QObject
         QString businessType;
         // Fase 3: días de crédito para el vencimiento (0 = default 15).
         int creditDays = 0;
+        // Fase 6: almacén origen de la venta (default Principal).
+        int locationId = LocationRepository::kPrincipalId;
     };
 
     explicit SaleRepository(QSqlDatabase db, ClientRepository *clients = nullptr,

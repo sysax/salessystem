@@ -233,6 +233,8 @@ bool DatabaseManager::migrateLegacyColumns()
         {"inventory_movements", "from_location",
          "from_location TEXT DEFAULT ''"}, // Fase 6: traspasos con origen/destino
         {"inventory_movements", "to_location", "to_location TEXT DEFAULT ''"},
+        {"sales", "location_id",
+         "location_id INTEGER DEFAULT 1"}, // Fase 6: almacén origen de la venta
     };
     for (const Column &c : kColumns) {
         if (!ensureColumn(QString::fromLatin1(c.table), QString::fromLatin1(c.name),

@@ -159,7 +159,8 @@ void accumulateBucket(QList<SalesService::TaxBucket> &buckets, const QString &na
 
 Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> &items,
                                                        QString &error,
-                                                       const QString &clientName) const
+                                                       const QString &clientName,
+                                                       int locationId) const
 {
     Totals t;
     t.itemsCount = items.size();
@@ -213,6 +214,25 @@ Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> 
                         .arg(p->available())
                         .arg(it.qty);
             return Result<Totals>::failure(error);
+        }
+        // Fase 6: además del global, la ubicación de la venta debe tener
+        // existencias (el ledger manda cuando hay traspasos).
+        {
+            const int loc = locationId > 0 ? locationId : LocationRepository::kPrincipalId;
+            auto *ledger = m_products ? m_products->locations() : nullptr;
+            const double at = ledger ? ledger->stockAt(p->sku, loc) : p->available();
+            if (at < it.qty - 1e-9) {
+                QString locName = QString::number(loc);
+                if (ledger) {
+                    if (const auto found = ledger->findLocation(loc))
+                        locName = found->name;
+                }
+                error = QStringLiteral("Sin existencias en %1 para '%2'. Hay: %3, Solicitado: %4")
+                            .arg(locName, p->name)
+                            .arg(at)
+                            .arg(it.qty);
+                return Result<Totals>::failure(error);
+            }
         }
         // Fase 3: nunca vender vencidos (aplica siempre, sin flag).
         if (!p->vencimiento.trimmed().isEmpty()) {
@@ -288,10 +308,11 @@ Result<SalesService::Totals> SalesService::buildTotals(const QList<ServiceItem> 
     return Result<Totals>::success(t);
 }
 
-SalesService::Totals SalesService::calculateTotals(const QList<ServiceItem> &items) const
+SalesService::Totals
+SalesService::calculateTotals(const QList<ServiceItem> &items, int locationId) const
 {
     QString error;
-    const auto r = buildTotals(items, error);
+    const auto r = buildTotals(items, error, {}, locationId);
     if (r.ok())
         return r.value();
     // Dry-run tolerante: líneas inválidas se omiten (como en Python)
@@ -327,13 +348,13 @@ Result<SalesService::CreatedSale>
 SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
                      const QMap<QString, Money> &payments, const QString &paymentMethod,
                      const QString &promoCode, const QString &vendedor, bool offline,
-                     const QString &role)
+                     const QString &role, int locationId)
 {
     if (items.isEmpty())
         return Result<CreatedSale>::failure(QStringLiteral("La venta debe tener al menos un item"));
 
     QString error;
-    auto totals = buildTotals(items, error, clientName);
+    auto totals = buildTotals(items, error, clientName, locationId);
     if (!totals.ok())
         return Result<CreatedSale>::failure(totals.error());
 
@@ -409,6 +430,8 @@ SalesService::create(const QList<ServiceItem> &items, const QString &clientName,
     SaleRepository::NewSale ns;
     ns.clientName = clientName;
     ns.vendedor = vendedor.isEmpty() ? QStringLiteral("vendedor") : vendedor;
+    // Fase 6: la venta descuenta el almacén indicado (default Principal).
+    ns.locationId = locationId > 0 ? locationId : LocationRepository::kPrincipalId;
     ns.subtotal = totals.value().subtotal;
     ns.discount = totals.value().discount + promoDiscount;
     ns.tax = totals.value().tax;

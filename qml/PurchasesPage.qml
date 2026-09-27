@@ -17,6 +17,13 @@ ColumnLayout {
             font.bold: true
             Layout.fillWidth: true
         }
+        // Fase 6: almacén destino de la recepción (default Principal).
+        ComboBox {
+            id: destBox
+            textRole: "name"
+            Accessible.name: qsTr("Almacén destino")
+            Component.onCompleted: destBox.model = inventoryCtl.locations()
+        }
         Button {
             text: qsTr("Nueva OC")
             onClicked: createDialog.open()
@@ -39,7 +46,8 @@ ColumnLayout {
                 text: qsTr("Recibir")
                 enabled: modelData.status === "Pendiente"
                 onClicked: {
-                    var r = purchasesCtl.receive(modelData.id, auth.currentUser);
+                    var dest = destBox.currentIndex >= 0 ? destBox.model[destBox.currentIndex].id : 1;
+                    var r = purchasesCtl.receive(modelData.id, auth.currentUser, dest);
                     if (!r.ok)
                         msg.text = r.error;
                 }
