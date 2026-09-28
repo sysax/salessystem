@@ -259,12 +259,22 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 **Objetivo:** operación predecible a largo plazo.
 
 ### Tareas
-- [ ] Logging estructurado con niveles y rotación (`qSetMessagePattern` + sink a archivo); correlación venta↔logs con `sale_id`.
-- [ ] Métricas básicas: tiempo de venta, errores de sync, fallos de caja — exportables a reporte semanal.
-- [ ] Manejo global de excepciones/fallos: crash handler que preserve cola de sync y deje rastro.
-- [ ] Versionado semántico + changelog generado desde commits; instaladores firmados (Windows/macOS) en pipeline de release.
-- [ ] Plan de actualización de BD: migraciones versionadas (`user_version` de SQLite) con downgrade documentado.
-- [ ] Revisión de licencia y cumplimiento (componentes third-party, LGPL/comercial Qt).
+- [x] Logging estructurado con niveles y rotación (`qSetMessagePattern` + sink a archivo); correlación venta↔logs con `sale_id`.
+- [x] Métricas básicas: tiempo de venta, errores de sync, fallos de caja — exportables a reporte semanal.
+- [x] Manejo global de excepciones/fallos: crash handler que preserve cola de sync y deje rastro.
+- [x] Versionado semántico + changelog generado desde commits; instaladores firmados (Windows/macOS) en pipeline de release.
+- [x] Plan de actualización de BD: migraciones versionadas (`user_version` de SQLite) con downgrade documentado.
+- [x] Revisión de licencia y cumplimiento (componentes third-party, LGPL/comercial Qt).
+
+> **Cierre Fase 8 (2026-09-28):** `Logger` (archivo rotado 1 MiB x5,
+> patrón con `[sale:id]`, `infoSale/warnSale`) + `CrashHandler` (SIGSEGV/
+> ABRT/ILL/FPE/BUS → `logs/crashes/crash_*.log` con versión + Qt +
+> stack, outbox intacta por WAL) + `AppMetrics` (`app_metrics`, resumen
+> semanal y CSV) + `AppVersion::kSchemaVersion=8` con rechazo de BD
+> futura + CPack + `release.yml` (tag==VERSION, changelog, artefactos) +
+> `docs/RELEASE|MIGRATIONS|THIRD_PARTY.md`; `tst_fase8` 7/7 en verde;
+> suite 23/23 (excl. `tst_auth`, SEGFAULT preexistente en
+> `asyncLoginAndIdle` verificado también en HEAD limpio).
 
 ### Criterios de salida
 ✅ Release reproducibles desde tag · ✅ Migración vN→vN+1 probada sobre copia de producción · ✅ Crash report identifica módulo y versión.

@@ -206,6 +206,20 @@ CREATE TABLE IF NOT EXISTS recovery_tokens (
     used INTEGER DEFAULT 0
 );
 
+-- Fase 8: métricas operativas (tiempo de venta, fallos sync/caja).
+-- Solo-append; purgable sin afectar negocio (ver AppMetrics).
+CREATE TABLE IF NOT EXISTS app_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    ms INTEGER DEFAULT 0,
+    ok INTEGER DEFAULT 1,
+    sale_id TEXT DEFAULT '',
+    detail TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_metrics_ts ON app_metrics(ts);
+CREATE INDEX IF NOT EXISTS idx_metrics_kind ON app_metrics(kind);
+
 -- Índices (verificados con EXPLAIN QUERY PLAN en tst_perf). UNIQUE ya
 -- indexa products.sku y clients.name (autoindex); barcode no es UNIQUE
 -- (el escáner POS lo consulta) y lleva índice propio.

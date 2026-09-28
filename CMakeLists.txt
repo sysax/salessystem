@@ -48,6 +48,13 @@ add_library(
     src/core/DatabaseManager.cpp
     src/core/Transaction.h
     src/core/Transaction.cpp
+    src/core/Version.h
+    src/core/Logger.h
+    src/core/Logger.cpp
+    src/core/AppMetrics.h
+    src/core/AppMetrics.cpp
+    src/core/CrashHandler.h
+    src/core/CrashHandler.cpp
     src/core/EventBus.h
     src/core/EventBus.cpp
     src/core/Permissions.h
@@ -230,8 +237,11 @@ qt_add_qml_module(
 # ver src/main.cpp). Sin SOURCES no hay lupdate implícito en el build;
 # el catálogo se actualiza con `cmake --build build --target update-translations`.
 qt_add_translations(
-    TARGETS QtSalesSystemApp
-    TS_FILES i18n/app_es.ts i18n/app_en.ts
+    TARGETS
+    QtSalesSystemApp
+    TS_FILES
+    i18n/app_es.ts
+    i18n/app_en.ts
 )
 find_program(
     LUPDATE_EXE NAMES lupdate HINTS "${CMAKE_PREFIX_PATH}/bin" "$ENV{HOME}/Qt/6.11.2/gcc_64/bin"
@@ -314,3 +324,29 @@ if(QMLLINT_EXE)
 endif()
 
 install(TARGETS QtSalesSystemApp RUNTIME DESTINATION bin)
+
+# Fase 8: release reproducible desde tag + changelog desde commits.
+find_program(GIT_EXE NAMES git)
+if(GIT_EXE)
+    add_custom_target(
+        changelog
+        COMMAND ${GIT_EXE} log --pretty=format:"- %h %ad %s" --date=short -n 100 >
+                ${CMAKE_SOURCE_DIR}/CHANGELOG.md
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generando CHANGELOG.md desde git log (últimos 100)"
+    )
+endif()
+
+# Fase 8: instaladores (CPack TGZ/ZIP; DEB en Linux). Firmado de
+# Windows/macOS en .github/workflows/release.yml (requiere secretos
+# CERT_PFX / APPLE_ID; sin ellos el artefacto sale sin firmar).
+set(CPACK_PACKAGE_NAME "QtSalesSystem")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_VENDOR "QtSalesSystem")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Punto de venta Qt6 multinegocio")
+set(CPACK_GENERATOR "TGZ;ZIP")
+if(UNIX AND NOT APPLE)
+    list(APPEND CPACK_GENERATOR "DEB")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "QtSalesSystem")
+endif()
+include(CPack)

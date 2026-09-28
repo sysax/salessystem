@@ -39,6 +39,9 @@ class DatabaseManager : public QObject
         return m_db;
     }
 
+    // Fase 8: versión de esquema (PRAGMA user_version). 0 = legada sin
+    // versionar; kSchemaVersion = actual. Ver docs/MIGRATIONS.md.
+    Q_INVOKABLE int schemaVersion() const;
     // Utilidad fase 1: conteo de filas por tabla para verificar el seed.
     Q_INVOKABLE int tableRowCount(const QString &table) const;
     // Fase 2: aplica sql/seeds/<name>.sql (INSERT OR IGNORE, idempotente).
@@ -60,6 +63,8 @@ class DatabaseManager : public QObject
     bool migrateCategoriesFk();
     bool ensureSeeded(); // aplica sql/seed.sql solo si users está vacía
     bool ensureColumn(const QString &table, const QString &column, const QString &definition);
+    // Fase 8: sella PRAGMA user_version (rechaza BDs de app futura).
+    bool ensureVersioned();
 
     QSqlDatabase m_db;
     QString m_dbPath;

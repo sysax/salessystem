@@ -20,7 +20,11 @@
 #include "controllers/SerialsController.h"
 #include "controllers/SettingsController.h"
 #include "core/DatabaseManager.h"
+#include "core/AppMetrics.h"
+#include "core/CrashHandler.h"
 #include "core/EventBus.h"
+#include "core/Logger.h"
+#include "core/Version.h"
 #include "repositories/AuditRepository.h"
 #include "repositories/CajaRepository.h"
 #include "repositories/ClientRepository.h"
@@ -43,11 +47,24 @@
 #include "services/SyncService.h"
 #include "services/TicketPrinter.h"
 
+#include <QStandardPaths>
+
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
     app.setOrganizationName(QStringLiteral("QtSalesSystem"));
     app.setApplicationName(QStringLiteral("QtSalesSystem"));
+    app.setApplicationVersion(AppVersion::versionString());
+
+    // Fase 8: logging a archivo + crash reports (antes de abrir la BD
+    // para capturar también fallos de inicialización).
+    const QString logsDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                            + QStringLiteral("/logs");
+    Logger::init(logsDir);
+    CrashHandler::install(logsDir, AppVersion::versionString());
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, [] { Logger::shutdown(); });
+    qInfo("QtSalesSystem v%s arranque (schema v%lld)", qPrintable(AppVersion::versionString()),
+          static_cast<long long>(AppVersion::kSchemaVersion));
 
     DatabaseManager db;
     const QString overridePath = QString::fromLocal8Bit(qgetenv("QTSALES_DB"));
@@ -88,6 +105,7 @@ int main(int argc, char *argv[])
     ReceivablesService cxcSvc(&cxc, &bus, nullptr, &settingsSvc);
     PayablesService cxpSvc(&cxp, &bus);
     TicketPrinter printer;
+    AppMetrics appMetrics(conn);
 
     AuthController authCtl(&auth, &bus);
     SettingsController settingsCtl(&settingsSvc, &auth);
@@ -125,6 +143,9 @@ int main(int argc, char *argv[])
         }
     }
     engine.rootContext()->setContextProperty(QStringLiteral("db"), &db);
+    engine.rootContext()->setContextProperty(QStringLiteral("appVersion"),
+                                             AppVersion::versionString());
+    engine.rootContext()->setContextProperty(QStringLiteral("metrics"), &appMetrics);
     engine.rootContext()->setContextProperty(QStringLiteral("auth"), &authCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("settingsCtl"), &settingsCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("dash"), &dashCtl);

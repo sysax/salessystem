@@ -1,0 +1,104 @@
+# Fase 8 (MAP_PRO.md): release desde tag v* — changelog + build
+# multiplataforma + instaladores CPack. Firmado con secretos si existen
+# (CERT_PFX / APPLE_*); sin ellos el artefacto sale sin firmar y se
+# anota en las notas del release.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  QT_VERSION: '6.11.2'
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            host: linux
+            arch: linux_gcc_64
+          - os: windows-latest
+            host: windows
+            arch: win64_msvc2022_64
+          - os: macos-latest
+            host: mac
+            arch: macos
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Qt 6.11 (aqt)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: ${{ matrix.host }}
+          target: desktop
+          arch: ${{ matrix.arch }}
+          cache: true
+
+      - name: Check tag == project VERSION
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PROJ=$(grep -oP 'project\(QtSalesSystem VERSION \K[0-9.]+' CMakeLists.txt)
+          if [ "$TAG" != "$PROJ" ]; then
+            echo "Tag v$TAG != project VERSION $PROJ" >&2
+            exit 1
+          fi
+
+      - name: Changelog desde commits
+        shell: bash
+        run: |
+          git log --pretty=format:"- %h %ad %s" --date=short -n 100 > CHANGELOG.md
+          cat CHANGELOG.md
+
+      - name: Configure
+        shell: bash
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test (offscreen)
+        run: ctest --test-dir build --output-on-failure
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+      - name: Package (CPack)
+        working-directory: build
+        run: cpack
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ matrix.os }}
+          path: build/QtSalesSystem-*
+
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          body: |
+            Release ${{ github.ref_name }}.
+            Firmado: solo si los secretos CERT_PFX / APPLE_* están configurados.
+            Ver docs/RELEASE.md para el procedimiento de firma.

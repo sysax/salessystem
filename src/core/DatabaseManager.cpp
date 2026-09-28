@@ -9,7 +9,9 @@
 #include <QSqlQuery>
 #include <QStandardPaths>
 
+#include "AppMetrics.h"
 #include "Transaction.h"
+#include "Version.h"
 
 DatabaseManager::DatabaseManager(QObject *parent) : QObject(parent)
 {
@@ -60,7 +62,8 @@ bool DatabaseManager::initialize(const QString &customPath)
     }
 
     if (!applySqlFile(QStringLiteral(":/sql/schema.sql"), QStringLiteral("sql/schema.sql"))
-        || !migrateLegacyColumns() || !migrateCategoriesFk() || !ensureSeeded()) {
+        || !migrateLegacyColumns() || !migrateCategoriesFk() || !ensureSeeded()
+        || !AppMetrics::ensureTable(m_db) || !ensureVersioned()) {
         emit openChanged();
         return false;
     }
@@ -83,6 +86,46 @@ bool DatabaseManager::isOpen() const
     return m_db.isValid() && m_db.isOpen();
 }
 
+int DatabaseManager::schemaVersion() const
+{
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral("PRAGMA user_version")) || !q.next())
+        return -1;
+    return q.value(0).toInt();
+}
+
+bool DatabaseManager::ensureVersioned()
+{
+    // Fase 8: migraciones versionadas. Hoy el esquema aditivo ya quedó
+    // aplicado por applySqlFile + migrateLegacyColumns (idempotentes);
+    // aquí solo se sella y se valida la versión para upgrades futuros.
+    // user_version=0 (legada o fresca) -> sellar a actual.
+    // 0 < v < actual -> migraciones incrementales (hoy: las históricas
+    // ya corrieron arriba) -> sellar a actual.
+    // v > actual -> BD de una app futura: rechazar (ver MIGRATIONS.md,
+    // downgrade solo vía respaldo).
+    QSqlQuery q(m_db);
+    if (!q.exec(QStringLiteral("PRAGMA user_version")) || !q.next()) {
+        m_status = QStringLiteral("user_version ilegible");
+        return false;
+    }
+    const int v = q.value(0).toInt();
+    if (v > AppVersion::kSchemaVersion) {
+        m_status = QStringLiteral("BD de versión futura (%1 > %2): actualice la app")
+                       .arg(v)
+                       .arg(AppVersion::kSchemaVersion);
+        return false;
+    }
+    if (v == AppVersion::kSchemaVersion)
+        return true;
+    QSqlQuery w(m_db);
+    if (!w.exec(QStringLiteral("PRAGMA user_version = %1").arg(AppVersion::kSchemaVersion))) {
+        m_status = QStringLiteral("user_version: ") + w.lastError().text();
+        return false;
+    }
+    return true;
+}
+
 int DatabaseManager::tableRowCount(const QString &table) const
 {
     static const QStringList kAllowed = {
@@ -96,6 +139,7 @@ int DatabaseManager::tableRowCount(const QString &table) const
         QStringLiteral("counters"),     QStringLiteral("outbox"),
         QStringLiteral("settings"),     QStringLiteral("recovery_tokens"),
         QStringLiteral("categories"),   QStringLiteral("serials"),
+        QStringLiteral("app_metrics"),
     };
     if (!kAllowed.contains(table))
         return -1;
@@ -227,9 +271,8 @@ bool DatabaseManager::migrateLegacyColumns()
         {"sales", "reason", "reason TEXT DEFAULT ''"},       // Fase 5: motivo NC/ND/cancelación
         {"purchases", "received_json",
          "received_json TEXT DEFAULT '{}'"}, // Fase 5: recepción parcial acumulada
-        {"outbox", "next_retry_at",
-         "next_retry_at TEXT DEFAULT ''"},  // Fase 6: backoff persistente
-        {"outbox", "priority", "priority INTEGER DEFAULT 0"}, // Fase 6: prioridad de lote
+        {"outbox", "next_retry_at", "next_retry_at TEXT DEFAULT ''"}, // Fase 6: backoff persistente
+        {"outbox", "priority", "priority INTEGER DEFAULT 0"},         // Fase 6: prioridad de lote
         {"inventory_movements", "from_location",
          "from_location TEXT DEFAULT ''"}, // Fase 6: traspasos con origen/destino
         {"inventory_movements", "to_location", "to_location TEXT DEFAULT ''"},
@@ -288,8 +331,8 @@ bool DatabaseManager::migrateLegacyColumns()
             "INTEGER NOT NULL, qty REAL DEFAULT 0, UNIQUE(sku, location_id))"))
         || !loc.exec(QStringLiteral(
             "CREATE INDEX IF NOT EXISTS idx_stock_loc ON stock_by_location(location_id)"))
-        || !loc.exec(QStringLiteral(
-            "CREATE INDEX IF NOT EXISTS idx_stock_sku ON stock_by_location(sku)"))
+        || !loc.exec(
+            QStringLiteral("CREATE INDEX IF NOT EXISTS idx_stock_sku ON stock_by_location(sku)"))
         || !loc.exec(QStringLiteral(
             "INSERT OR IGNORE INTO stock_by_location (sku, location_id, qty) SELECT sku, 1, stock "
             "FROM products WHERE stock IS NOT NULL AND ABS(stock) > 1e-9"))) {
