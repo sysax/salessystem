@@ -11,7 +11,9 @@ RowLayout {
     id: root
     spacing: Theme.spacingMedium
 
-    readonly property int touchH: 48   // objetivo táctil mínimo
+    // Fase 7: altura táctil según densidad configurada (compacto 44 /
+    // normal 48 / amplio 56; mínimo 44px por accesibilidad).
+    readonly property int touchH: Theme.posTouchH
     readonly property int rowHProduct: 56
     readonly property int rowHCart: 64
 
@@ -59,7 +61,7 @@ RowLayout {
             serialDialog.openForLine(pos.cart.length - 1, productId,
                                        pos.inStockSerials(productId));
         } else {
-            Utils.showToast("success", "Agregado al carrito", 1500);
+            Utils.showToast("success", qsTr("Agregado al carrito"), 1500);
         }
         // Fase 3: producto con receta → pedir Nº (no bloquea, valida al cobrar).
         if (p && root.supportsReceta() && root.needsReceta(p)) {
@@ -172,8 +174,15 @@ RowLayout {
     }
 
     // Lógica de cobro: Efectivo/Mixto exigen efectivo >= total (Crédito y demás, no).
+    // methodBox muestra etiqueta traducida pero opera con el valor interno en
+    // español (contrato del backend: "Efectivo"|"Credito"|"Mixto"...).
+    function payMethod() {
+        var values = ["Efectivo", "Transferencia", "Tarjeta", "Credito", "Mixto"];
+        return values[methodBox.currentIndex] || "Efectivo";
+    }
     function cashNeeded() {
-        return methodBox.currentText === "Efectivo" || methodBox.currentText === "Mixto";
+        var m = root.payMethod();
+        return m === "Efectivo" || m === "Mixto";
     }
     function cashValue() {
         // MoneyField normaliza es_CO ("10.000,50"); fallback a parseFloat si cambia el tipo.
@@ -449,7 +458,7 @@ RowLayout {
                     model: (pos.totals.taxBreakdown && pos.totals.taxBreakdown.length > 1)
                            ? pos.totals.taxBreakdown : []
                     Label {
-                        text: "  · " + modelData.name + ": " + money(modelData.tax)
+                        text: qsTr("  · %1: %2").arg(modelData.name).arg(money(modelData.tax))
                         font.pixelSize: Theme.fontS
                         opacity: 0.8
                     }
@@ -476,7 +485,7 @@ RowLayout {
                 onClicked: {
                     var r = pos.applyPromo(promoField.text);
                     if (r.ok)
-                        Utils.showToast("success", "Descuento: " + money(r.discount), 2500);
+                        Utils.showToast("success", qsTr("Descuento: %1").arg(money(r.discount)), 2500);
                     else
                         Utils.showToast("error", r.error, 3000);
                 }
@@ -486,7 +495,7 @@ RowLayout {
             id: methodBox
             Layout.fillWidth: true
             implicitHeight: root.touchH
-            model: ["Efectivo", "Transferencia", "Tarjeta", "Credito", "Mixto"]
+            model: [qsTr("Efectivo"), qsTr("Transferencia"), qsTr("Tarjeta"), qsTr("Crédito"), qsTr("Mixto")]
         }
         // Fase 2: efectivo/cash >= 0 con máx. 2 decimales (MoneyField + Money backend).
         MoneyField {
@@ -535,7 +544,7 @@ RowLayout {
                     return;
                 }
                 var pays = {};
-                if (methodBox.currentText === "Mixto" || methodBox.currentText === "Efectivo") {
+                if (root.payMethod() === "Mixto" || root.payMethod() === "Efectivo") {
                     var cash = root.cashValue();
                     if (cash > 0)
                         pays["efectivo"] = cash;
@@ -547,10 +556,10 @@ RowLayout {
                     Utils.showToast("error", qsTr("Receta requerida para: ") + missing, 4000);
                     return;
                 }
-                var r = pos.checkout(clientField.text, pays, methodBox.currentText, auth.currentUser, auth.currentRole);
+                var r = pos.checkout(clientField.text, pays, root.payMethod(), auth.currentUser, auth.currentRole);
                 Utils.hideLoading();
                 if (r.ok) {
-                    Utils.showToast("success", "Venta " + r.saleId + " · Cambio " + money(r.change), 3000);
+                    Utils.showToast("success", qsTr("Venta %1 · Cambio %2").arg(r.saleId).arg(money(r.change)), 3000);
                     cashField.text = "";
                     promoField.text = "";
                 } else {
@@ -593,9 +602,9 @@ RowLayout {
                             var r = pos.caja.open ? pos.closeCaja(counted, auth.currentUser, cajaReason.text) : pos.openCaja(counted, auth.currentUser);
                             if (r.ok) {
                                 if (r.diff !== undefined)
-                                    Utils.showToast("warning", "Diferencia: " + money(r.diff), 3000);
+                                    Utils.showToast("warning", qsTr("Diferencia: %1").arg(money(r.diff)), 3000);
                                 else
-                                    Utils.showToast("success", "Caja abierta", 2500);
+                                    Utils.showToast("success", qsTr("Caja abierta"), 2500);
                                 cajaReason.text = "";
                             } else {
                                 Utils.showToast("error", r.error, 4000);
@@ -646,7 +655,7 @@ RowLayout {
         onAccepted: {
             if (removeIndex >= 0) {
                 pos.removeLine(removeIndex);
-                Utils.showToast("info", "Producto eliminado", 2000);
+                Utils.showToast("info", qsTr("Producto eliminado"), 2000);
             }
             removeIndex = -1;
         }
@@ -666,7 +675,7 @@ RowLayout {
         }
         onAccepted: {
             pos.clearCart();
-            Utils.showToast("info", "Carrito vaciado", 2000);
+            Utils.showToast("info", qsTr("Carrito vaciado"), 2000);
         }
     }
 
@@ -677,7 +686,7 @@ RowLayout {
         onQtyChosen: function (qty, cIdx, pid) {
             if (cIdx >= 0) {
                 pos.setQty(cIdx, qty);
-                Utils.showToast("success", "Cantidad: " + Utils.formatQty(qty), 1500);
+                Utils.showToast("success", qsTr("Cantidad: %1").arg(Utils.formatQty(qty)), 1500);
                 qtyDialog.confirmDone();
             } else {
                 var r = pos.addToCart(pid, qty);
@@ -685,7 +694,7 @@ RowLayout {
                     qtyDialog.showError(r.error);
                     return;
                 }
-                Utils.showToast("success", "Agregado: " + Utils.formatQty(qty), 1500);
+                Utils.showToast("success", qsTr("Agregado: %1").arg(Utils.formatQty(qty)), 1500);
                 qtyDialog.confirmDone();
             }
         }
@@ -701,7 +710,7 @@ RowLayout {
                 serialDialog.showError(r.error);
                 return;
             }
-            Utils.showToast("success", "Serial registrado", 1500);
+            Utils.showToast("success", qsTr("Serial registrado"), 1500);
         }
     }
 

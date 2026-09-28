@@ -46,7 +46,7 @@ ColumnLayout {
         model: clientsCtl.clientModel
         delegate: ItemDelegate {
             width: ListView.view.width
-            text: model.name + "  ·  " + model.balance + " saldo  ·  " + model.status
+            text: qsTr("%1  ·  %2 saldo  ·  %3").arg(model.name).arg(model.balance).arg(model.status)
             onClicked: {
                 stmtModel.model = clientsCtl.statement(model.name);
                 stmtLabel.text = qsTr("Estado: ") + model.name;

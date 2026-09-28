@@ -56,6 +56,23 @@ class SettingsService : public QObject
     static const QString KRequireExpiry;
     static const QString KRequireSerial;
     static const QString KWeightUnit;
+    // Fase 7 (MAP_PRO): idioma de la UI (es|en, es = fuente sin translator).
+    static const QString KLanguage;
+    // Fase 7 (MAP_PRO): apariencia y operación por operador.
+    // theme: light|dark (Material Light/Dark, aplica inmediato).
+    static const QString KTheme;
+    // high_contrast: 0|1 (paleta de contraste reforzado).
+    static const QString KHighContrast;
+    // pos_density: compacto|normal|amplio (altura táctil POS 44/48/56).
+    static const QString KPosDensity;
+    // Atajos de navegación personalizables (secuencias estilo "Ctrl+1").
+    static const QString KShortcutDashboard;
+    static const QString KShortcutPos;
+    static const QString KShortcutProducts;
+    static const QString KShortcutSales;
+    static const QString KShortcutInventory;
+    static const QString KShortcutReports;
+    static const QString KShortcutMenu;
     // Fase 3 (MAP_PRO): configuración externalizada de crédito y operación.
     static const QString KCreditDays;
     static const QString KPayableDays;
@@ -87,6 +104,18 @@ class SettingsService : public QObject
     bool requireExpiry() const;
     bool requireSerial() const;
     QString weightUnit() const;
+    // Fase 7: idioma ("es" por defecto; solo "es"|"en" son válidos).
+    QString language() const;
+    // Fase 7: apariencia ("light" por defecto) y contraste reforzado (off).
+    QString theme() const;
+    bool highContrast() const;
+    // Fase 7: densidad táctil del POS ("normal" = 48px; ver Theme.posTouchH).
+    QString posDensity() const;
+    // Fase 7: atajo para una acción (clave shortcut_*; default si falta).
+    Q_INVOKABLE QString shortcut(const QString &key) const;
+    // Defaults de atajos (misma tabla que valida save()).
+    static QVariantMap defaultShortcuts();
+    static const QStringList ShortcutKeys;
     // Fase 3: crédito y operación (con defaults si la clave falta o es inválida).
     int creditDays() const;
     int payableDays() const;

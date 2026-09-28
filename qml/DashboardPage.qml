@@ -219,7 +219,7 @@ ScrollView {
             model: dash.data.lowStock || []
             delegate: Label {
                 visible: index < 5
-                text: "• " + modelData.name + "  (" + modelData.stock + "/" + modelData.min + ")"
+                text: qsTr("• %1  (%2/%3)").arg(modelData.name).arg(modelData.stock).arg(modelData.min)
                 width: parent.width
                 elide: Text.ElideRight
                 opacity: 0.85
@@ -247,8 +247,7 @@ ScrollView {
             model: root.supportsExpiry() ? (dash.data.expiring30 || []) : []
             delegate: Label {
                 visible: index < 5
-                text: "• " + modelData.name + "  lote " + (modelData.lote || "—")
-                      + "  vence " + modelData.vencimiento
+                text: qsTr("• %1  lote %2  vence %3").arg(modelData.name).arg(modelData.lote || "—").arg(modelData.vencimiento)
                 width: parent.width
                 elide: Text.ElideRight
                 opacity: 0.85

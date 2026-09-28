@@ -23,7 +23,7 @@ ColumnLayout {
         delegate: RowLayout {
             width: ListView.view.width
             Label {
-                text: modelData.id + "  ·  " + modelData.client + "  ·  saldo " + money(modelData.balance) + "  ·  mora " + money(modelData.mora)
+                text: qsTr("%1  ·  %2  ·  saldo %3  ·  mora %4").arg(modelData.id).arg(modelData.client).arg(money(modelData.balance)).arg(money(modelData.mora))
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }

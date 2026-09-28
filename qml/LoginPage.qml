@@ -129,7 +129,7 @@ Pane {
             passField.text = "";
             root.pendingChangeUser = "";
             root.pendingCurrentPass = "";
-            Utils.showToast("success", "¡Bienvenido!", 2000);
+            Utils.showToast("success", qsTr("¡Bienvenido!"), 2000);
             root.loggedIn();
         }
     }
@@ -140,7 +140,7 @@ Pane {
         forcePassErr.text = "";
         newPassField.text = "";
         confirmPassField.text = "";
-        Utils.showToast("warning", "Debe cambiar la clave por defecto", 4000);
+        Utils.showToast("warning", qsTr("Debe cambiar la clave por defecto"), 4000);
         forcePassDialog.open();
     }
 
@@ -155,12 +155,12 @@ Pane {
                 if (r.mustChangePassword) {
                     askForcedChange(r.user, passField.text);
                 } else {
-                    Utils.showToast("success", "¡Bienvenido!", 2000);
+                    Utils.showToast("success", qsTr("¡Bienvenido!"), 2000);
                     root.loggedIn();
                 }
             } else if (r.totpRequired) {
                 root.needTotp = true;
-                Utils.showToast("info", "Ingrese su código 2FA", 3000);
+                Utils.showToast("info", qsTr("Ingrese su código 2FA"), 3000);
             } else {
                 Utils.showToast("error", r.error, 4000);
             }
@@ -173,7 +173,7 @@ Pane {
             if (r.mustChangePassword) {
                 askForcedChange(r.user, passField.text);
             } else {
-                Utils.showToast("success", "Autenticación exitosa", 2000);
+                Utils.showToast("success", qsTr("Autenticación exitosa"), 2000);
                 root.needTotp = false;
                 root.loggedIn();
             }

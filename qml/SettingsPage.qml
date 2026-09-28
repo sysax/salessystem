@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtSalesSystem
+import "Utils.js" as Utils
 import "components"
 
 ScrollView {
@@ -270,6 +271,105 @@ ScrollView {
         }
 
         GroupBox {
+            title: qsTr("Idioma")
+            Layout.fillWidth: true
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: Theme.spacingSmall
+                ComboBox {
+                    id: fLang
+                    Layout.fillWidth: true
+                    model: [qsTr("Español"), qsTr("English")]
+                }
+                Label {
+                    text: qsTr("El cambio de idioma aplica al reiniciar la aplicación.")
+                    font.pixelSize: Theme.fontS
+                    opacity: 0.7
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+            }
+        }
+
+        GroupBox {
+            title: qsTr("Apariencia (Fase 7)")
+            Layout.fillWidth: true
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: Theme.spacingSmall
+                RowLayout {
+                    Label {
+                        text: qsTr("Tema")
+                        Layout.preferredWidth: 110
+                    }
+                    ComboBox {
+                        id: fTheme
+                        Layout.fillWidth: true
+                        model: [qsTr("Claro"), qsTr("Oscuro")]
+                    }
+                }
+                CheckBox {
+                    id: fHighContrast
+                    text: qsTr("Alto contraste")
+                }
+                RowLayout {
+                    Label {
+                        text: qsTr("Densidad POS")
+                        Layout.preferredWidth: 110
+                    }
+                    ComboBox {
+                        id: fDensity
+                        Layout.fillWidth: true
+                        model: [qsTr("Compacto"), qsTr("Normal"), qsTr("Amplio")]
+                    }
+                }
+                Label {
+                    text: qsTr("Tema y densidad aplican al guardar, sin reiniciar.")
+                    font.pixelSize: Theme.fontS
+                    opacity: 0.7
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+            }
+        }
+
+        GroupBox {
+            title: qsTr("Atajos de teclado (Fase 7)")
+            Layout.fillWidth: true
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: Theme.spacingSmall
+                GridLayout {
+                    columns: 2
+                    columnSpacing: Theme.spacingSmall
+                    rowSpacing: Theme.spacingSmall
+                    Layout.fillWidth: true
+                    Label { text: qsTr("Tablero") }
+                    TextField { id: fScDashboard; Layout.fillWidth: true; maximumLength: 20 }
+                    Label { text: qsTr("Punto de venta") }
+                    TextField { id: fScPos; Layout.fillWidth: true; maximumLength: 20 }
+                    Label { text: qsTr("Productos") }
+                    TextField { id: fScProducts; Layout.fillWidth: true; maximumLength: 20 }
+                    Label { text: qsTr("Ventas") }
+                    TextField { id: fScSales; Layout.fillWidth: true; maximumLength: 20 }
+                    Label { text: qsTr("Inventario") }
+                    TextField { id: fScInventory; Layout.fillWidth: true; maximumLength: 20 }
+                    Label { text: qsTr("Reportes") }
+                    TextField { id: fScReports; Layout.fillWidth: true; maximumLength: 20 }
+                    Label { text: qsTr("Menú") }
+                    TextField { id: fScMenu; Layout.fillWidth: true; maximumLength: 20 }
+                }
+                Label {
+                    text: qsTr("Ej.: Ctrl+1, Ctrl+Shift+P, F9. Sin duplicados; aplican al guardar.")
+                    font.pixelSize: Theme.fontS
+                    opacity: 0.7
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+            }
+        }
+
+        GroupBox {
             title: qsTr("Catálogo inicial por rubro (Fase 2)")
             Layout.fillWidth: true
             ColumnLayout {
@@ -379,6 +479,8 @@ ScrollView {
     }
 
     function doSave() {
+        var prevLang = "es";
+        try { prevLang = settingsCtl.settings["language"] || "es"; } catch (e) {}
         var r = settingsCtl.save({
             "business_name": fName.text,
             "business_nit": fNit.text,
@@ -397,11 +499,24 @@ ScrollView {
             "fixed_costs_monthly": fFixedCosts.text.trim() !== "" ? String(
                 fFixedCosts.amount()) : "5000000",
             "promo_volumen_min_qty": fPromoMinQty.text,
+            "language": fLang.currentIndex === 1 ? "en" : "es",
+            "theme": fTheme.currentIndex === 1 ? "dark" : "light",
+            "high_contrast": fHighContrast.checked ? "1" : "0",
+            "pos_density": ["compacto", "normal", "amplio"][fDensity.currentIndex] || "normal",
+            "shortcut_dashboard": fScDashboard.text.trim(),
+            "shortcut_pos": fScPos.text.trim(),
+            "shortcut_products": fScProducts.text.trim(),
+            "shortcut_sales": fScSales.text.trim(),
+            "shortcut_inventory": fScInventory.text.trim(),
+            "shortcut_reports": fScReports.text.trim(),
+            "shortcut_menu": fScMenu.text.trim(),
             "require_expiry": fExpiry.checked ? "1" : "0",
             "require_serial": fSerial.checked ? "1" : "0"
         });
         if (r.ok) {
             okMsg.text = qsTr("Guardado. Los próximos tickets y reportes usan estos datos.");
+            if ((fLang.currentIndex === 1 ? "en" : "es") !== prevLang)
+                Utils.showToast("info", qsTr("Idioma cambiado. Reinicie la aplicación para aplicarlo."), 4000);
         } else {
             msg.text = r.error;
         }
@@ -462,6 +577,18 @@ ScrollView {
         var bt = s["business_type"] || "miscelanea";
         var idx = fType.model.indexOf(bt);
         fType.currentIndex = idx >= 0 ? idx : 0;
+        fLang.currentIndex = (s["language"] || "es") === "en" ? 1 : 0;
+        fTheme.currentIndex = (s["theme"] || "light") === "dark" ? 1 : 0;
+        fHighContrast.checked = (s["high_contrast"] || "0") === "1";
+        var dens = s["pos_density"] || "normal";
+        fDensity.currentIndex = dens === "compacto" ? 0 : (dens === "amplio" ? 2 : 1);
+        fScDashboard.text = s["shortcut_dashboard"] || "Ctrl+1";
+        fScPos.text = s["shortcut_pos"] || "Ctrl+2";
+        fScProducts.text = s["shortcut_products"] || "Ctrl+3";
+        fScSales.text = s["shortcut_sales"] || "Ctrl+4";
+        fScInventory.text = s["shortcut_inventory"] || "Ctrl+5";
+        fScReports.text = s["shortcut_reports"] || "Ctrl+6";
+        fScMenu.text = s["shortcut_menu"] || "Ctrl+M";
         fExpiry.checked = (s["require_expiry"] || "0") === "1";
         fSerial.checked = (s["require_serial"] || "0") === "1";
         root.updatePreview();

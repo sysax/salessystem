@@ -14,26 +14,29 @@ ColumnLayout {
 
     property string currentKey: "dashboard"
 
+    // Fase 7: hints de atajo personalizables. `sc` = texto por defecto
+    // (visible en tst_sidebar, que carga aislado sin settingsCtl);
+    // `sck` = clave del setting que lo sobrescribe al estar disponible.
     property var entries: [
-        { "key": "dashboard", "label": "Tablero", "icon": "📊", "sc": "Ctrl+1" },
-        { "key": "pos", "label": "Punto de venta", "icon": "🛒", "sc": "Ctrl+2" },
-        { "key": "products", "label": "Productos", "icon": "📦", "sc": "Ctrl+3" },
-        { "key": "sales", "label": "Ventas", "icon": "🧾", "sc": "Ctrl+4" },
-        { "key": "clients", "label": "Clientes", "icon": "👥", "sc": "" },
-        { "key": "inventory", "label": "Inventario", "icon": "🏬", "sc": "Ctrl+5" },
-        { "key": "purchases", "label": "Compras", "icon": "🛍️", "sc": "" },
-        { "key": "suppliers", "label": "Proveedores", "icon": "🚚", "sc": "" },
-        { "key": "receivables", "label": "Cuentas por cobrar", "icon": "💳", "sc": "" },
-        { "key": "payables", "label": "Cuentas por pagar", "icon": "💸", "sc": "" },
-        { "key": "reports", "label": "Reportes", "icon": "📈", "sc": "Ctrl+6" },
-        { "key": "promos", "label": "Promociones", "icon": "🎟️", "sc": "" },
-        { "key": "users", "label": "Usuarios", "icon": "👤", "sc": "" },
-        { "key": "audit", "label": "Bitácora", "icon": "📜", "sc": "" },
-        { "key": "settings", "label": "Configuración", "icon": "⚙️", "sc": "" },
+        { "key": "dashboard", "label": qsTr("Tablero"), "icon": "📊", "sc": "Ctrl+1", "sck": "shortcut_dashboard" },
+        { "key": "pos", "label": qsTr("Punto de venta"), "icon": "🛒", "sc": "Ctrl+2", "sck": "shortcut_pos" },
+        { "key": "products", "label": qsTr("Productos"), "icon": "📦", "sc": "Ctrl+3", "sck": "shortcut_products" },
+        { "key": "sales", "label": qsTr("Ventas"), "icon": "🧾", "sc": "Ctrl+4", "sck": "shortcut_sales" },
+        { "key": "clients", "label": qsTr("Clientes"), "icon": "👥", "sc": "" },
+        { "key": "inventory", "label": qsTr("Inventario"), "icon": "🏬", "sc": "Ctrl+5", "sck": "shortcut_inventory" },
+        { "key": "purchases", "label": qsTr("Compras"), "icon": "🛍️", "sc": "" },
+        { "key": "suppliers", "label": qsTr("Proveedores"), "icon": "🚚", "sc": "" },
+        { "key": "receivables", "label": qsTr("Cuentas por cobrar"), "icon": "💳", "sc": "" },
+        { "key": "payables", "label": qsTr("Cuentas por pagar"), "icon": "💸", "sc": "" },
+        { "key": "reports", "label": qsTr("Reportes"), "icon": "📈", "sc": "Ctrl+6", "sck": "shortcut_reports" },
+        { "key": "promos", "label": qsTr("Promociones"), "icon": "🎟️", "sc": "" },
+        { "key": "users", "label": qsTr("Usuarios"), "icon": "👤", "sc": "" },
+        { "key": "audit", "label": qsTr("Bitácora"), "icon": "📜", "sc": "" },
+        { "key": "settings", "label": qsTr("Configuración"), "icon": "⚙️", "sc": "" },
         // Fase 4: módulos por vertical (verticals vacío = todas).
-        { "key": "lots", "label": "Lotes y vencimientos", "icon": "📅", "sc": "",
+        { "key": "lots", "label": qsTr("Lotes y vencimientos"), "icon": "📅", "sc": "",
           "verticals": ["farmacia", "veterinaria", "abarrotes", "panaderia", "restaurante", "cafeteria"] },
-        { "key": "serials", "label": "Seriales y garantías", "icon": "🔧", "sc": "",
+        { "key": "serials", "label": qsTr("Seriales y garantías"), "icon": "🔧", "sc": "",
           "verticals": ["celulares", "taller"] },
     ]
 
@@ -77,8 +80,8 @@ ColumnLayout {
                     elide: Text.ElideRight
                 }
                 Label {
-                    visible: modelData.sc !== ""
-                    text: modelData.sc
+                    visible: root.scHint(modelData) !== ""
+                    text: root.scHint(modelData)
                     font.pixelSize: 12
                     opacity: 0.6
                 }
@@ -94,6 +97,19 @@ ColumnLayout {
         } catch (e) {
             return "";
         }
+    }
+
+    function scHint(entry) {
+        // Atajo efectivo: setting personalizado o texto por defecto.
+        // settingsCtl puede no existir (tst_sidebar carga aislado).
+        if (!entry.sck)
+            return entry.sc;
+        try {
+            var v = settingsCtl.settings[entry.sck];
+            if (v && String(v).trim() !== "")
+                return String(v);
+        } catch (e) {}
+        return entry.sc;
     }
 
     function forVertical(entry) {

@@ -9,7 +9,7 @@ Item {
     id: root
     
     property bool loadingVisible: false
-    property string message: "Cargando..."
+    property string message: qsTr("Cargando...")
     
     anchors.fill: parent
     z: 999  // Just below Toast

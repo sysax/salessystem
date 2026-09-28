@@ -53,7 +53,7 @@ ColumnLayout {
         visible: (inventoryCtl.alerts.low || []).length > 0
         delegate: Label {
             width: ListView.view.width
-            text: "⚠ " + modelData.sku + "  " + modelData.name + "  (stock " + modelData.stock + ")"
+            text: qsTr("⚠ %1  %2  (stock %3)").arg(modelData.sku).arg(modelData.name).arg(modelData.stock)
             color: Theme.error
         }
     }

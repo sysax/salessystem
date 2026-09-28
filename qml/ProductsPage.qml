@@ -601,7 +601,7 @@ ColumnLayout {
                 editErr.text = r.error;
                 open(); // reabrir si falló
             } else {
-                Utils.showToast("success", editDialog.sku === "" ? "Producto creado" : "Producto actualizado", 2500);
+                Utils.showToast("success", editDialog.sku === "" ? qsTr("Producto creado") : qsTr("Producto actualizado"), 2500);
                 close();
             }
         }

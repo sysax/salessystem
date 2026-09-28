@@ -36,6 +36,7 @@ find_package(
                Test
                Network
                Gui
+               LinguistTools
 )
 
 qt_standard_project_setup()
@@ -223,6 +224,33 @@ qt_add_qml_module(
     qml/components/BusinessBadge.qml
     qml/components/MoneyField.qml
 )
+
+# Fase 7 (MAP_PRO): i18n es/en. Los .qm se compilan con lrelease y se
+# empaquetan en :/i18n/app_<lang>.qm (RESOURCE_PREFIX por defecto "/i18n",
+# ver src/main.cpp). Sin SOURCES no hay lupdate implícito en el build;
+# el catálogo se actualiza con `cmake --build build --target update-translations`.
+qt_add_translations(
+    TARGETS QtSalesSystemApp
+    TS_FILES i18n/app_es.ts i18n/app_en.ts
+)
+find_program(
+    LUPDATE_EXE NAMES lupdate HINTS "${CMAKE_PREFIX_PATH}/bin" "$ENV{HOME}/Qt/6.11.2/gcc_64/bin"
+)
+if(LUPDATE_EXE)
+    file(
+        GLOB
+        TS_UPDATE_QML
+        CONFIGURE_DEPENDS
+        ${CMAKE_SOURCE_DIR}/qml/*.qml
+        ${CMAKE_SOURCE_DIR}/qml/components/*.qml
+    )
+    add_custom_target(
+        update-translations
+        COMMAND ${LUPDATE_EXE} ${TS_UPDATE_QML} -ts ${CMAKE_SOURCE_DIR}/i18n/app_es.ts
+                ${CMAKE_SOURCE_DIR}/i18n/app_en.ts
+        COMMENT "Actualizando catálogos i18n (lupdate es/en)"
+    )
+endif()
 
 target_link_libraries(
     QtSalesSystemApp

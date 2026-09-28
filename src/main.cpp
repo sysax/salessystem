@@ -3,8 +3,10 @@
 // Repositories -> SQLite. El grafo de dependencias se cablea aquí
 // (DI manual, sin framework).
 #include <QGuiApplication>
+#include <QLibraryInfo>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QTranslator>
 #include <QUrl>
 
 #include "controllers/AuthController.h"
@@ -106,6 +108,22 @@ int main(int argc, char *argv[])
     AuditController auditCtl(&audit);
 
     QQmlApplicationEngine engine;
+    // Fase 7 (MAP_PRO): i18n. "es" es la lengua fuente (sin translator);
+    // "en" carga el .qm empaquetado (:/i18n) con fallback a la ruta del
+    // sistema. El idioma pleno aplica al reiniciar (ver SettingsPage).
+    if (settingsSvc.language() == QStringLiteral("en")) {
+        QTranslator *translator = new QTranslator(&app);
+        const QStringList candidates = {
+            QStringLiteral(":/i18n/app_en.qm"),
+            QLibraryInfo::path(QLibraryInfo::TranslationsPath) + QStringLiteral("/app_en.qm"),
+        };
+        for (const QString &p : candidates) {
+            if (translator->load(p)) {
+                app.installTranslator(translator);
+                break;
+            }
+        }
+    }
     engine.rootContext()->setContextProperty(QStringLiteral("db"), &db);
     engine.rootContext()->setContextProperty(QStringLiteral("auth"), &authCtl);
     engine.rootContext()->setContextProperty(QStringLiteral("settingsCtl"), &settingsCtl);

@@ -22,7 +22,7 @@ ApplicationWindow {
         root.tickClock();
     }
 
-    Material.theme: Material.Light
+    Material.theme: Theme.dark ? Material.Dark : Material.Light
     Material.primary: Theme.primary   // menta pastel
     Material.accent: Theme.accent
 
@@ -33,7 +33,25 @@ ApplicationWindow {
     property bool online: true
 
     function tickClock() {
-        clockText = Qt.formatDateTime(new Date(), "dd/MM HH:mm:ss");
+        // Fase 7: formato según idioma de la app (no del sistema).
+        var lang = "es";
+        try { lang = settingsCtl.settings["language"] || "es"; } catch (e) {}
+        try {
+            clockText = Qt.formatDateTime(new Date(),
+                lang === "en" ? "MM/dd hh:mm:ss AP" : "dd/MM HH:mm:ss");
+        } catch (e) {
+            clockText = Qt.formatDateTime(new Date(), "dd/MM HH:mm:ss");
+        }
+    }
+
+    // Fase 7: atajos personalizables (settings shortcut_*; fallback = default).
+    function shortcutSeq(key, fallback) {
+        try {
+            var v = settingsCtl.settings[key];
+            if (v && String(v).trim() !== "")
+                return String(v);
+        } catch (e) {}
+        return fallback;
     }
 
     function recheckOnline() {
@@ -61,24 +79,24 @@ ApplicationWindow {
     // Mejora #5: metadatos para breadcrumbs + sidebar (etiqueta, icono, sección).
     function screenMeta(key) {
         var map = {
-            "login": {"label": "Ingresar", "icon": "🔑", "section": "Sistema"},
-            "dashboard": {"label": "Tablero", "icon": "📊", "section": "Principal"},
-            "pos": {"label": "Punto de venta", "icon": "🛒", "section": "Principal"},
-            "products": {"label": "Productos", "icon": "📦", "section": "Catálogo"},
-            "sales": {"label": "Ventas", "icon": "🧾", "section": "Ventas"},
-            "clients": {"label": "Clientes", "icon": "👥", "section": "Ventas"},
-            "inventory": {"label": "Inventario", "icon": "🏬", "section": "Catálogo"},
-            "purchases": {"label": "Compras", "icon": "🛍️", "section": "Catálogo"},
-            "suppliers": {"label": "Proveedores", "icon": "🚚", "section": "Catálogo"},
-            "receivables": {"label": "Cuentas por cobrar", "icon": "💳", "section": "Finanzas"},
-            "payables": {"label": "Cuentas por pagar", "icon": "💸", "section": "Finanzas"},
-            "reports": {"label": "Reportes", "icon": "📈", "section": "Finanzas"},
-            "promos": {"label": "Promociones", "icon": "🎟️", "section": "Ventas"},
-            "users": {"label": "Usuarios", "icon": "👤", "section": "Sistema"},
-            "settings": {"label": "Configuración", "icon": "⚙️", "section": "Sistema"},
-            "lots": {"label": "Lotes y vencimientos", "icon": "📅", "section": "Catálogo"},
-            "serials": {"label": "Seriales y garantías", "icon": "🔧", "section": "Catálogo"},
-            "audit": {"label": "Bitácora", "icon": "📜", "section": "Sistema"}
+            "login": {"label": qsTr("Ingresar"), "icon": "🔑", "section": qsTr("Sistema")},
+            "dashboard": {"label": qsTr("Tablero"), "icon": "📊", "section": qsTr("Principal")},
+            "pos": {"label": qsTr("Punto de venta"), "icon": "🛒", "section": qsTr("Principal")},
+            "products": {"label": qsTr("Productos"), "icon": "📦", "section": qsTr("Catálogo")},
+            "sales": {"label": qsTr("Ventas"), "icon": "🧾", "section": qsTr("Ventas")},
+            "clients": {"label": qsTr("Clientes"), "icon": "👥", "section": qsTr("Ventas")},
+            "inventory": {"label": qsTr("Inventario"), "icon": "🏬", "section": qsTr("Catálogo")},
+            "purchases": {"label": qsTr("Compras"), "icon": "🛍️", "section": qsTr("Catálogo")},
+            "suppliers": {"label": qsTr("Proveedores"), "icon": "🚚", "section": qsTr("Catálogo")},
+            "receivables": {"label": qsTr("Cuentas por cobrar"), "icon": "💳", "section": qsTr("Finanzas")},
+            "payables": {"label": qsTr("Cuentas por pagar"), "icon": "💸", "section": qsTr("Finanzas")},
+            "reports": {"label": qsTr("Reportes"), "icon": "📈", "section": qsTr("Finanzas")},
+            "promos": {"label": qsTr("Promociones"), "icon": "🎟️", "section": qsTr("Ventas")},
+            "users": {"label": qsTr("Usuarios"), "icon": "👤", "section": qsTr("Sistema")},
+            "settings": {"label": qsTr("Configuración"), "icon": "⚙️", "section": qsTr("Sistema")},
+            "lots": {"label": qsTr("Lotes y vencimientos"), "icon": "📅", "section": qsTr("Catálogo")},
+            "serials": {"label": qsTr("Seriales y garantías"), "icon": "🔧", "section": qsTr("Catálogo")},
+            "audit": {"label": qsTr("Bitácora"), "icon": "📜", "section": qsTr("Sistema")}
         };
         return map[key] || {"label": key, "icon": "•", "section": ""};
     }
@@ -153,21 +171,37 @@ ApplicationWindow {
     }
 
     // Formato de moneda con el símbolo de settingsCtl (Fase 0 multinegocio).
+    // Fase 7: agrupación localizada vía Qt.locale según settings["language"]
+    // ("es" → es_CO con punto de miles, "en" → en_US con coma). Céntimos no se
+    // muestran en UI (los montos viajan redondeados); el backend Money conserva
+    // la precisión. Con fallback manual si Qt.locale falla.
     function money(v) {
-        var sym = "$ ";
+        var sym = "$";
+        var lang = "es";
         try {
             if (settingsCtl && settingsCtl.settings["currency_symbol"])
-                sym = settingsCtl.settings["currency_symbol"] + " ";
+                sym = settingsCtl.settings["currency_symbol"];
+            if (settingsCtl && settingsCtl.settings["language"])
+                lang = settingsCtl.settings["language"];
         } catch (e) {}
         var n = Math.round(v);
-        var neg = n < 0;
-        n = Math.abs(n).toString();
-        var out = "";
-        while (n.length > 3) {
-            out = "." + n.slice(-3) + out;
-            n = n.slice(0, -3);
+        try {
+            var loc = Qt.locale(lang === "en" ? "en_US" : "es_CO");
+            var s = Number(n).toLocaleString(loc, 'f', 0);
+            // toLocaleString conserva el signo; normalizar "-0" a "0".
+            if (s === "-0" || s === "-0.0")
+                s = "0";
+            return sym + " " + s;
+        } catch (e) {
+            var neg = n < 0;
+            n = Math.abs(n).toString();
+            var out = "";
+            while (n.length > 3) {
+                out = "." + n.slice(-3) + out;
+                n = n.slice(0, -3);
+            }
+            return (neg ? "-" + sym + " " : sym + " ") + n + out;
         }
-        return (neg ? "-" + sym : sym) + n + out;
     }
 
     header: ToolBar {
@@ -193,7 +227,7 @@ ApplicationWindow {
                 opacity: 0.6
             }
             Label {
-                text: qsTr("Sistema de Ventas  ·  ") + crumbText() + (auth.loggedIn ? "  ·  " + auth.currentUser + " (" + auth.currentRole + ")" : "")
+                text: auth.loggedIn ? qsTr("Sistema de Ventas  ·  %1  ·  %2 (%3)").arg(crumbText()).arg(auth.currentUser).arg(auth.currentRole) : qsTr("Sistema de Ventas  ·  ") + crumbText()
                 elide: Label.ElideRight
                 Layout.fillWidth: true
             }
@@ -365,16 +399,16 @@ ApplicationWindow {
         visible: false
     }
 
-    // Atajos de teclado (mejora #10): navegación rápida entre módulos principales.
+    // Atajos de teclado (mejora #10, personalizables en Fase 7 vía settings).
     // navigate() ya valida sesión y permiso por rol.
-    Shortcut { sequence: "Ctrl+1"; enabled: auth.loggedIn; onActivated: root.navigate("dashboard") }
-    Shortcut { sequence: "Ctrl+2"; enabled: auth.loggedIn; onActivated: root.navigate("pos") }
-    Shortcut { sequence: "Ctrl+3"; enabled: auth.loggedIn; onActivated: root.navigate("products") }
-    Shortcut { sequence: "Ctrl+4"; enabled: auth.loggedIn; onActivated: root.navigate("sales") }
-    Shortcut { sequence: "Ctrl+5"; enabled: auth.loggedIn; onActivated: root.navigate("inventory") }
-    Shortcut { sequence: "Ctrl+6"; enabled: auth.loggedIn; onActivated: root.navigate("reports") }
+    Shortcut { sequence: root.shortcutSeq("shortcut_dashboard", "Ctrl+1"); enabled: auth.loggedIn; onActivated: root.navigate("dashboard") }
+    Shortcut { sequence: root.shortcutSeq("shortcut_pos", "Ctrl+2"); enabled: auth.loggedIn; onActivated: root.navigate("pos") }
+    Shortcut { sequence: root.shortcutSeq("shortcut_products", "Ctrl+3"); enabled: auth.loggedIn; onActivated: root.navigate("products") }
+    Shortcut { sequence: root.shortcutSeq("shortcut_sales", "Ctrl+4"); enabled: auth.loggedIn; onActivated: root.navigate("sales") }
+    Shortcut { sequence: root.shortcutSeq("shortcut_inventory", "Ctrl+5"); enabled: auth.loggedIn; onActivated: root.navigate("inventory") }
+    Shortcut { sequence: root.shortcutSeq("shortcut_reports", "Ctrl+6"); enabled: auth.loggedIn; onActivated: root.navigate("reports") }
     Shortcut {
-        sequence: "Ctrl+M"; enabled: auth.loggedIn
+        sequence: root.shortcutSeq("shortcut_menu", "Ctrl+M"); enabled: auth.loggedIn
         onActivated: drawer.visible ? drawer.close() : drawer.open()
     }
 

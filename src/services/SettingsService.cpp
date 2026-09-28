@@ -7,6 +7,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QKeySequence>
+#include <QSet>
 
 const QString SettingsService::KBusinessName = QStringLiteral("business_name");
 const QString SettingsService::KBusinessType = QStringLiteral("business_type");
@@ -22,6 +24,22 @@ const QString SettingsService::KMoraRate = QStringLiteral("mora_rate_monthly");
 const QString SettingsService::KRequireExpiry = QStringLiteral("require_expiry");
 const QString SettingsService::KRequireSerial = QStringLiteral("require_serial");
 const QString SettingsService::KWeightUnit = QStringLiteral("weight_unit_default");
+const QString SettingsService::KLanguage = QStringLiteral("language");
+const QString SettingsService::KTheme = QStringLiteral("theme");
+const QString SettingsService::KHighContrast = QStringLiteral("high_contrast");
+const QString SettingsService::KPosDensity = QStringLiteral("pos_density");
+const QString SettingsService::KShortcutDashboard = QStringLiteral("shortcut_dashboard");
+const QString SettingsService::KShortcutPos = QStringLiteral("shortcut_pos");
+const QString SettingsService::KShortcutProducts = QStringLiteral("shortcut_products");
+const QString SettingsService::KShortcutSales = QStringLiteral("shortcut_sales");
+const QString SettingsService::KShortcutInventory = QStringLiteral("shortcut_inventory");
+const QString SettingsService::KShortcutReports = QStringLiteral("shortcut_reports");
+const QString SettingsService::KShortcutMenu = QStringLiteral("shortcut_menu");
+
+const QStringList SettingsService::ShortcutKeys = {
+    KShortcutDashboard, KShortcutPos,      KShortcutProducts, KShortcutSales,
+    KShortcutInventory, KShortcutReports,  KShortcutMenu,
+};
 const QString SettingsService::KCreditDays = QStringLiteral("credit_days");
 const QString SettingsService::KPayableDays = QStringLiteral("payable_days");
 const QString SettingsService::KDefaultCreditLimit = QStringLiteral("default_credit_limit");
@@ -99,6 +117,47 @@ bool SettingsService::requireSerial() const
 QString SettingsService::weightUnit() const
 {
     return m_repo->get(KWeightUnit, QStringLiteral("unidad"));
+}
+QString SettingsService::language() const
+{
+    const QString v = m_repo->get(KLanguage, QStringLiteral("es")).trimmed().toLower();
+    return (v == QStringLiteral("en")) ? QStringLiteral("en") : QStringLiteral("es");
+}
+QString SettingsService::theme() const
+{
+    const QString v = m_repo->get(KTheme, QStringLiteral("light")).trimmed().toLower();
+    return (v == QStringLiteral("dark")) ? QStringLiteral("dark") : QStringLiteral("light");
+}
+bool SettingsService::highContrast() const
+{
+    return m_repo->get(KHighContrast, QStringLiteral("0")).trimmed()
+           == QStringLiteral("1");
+}
+QString SettingsService::posDensity() const
+{
+    const QString v = m_repo->get(KPosDensity, QStringLiteral("normal")).trimmed().toLower();
+    if (v == QStringLiteral("compacto") || v == QStringLiteral("amplio"))
+        return v;
+    return QStringLiteral("normal");
+}
+QVariantMap SettingsService::defaultShortcuts()
+{
+    return {
+        {KShortcutDashboard, QStringLiteral("Ctrl+1")},
+        {KShortcutPos, QStringLiteral("Ctrl+2")},
+        {KShortcutProducts, QStringLiteral("Ctrl+3")},
+        {KShortcutSales, QStringLiteral("Ctrl+4")},
+        {KShortcutInventory, QStringLiteral("Ctrl+5")},
+        {KShortcutReports, QStringLiteral("Ctrl+6")},
+        {KShortcutMenu, QStringLiteral("Ctrl+M")},
+    };
+}
+QString SettingsService::shortcut(const QString &key) const
+{
+    const QVariantMap dflt = defaultShortcuts();
+    if (!dflt.contains(key))
+        return {};
+    return m_repo->get(key, dflt[key].toString());
 }
 
 int SettingsService::creditDays() const
@@ -248,6 +307,19 @@ QVariantMap SettingsService::all() const
         m[KRequireSerial] = QStringLiteral("0");
     if (!m.contains(KWeightUnit))
         m[KWeightUnit] = QStringLiteral("unidad");
+    if (!m.contains(KLanguage))
+        m[KLanguage] = QStringLiteral("es");
+    if (!m.contains(KTheme))
+        m[KTheme] = QStringLiteral("light");
+    if (!m.contains(KHighContrast))
+        m[KHighContrast] = QStringLiteral("0");
+    if (!m.contains(KPosDensity))
+        m[KPosDensity] = QStringLiteral("normal");
+    const QVariantMap shortcutDefaults = defaultShortcuts();
+    for (auto it = shortcutDefaults.begin(); it != shortcutDefaults.end(); ++it) {
+        if (!m.contains(it.key()))
+            m[it.key()] = it.value();
+    }
     if (!m.contains(KCreditDays))
         m[KCreditDays] = QStringLiteral("15");
     if (!m.contains(KPayableDays))
@@ -281,6 +353,17 @@ QString SettingsService::validate(const QVariantMap &m, QVariantMap &cleaned) co
         KRequireExpiry,
         KRequireSerial,
         KWeightUnit,
+        KLanguage,
+        KTheme,
+        KHighContrast,
+        KPosDensity,
+        KShortcutDashboard,
+        KShortcutPos,
+        KShortcutProducts,
+        KShortcutSales,
+        KShortcutInventory,
+        KShortcutReports,
+        KShortcutMenu,
         KCreditDays,
         KPayableDays,
         KDefaultCreditLimit,
@@ -325,6 +408,78 @@ QString SettingsService::validate(const QVariantMap &m, QVariantMap &cleaned) co
             const QString v = cleaned[flag].toString();
             if (v != QStringLiteral("0") && v != QStringLiteral("1"))
                 return QStringLiteral("Flag inválido para %1 (0/1)").arg(flag);
+        }
+    }
+    if (cleaned.contains(KLanguage)) {
+        const QString v = cleaned[KLanguage].toString().trimmed().toLower();
+        if (v != QStringLiteral("es") && v != QStringLiteral("en"))
+            return QStringLiteral("Idioma inválido para %1 (es/en)").arg(KLanguage);
+        cleaned[KLanguage] = v;
+    }
+    if (cleaned.contains(KTheme)) {
+        const QString v = cleaned[KTheme].toString().trimmed().toLower();
+        if (v != QStringLiteral("light") && v != QStringLiteral("dark"))
+            return QStringLiteral("Tema inválido para %1 (light/dark)").arg(KTheme);
+        cleaned[KTheme] = v;
+    }
+    if (cleaned.contains(KHighContrast)) {
+        const QString v = cleaned[KHighContrast].toString().trimmed();
+        if (v != QStringLiteral("0") && v != QStringLiteral("1"))
+            return QStringLiteral("Flag inválido para %1 (0/1)").arg(KHighContrast);
+        cleaned[KHighContrast] = v;
+    }
+    if (cleaned.contains(KPosDensity)) {
+        const QString v = cleaned[KPosDensity].toString().trimmed().toLower();
+        if (v != QStringLiteral("compacto") && v != QStringLiteral("normal")
+            && v != QStringLiteral("amplio"))
+            return QStringLiteral("Densidad inválida para %1 (compacto/normal/amplio)")
+                .arg(KPosDensity);
+        cleaned[KPosDensity] = v;
+    }
+    // Atajos: secuencia válida de QKeySequence, no vacía y sin duplicados
+    // (dos acciones con la misma secuencia dispararían ambas a la vez).
+    // Se exige forma Portable (p. ej. "Ctrl+Shift+P"): así se rechazan
+    // teclas desconocidas ("NotAKey") o modificadores solos ("Ctrl"), que
+    // QKeySequence acepta pero nunca dispararían.
+    {
+        QMap<QString, QString> effective;
+        const QVariantMap dflt = defaultShortcuts();
+        for (const QString &key : ShortcutKeys)
+            effective[key] = m_repo->get(key, dflt[key].toString());
+        for (const QString &key : ShortcutKeys) {
+            if (cleaned.contains(key))
+                effective[key] = cleaned[key].toString().trimmed();
+        }
+        auto portableOf = [](const QString &seq, QString *out) -> bool {
+            const QKeySequence ks(seq);
+            if (ks.count() == 0)
+                return false;
+            for (int i = 0; i < ks.count(); ++i) {
+                if (ks[i].key() == Qt::Key_unknown)
+                    return false;
+            }
+            const QString norm = ks.toString(QKeySequence::PortableText);
+            if (norm.isEmpty())
+                return false;
+            if (out)
+                *out = norm;
+            return true;
+        };
+        QSet<QString> seen;
+        for (const QString &key : ShortcutKeys) {
+            const QString seq = effective[key].trimmed();
+            if (seq.isEmpty())
+                return QStringLiteral("Atajo vacío para %1").arg(key);
+            QString norm;
+            if (!portableOf(seq, &norm))
+                return QStringLiteral("Atajo inválido para %1 (%2)").arg(key, seq);
+            if (seen.contains(norm))
+                return QStringLiteral("Atajo duplicado: %1 ya está asignado").arg(seq);
+            seen.insert(norm);
+        }
+        for (const QString &key : ShortcutKeys) {
+            if (cleaned.contains(key))
+                cleaned[key] = effective[key].trimmed();
         }
     }
     for (const QString &key : {KCreditDays, KPayableDays}) {

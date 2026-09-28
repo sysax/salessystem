@@ -262,3 +262,20 @@ Basado en esta implementación, se recomienda continuar con:
 - **Contraste**: `Theme.textOnBright (#1A1A1A)` + `Toast.fgColor` (texto oscuro en
   success/warning, blanco en info/error); base Material Light sin cambios. `Accessible.name`
   ya cubría sidebar, paginador, POS y atajos principales.
+
+## Fase 7 — i18n + apariencia + atajos (MAP_PRO)
+
+- **i18n es/en**: 100% de literales QML en `qsTr()` (concatenaciones migradas a
+  `%1` con `.arg()`), `qt_add_translations` + target `update-translations`,
+  `language` en Settings (`main.cpp` instala `:/i18n/app_en.qm`, aplica al
+  reiniciar). `money()` QML vía `Qt.locale` (es_CO/en_US), reloj por idioma,
+  pago con etiqueta traducida y valor interno intacto (`payMethod()`).
+- **Apariencia**: `theme` light/dark (`Material.theme` reactivo, sin reinicio),
+  `high_contrast` (semánticos `info/success/warning/error` reforzados por modo
+  en `Theme`), `pos_density` compacto/normal/amplio → `Theme.posTouchH`
+  44/48/56 (`PosPage.touchH` lo consume; mínimo 44px accesible).
+- **Atajos personalizables**: 7 claves `shortcut_*` (validadas: forma Portable,
+  sin vacías/duplicadas), `Main.qml` vía `shortcutSeq()` con fallback,
+  hints del `AppSidebar` reactivos (`scHint()` con fallback aislado para
+  `tst_sidebar`), edición en SettingsPage.
+- Settings nuevas cubiertas en `tst_settings::fase7AppearanceAndShortcuts`.

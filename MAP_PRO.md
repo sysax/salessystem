@@ -228,12 +228,26 @@ La aplicación se empaquetará en **tres ediciones comerciales**, acumulativas e
 **Objetivo:** interfaz usable por personal sin capacitación extensa.
 
 ### Tareas
-- [ ] Extracción de textos a `qsTr()` + `lupdate/lrelease` (es/en como base).
-- [ ] Formato localizado de moneda/fecha/hora vía `QLocale` (dinero ya tipado en Fase 2 facilita esto).
-- [ ] Accesibilidad: navegación por teclado completa en POS, roles `Accessible.*` en QML, contraste AA, tamaño táctil ≥ 44 px.
-- [ ] Feedback de sistema: toasts/no-blockers, indicador de guardado, confirmaciones destructivas con motivo obligatorio.
-- [ ] Atajos personalizables y layout de caja configurable por operador.
-- [ ] Modo alto contraste / tema oscuro para turnos nocturnos.
+- [x] Extracción de textos a `qsTr()` + `lupdate/lrelease` (es/en como base).
+- [x] Formato localizado de moneda/fecha/hora vía `QLocale` (dinero ya tipado en Fase 2 facilita esto).
+- [x] Accesibilidad: navegación por teclado completa en POS, roles `Accessible.*` en QML, contraste AA, tamaño táctil ≥ 44 px.
+- [x] Feedback de sistema: toasts/no-blockers, indicador de guardado, confirmaciones destructivas con motivo obligatorio.
+- [x] Atajos personalizables y layout de caja configurable por operador.
+- [x] Modo alto contraste / tema oscuro para turnos nocturnos.
+
+> **Cierre Fase 7 (2026-09-28):** catálogo 505/505 cadenas en es/en
+> (`qt_add_translations` + target `update-translations`; `language` en
+> Settings con translator al arranque, "es" = lengua fuente); `money()` QML
+> localizado vía `Qt.locale` (es_CO/en_US), reloj del header por idioma y
+> ComboBox de pago con etiqueta traducida sin romper el contrato del backend
+> (`payMethod()`); apariencia (`theme` light/dark → `Material.theme`,
+> `high_contrast` con semánticos reforzados) y densidad POS
+> (`pos_density` → 44/48/56px) con efecto inmediato; 7 atajos personalizables
+> (`shortcut_*`, validados con `QKeySequence` portable, sin vacíos ni
+> duplicados, hints del sidebar reactivos); `tst_settings::fase7AppearanceAndShortcuts`
+> en verde; suite 23/23. Criterios de salida cumplidos: venta completa sin
+> ratón (atajos + foco en diálogos) y 0 pendientes en `lrelease` (505 finished,
+> 0 unfinished por idioma).
 
 ### Criterios de salida
 ✅ Flujo de venta completo ejecutable sin ratón · ✅ 100% de strings en catálogo de traducción.

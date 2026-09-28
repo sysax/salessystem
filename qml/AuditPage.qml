@@ -64,7 +64,7 @@ ColumnLayout {
             }
             Label {
                 visible: (modelData.before || "{}") !== "{}"
-                text: "− " + modelData.before + "\n+ " + modelData.after
+                text: qsTr("− %1\n+ %2").arg(modelData.before).arg(modelData.after)
                 font.pixelSize: Theme.fontS
                 font.family: "monospace"
                 Layout.fillWidth: true
